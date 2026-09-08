@@ -46,10 +46,10 @@ Filled in per phase. Every entry does real work in code and has a friction-log e
 | KMS (asymmetric RSA) | JWT signing (`RSASSA_PKCS1_V1_5_SHA_256`) and the JWKS document | Phase 2: `KmsSigner` with mocked-client tests; deployed in Phase 6 |
 | Secrets Manager | Bridge secret, static client secrets | Phase 6 |
 | S3 | Simulator assets, fixture audio | Phase 5, 6 |
-| Amazon Bedrock + Strands Agents | The simulated Alexa+ agent | Phase 5 |
+| Amazon Bedrock + Strands Agents | The simulated Alexa+ agent: `BedrockModel` (Claude Haiku 4.5 by default, Nova as fallback), `McpClient` over the same `/mcp` | Phase 5: agent loop and structured output tested with a scripted model; live Bedrock is an Owner step (model access) |
 | Bedrock AgentCore Gateway | MCP server target for the agent | Phase 6 |
-| Amazon Transcribe (streaming) | Voice input in the simulator | Phase 5 |
-| Amazon Polly | Spoken replies in the simulator (never story narration) | Phase 5 |
+| Amazon Transcribe (streaming) | Voice input: WebM/Opus from the browser, converted to 16 kHz PCM, streamed | Phase 5: mocked-client test plus a real `ffmpeg` conversion test |
+| Amazon Polly | Spoken replies in the simulator, neural `Joanna` `en-US` (never story narration) | Phase 5: mocked-client test; S3 store for the deployed reply audio |
 | CloudWatch + X-Ray | Sub-500 ms tool latency proof | Phase 6 |
 | Kiro Crew | CDK scaffold draft | Not available on the build machine (friction log) |
 
@@ -88,6 +88,11 @@ node scripts/e2e-link.mjs                                       # authorize → 
 Open `http://localhost:4310/dev/start` in a browser for the same flow by hand. Copy
 `.env.example` to `.env` to pin the generated values.
 
+The simulated Alexa+ client runs with `pnpm dev` (server on `:4310`, Vite on
+`:5173/demo/`, AWS credentials from the `archy` profile for Bedrock, Polly and Transcribe)
+or `pnpm dev:offline` (scripted model, canned transcript, no AWS). `pnpm test:e2e` runs
+the Playwright smoke against the simulator's in-app mock.
+
 Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.md`.
 
 ## Repository layout
@@ -98,8 +103,9 @@ packages/mcp-server  dual-era MCP server, fixture provider, three read-only tool
 fixtures/            the Owner's recorded stories for the demo subject (see fixtures/README.md)
 packages/oauth       OAuth 2.1 authorization server: PKCE, client_credentials, RFC 8414/9728, JWT verifier (Phase 2)
                      app.ts composes OAuth + JWT-gated /mcp + dev routes; HttpProvider talks to the bridge (Phase 4)
-packages/agent       Phase 5: Strands + Bedrock agent, Polly, Transcribe
-packages/simulator   Phase 5: simulated Alexa+ SPA
+packages/agent       Strands + Bedrock agent loop, scripted offline model, Polly, Transcribe, sessions (Phase 5)
+packages/simulator   simulated Alexa+ SPA: Vite + React, brand tokens, Playwright smoke (Phase 5)
+packages/app         the composed server: OAuth + MCP + agent on one Hono app; local and Lambda entry points
 infra/               CDK app (CoreStack now; Phase 6 adds the rest)
 amazon/              addon.json, agent-skill placeholder, runbook, US account checklist, Inspector guide (Phase 7)
 scripts/             mock-spoken-letter.mjs (stand-in for the private bridge), e2e-link.mjs, add-fixture-story.mjs

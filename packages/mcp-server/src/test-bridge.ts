@@ -1,6 +1,6 @@
 // A stand-in for the private Spoken Letter bridge (Phase 3, out of scope here). It
-// implements exactly the three routes the plan gives the private repository plus a fake
-// "confirm" step that a signed-in Owner would perform in the browser. Test-only.
+// implements the two bridge routes and the two session routes phase-3.md section 5 gives
+// the private repository; the "confirm" step stands in for a signed-in Owner. Test-only.
 import { constantTimeEqual } from "@spoken-letter-alexa/shared";
 import { Hono } from "hono";
 

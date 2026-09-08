@@ -7,6 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./contract": "./src/contract/agent-tools.ts",
+    "./brand": "./src/brand/index.ts",
+    "./brand/tokens.json": "./src/brand/tokens.json",
     "./env": "./src/env.ts",
     "./logger": "./src/logger.ts"
   },

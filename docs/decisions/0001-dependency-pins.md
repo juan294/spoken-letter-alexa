@@ -14,7 +14,12 @@ the hackathon; everything else follows "latest stable at pin time".
 | `@modelcontextprotocol/client` | 2.0.0 | Test-side and agent-side MCP client from the same generation. The plan's fallback (`@modelcontextprotocol/sdk` 1.30.0 for the Strands transport) is only pulled in if Phase 5 hits the type mismatch listed in the risks table. |
 | `hono` | 4.13.7 | Latest 4.x. Works unchanged on Node, Lambda (`hono/aws-lambda`, `RESPONSE_STREAM`) and in tests via `app.request()`. |
 | `zod` | 4.5.4 | Latest 4.x. The MCP SDK v2 and the vendored agent-tool contract both use `z.toJSONSchema`, which only exists in zod 4. |
-| `@strands-agents/sdk` | 1.16.0 | Version named in the plan; verified present on npm. Phase 5. |
+| `@strands-agents/sdk` | 1.16.0 | Version named in the plan; the agent loop, `BedrockModel`, `McpClient` and structured output. Its `McpClient` takes an MCP SDK **1.x** transport, which is why `@modelcontextprotocol/sdk` 1.30.0 is pinned next to it (the plan's risk-table fallback, now the normal path). |
+| `@modelcontextprotocol/sdk` | 1.30.0 | `StreamableHTTPClientTransport` for the agent's MCP client only; the server stays on v2. |
+| `ffmpeg-static` | 5.3.0 | Converts the browser's WebM/Opus utterance to 16 kHz PCM for Transcribe streaming; the only dependency allowed to run a postinstall besides esbuild. |
+| `react` / `react-dom` / `@vitejs/plugin-react` / `vite` | 19.2.8 / 19.2.8 / 6.1.1 / 8.2.2 | The simulator SPA. |
+| `@testing-library/react` / `jest-dom` / `user-event` / `jsdom` | 16.3.3 / 7.0.1 / 14.6.7 / 30.0.1 | Simulator state-transition tests. |
+| `@playwright/test` | 1.63.0 | Simulator smoke at 390 and 1280 px against the in-app mock transport. |
 | `aws-cdk-lib` / `aws-cdk` | 2.268.0 / 2.1140.0 | Latest 2.x library and CLI at pin time. |
 | `constructs` | 10.8.1 | Peer of `aws-cdk-lib`. |
 | `@aws-sdk/client-*`, `@aws-sdk/lib-dynamodb` | 3.1127.0 | One version across every AWS SDK v3 client so `aws-sdk-client-mock` mocks line up. |

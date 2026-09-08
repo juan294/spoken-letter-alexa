@@ -6,6 +6,9 @@ import { z } from "zod";
 /** `<repo>/fixtures/stories.json`, independent of the process cwd (`pnpm -F` runs in the package). */
 export const DEFAULT_FIXTURES_PATH = path.resolve(import.meta.dirname, "../../../fixtures/stories.json");
 
+/** Default Bedrock model: fast and inexpensive for a one-sentence voice reply. Nova is the fallback. */
+export const DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+
 export const serverEnvShape = {
   /** Public origin and OAuth issuer. Defaults to `http://localhost:<PORT>`; see `readServerEnv`. */
   PUBLIC_BASE_URL: z.url().optional(),
@@ -22,6 +25,8 @@ export const serverEnvShape = {
   ALEXA_BRIDGE_SECRET: z.string().min(16).optional(),
   /** JSON array of static clients (see packages/oauth/src/clients.ts). Local dev clients when absent. */
   OAUTH_CLIENTS: z.string().optional(),
+  /** Secret of the `alexa-m2m` client the agent uses for the demo subject. Generated locally when absent. */
+  OAUTH_M2M_SECRET: z.string().min(16).optional(),
   OAUTH_STORE: z.enum(["memory", "dynamo"]).default("memory"),
   OAUTH_TABLE: z.string().default("sla-oauth"),
   JWT_SIGNER: z.enum(["local", "kms"]).default("local"),
@@ -31,11 +36,21 @@ export const serverEnvShape = {
   DEV_ROUTES: z.enum(["0", "1"]).default("0"),
   /** `1` serves 2025-era clients through per-session transports (Inspector contingency, single instance only). */
   MCP_LEGACY_SESSIONS: z.enum(["0", "1"]).default("0"),
+  /** `1`: scripted model, canned transcript, no Polly. No AWS credentials needed. */
+  AGENT_OFFLINE: z.enum(["0", "1"]).default("0"),
+  BEDROCK_MODEL_ID: z.string().default(DEFAULT_BEDROCK_MODEL_ID),
+  /** Where the agent's MCP client connects; `${PUBLIC_BASE_URL}/mcp` locally, the AgentCore Gateway in AWS. */
+  MCP_URL: z.url().optional(),
+  AGENT_SESSIONS_STORE: z.enum(["memory", "dynamo"]).default("memory"),
+  AGENT_SESSIONS_TABLE: z.string().default("sla-agent-sessions"),
+  /** S3 bucket for Polly replies (`polly/` prefix) served by CloudFront; data URLs when absent. */
+  ASSETS_BUCKET: z.string().optional(),
 };
 
 export type ServerEnv = ReturnType<typeof readServerEnv>;
 
 export function readServerEnv(source?: Record<string, string | undefined>) {
   const env = readEnv(serverEnvShape, source);
-  return { ...env, PUBLIC_BASE_URL: env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT}` };
+  const publicBaseUrl = env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT}`;
+  return { ...env, PUBLIC_BASE_URL: publicBaseUrl, MCP_URL: env.MCP_URL ?? `${publicBaseUrl}/mcp` };
 }

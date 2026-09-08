@@ -55,7 +55,8 @@ Deployed with CDK at `alexa.spokenletter.com`.
 - pnpm workspaces, Node 24, TypeScript 6 (strict, `noUncheckedIndexedAccess`, NodeNext),
   ESLint flat config (ESLint 10, same contract as 9), vitest, AWS CDK (`aws-cdk-lib` 2.x).
 - Packages: `packages/mcp-server` (Phase 1), `packages/oauth` (Phase 2),
-  `packages/agent` and `packages/simulator` (Phase 5), `packages/shared` (Phase 0),
+  `packages/agent` and `packages/simulator` (Phase 5), `packages/app` (composed server and
+  entry points, D12), `packages/shared` (Phase 0),
   `infra/` CDK app (Phase 0 skeleton, Phase 6 stacks), `amazon/` packaging (Phase 7),
   `fixtures/audio/` (Phase 1).
 - Pinned: `@modelcontextprotocol/server`, `/hono`, `/node` 2.0.0; `hono` 4.x; `zod` 4.x;

@@ -112,8 +112,8 @@ entries by tool.
   `anyOfScopes` option on the helper.
 - **The private bridge does not exist yet, so Phase 4's end-to-end proof runs against a
   mock.** `packages/mcp-server/src/test-bridge.ts` and `scripts/mock-spoken-letter.mjs`
-  implement the three bridge routes and the Owner's confirm step exactly as phase-3.md
-  specifies them; the automated `app.test.ts` drives authorize, confirm, continue,
+  implement the two bridge routes and the two session routes exactly as phase-3.md
+  section 5 specifies them (the script adds the link page itself); the automated `app.test.ts` drives authorize, confirm, continue,
   exchange, legacy initialize, both tools and disconnect through them (D10). The real
   run with a Spoken Letter session cookie is the Phase 8 step after the freeze.
 - **Hono's `app.request` returns `Response | Promise<Response>`.** Severity low, not
@@ -141,6 +141,39 @@ entries by tool.
   command the research did not record (role assumption snippet, CodeArtifact domain,
   CLI install, deploy flags, simulator URL) instead of inventing one;
   `amazon/AGENT_SKILL.md` records that the skill text is gated.
+
+## 2026-09-08: Phase 5 (agent, Transcribe, Polly, simulator)
+
+- **Strands' `McpTool` drops `structuredContent`.** Severity medium. Only the `content`
+  blocks reach the model, so a tool whose useful data (story ids, audio URL) lives in
+  `structuredContent` is unusable from Strands. The MCP specification asks servers to
+  serialise structured content into a text block for backwards compatibility, so every
+  tool now appends that JSON block (D11). Fix: map `structuredContent` to a json block in
+  `McpTool`.
+- **A `resource_link` content block becomes a Strands json block.** Severity low. The
+  scripted model first mistook that block for the story JSON; readers must match on the
+  key they need, not the first JSON-looking block.
+- **Tool hooks fire for the structured-output validator.** Severity low.
+  `AfterToolCallEvent` runs for `strands_structured_output` as well as for MCP tools; the
+  trace filters it out so the drawer shows only real calls.
+- **`McpClient` wants a 1.x transport.** As the plan's risk table predicted,
+  `@modelcontextprotocol/sdk` 1.30.0 is used for the agent's client; the server stays on
+  v2 and answers the 1.x client's legacy `initialize` without changes.
+- **The Strands SDK pulls native optional dependencies.** Severity low. pnpm 11 stopped
+  the install until `better-sqlite3`, `node-llama-cpp` and the `tree-sitter-*` builds were
+  explicitly disallowed in `pnpm-workspace.yaml`; none of those code paths are used.
+- **`ffmpeg-static` typings under NodeNext.** Severity low. The CommonJS default export
+  arrives as a module namespace object; `resolveFfmpegPath` accepts both shapes.
+- **Bedrock model access is an Owner step.** Read-only `list-foundation-models` and
+  `list-inference-profiles` (profile `archy`, 2026-09-08) show Claude Haiku 4.5 and Nova
+  Lite inference profiles available in the account; whether invocation is enabled is only
+  known on the first live call (`AccessDeniedException` per the plan's risk table). The
+  default `BEDROCK_MODEL_ID` is `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
+- **`aws-cdk-lib` typings, again.** The `sla-agent-sessions` table is now in `CoreStack`
+  so the agent's DynamoDB session store has a home before Phase 6.
+- **Playwright in CI runs against the SPA's in-app mock transport**, not against
+  `pnpm dev:offline` as phase-5 says (D13): the CI job has no agent server and no AWS,
+  and the mock keeps the smoke deterministic. `pnpm dev:offline` is the manual path.
 
 ## Kiro Crew
 

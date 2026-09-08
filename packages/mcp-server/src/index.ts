@@ -1,6 +1,5 @@
 export { createApp, protectedResourceMetadata, type AppDeps } from "./http.ts";
 export { createServerApp, type ServerAppConfig } from "./app.ts";
-export { bootstrap, type Bootstrapped } from "./bootstrap.ts";
 export { createHandler, createServerFactory, SERVER_NAME, SERVER_VERSION } from "./server.ts";
 export {
   devTokenGate,
@@ -11,7 +10,6 @@ export {
   MCP_SCOPES,
   type BearerGate,
 } from "./auth.ts";
-export { DEFAULT_FIXTURES_PATH, readServerEnv, serverEnvShape, type ServerEnv } from "./env.ts";
 export { FixtureProvider, loadFixtureCatalog, parseFixtureCatalog, type FixtureStory } from "./provider/fixtures.ts";
 export { HttpProvider, AUDIO_URL_TTL_SECONDS, type HttpProviderOptions } from "./provider/http.ts";
 export { createProviderResolver, DEMO_SUBJECT, SERVICE_SUBJECT_PREFIX, type ProviderMode } from "./provider/registry.ts";

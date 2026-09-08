@@ -231,6 +231,66 @@ env, `createServerFactory` split in `server.ts`, `legacySessions` option in `htt
 Verification if access exists (phase-7 section 3) is an Owner gate; `amazon/inspector.md`
 says what to record.
 
+## Phase 4 and 7 review
+
+Independent reviewer (fresh context, read-only) on commit `6c11fb5`: Phase 4 APPROVED,
+Phase 7 APPROVED, F2-1/2/3/4/6/7/8/9 all resolved; the reviewer ran the manual Phase 4
+criterion (`scripts/e2e-link.mjs` against `pnpm dev` and the mock) and it passed every
+step. Applied in the Phase 5 commit: F4-1 (the bridge timeout now covers the body read,
+with a stalled-body test), F4-3 (the outage test now uses a 503 bridge), F4-4 (D10
+completed), F4-6 (wording: two bridge routes plus two session routes), F7-1 (runbook
+parenthetical), F7-2 (inferred device-list and entitlement claims labelled as inferred in
+`amazon/runbook.md` and `amazon/us-account-checklist.md`). Deferred: F4-5 (bootstrap
+tests, now in `packages/app/src/bootstrap.test.ts`), F4-7 (legacy session eviction,
+documented), F4-8, F4-9, F7-3, F7-4 (informational).
+
+## Phase 5 handoff
+
+Objective: simulated Alexa+ client (phase-5.md): agent API, Transcribe, Polly, SPA.
+
+Delivered:
+
+- `packages/agent`: `runTurn` (Strands `Agent` + `McpClient` over an MCP SDK 1.x
+  `StreamableHTTPClientTransport` with the session's bearer, `structuredOutputSchema`
+  validated with zod, tool traces from the call hooks, fallback apology on any failure),
+  `ScriptedModel` (deterministic provider driving list, get and the structured reply;
+  offline mode and tests), `PollySpeech` with `DataUrlSpeechStore`/`S3SpeechStore`,
+  `createTranscriber` (ffmpeg-static WebM to 16 kHz PCM, Transcribe streaming, final
+  results only), `MemorySessionStore`/`DynamoSessionStore`, `createAgentApp`
+  (`/agent/health|session|turn|transcribe`, 5 MiB utterance cap, JSON errors),
+  `createOfflineDeps`. Tests: `turn` (real MCP server in-process, sequence list then
+  get, structured output, traces, second turn, list-only question, rejected token),
+  `routes` (demo and linked sessions, Polly data URL, follow-up, validation, 404, 413,
+  offline contract), `polly`, `transcribe` (mocked stream plus a real ffmpeg
+  conversion), `sessions`.
+- `packages/simulator` (delegated implementer, integrated by the parent): Vite + React
+  SPA at `/demo/`, screens Idle/Listening/Thinking/Reply/Playing, push-to-talk with
+  MediaRecorder and a 15 s cap, keyboard fallback, PKCE connect flow with tokens in
+  memory only, "Under the hood" drawer, `theme.css` projected from the vendored tokens
+  with a two-way parity test, `BrandMark`/`Wordmark`/`Eyebrow`/`MoonPixels` ports, the
+  `sl-design` ESLint plugin (hex/colour functions, font literals, micro sizes) with
+  RuleTester tests, 35 vitest tests, Playwright smoke at 390 and 1280 px against the
+  in-app mock transport (`VITE_AGENT_MOCK=1`).
+- `packages/app` (D12): `bootstrap` from the environment (memory/DynamoDB stores, local/KMS
+  signer, Bedrock or offline agent, Polly data URL or S3, generated local secrets),
+  `local.ts` on `:4310`, `lambda.ts` (refuses `DEV_ROUTES` and `AGENT_OFFLINE`);
+  `bootstrap.test.ts` covers the local and production postures (closes F4-5).
+- `packages/shared/src/brand`: vendored `tokens.json` with the SHA-256 pin (ADR 0002),
+  `resolveToken`, `flattenTokens`, `brand`.
+- MCP tools append a JSON text block with the structured result (D11). `CoreStack` gains
+  `sla-agent-sessions`. Root: `scripts/dev.mjs` (`pnpm dev`, `pnpm dev:offline`),
+  `pnpm test:e2e`, the simulator lint plugin registered, Playwright in the CI job.
+
+Checks on the Phase 5 commit: `pnpm typecheck` pass (8 packages); `pnpm lint` pass;
+`pnpm test` pass, 38 files, 253 tests; `pnpm -F infra synth` pass; simulator `build`
+pass; `pnpm test:e2e` 2 passed. TDD: agent suites (5), app suite and the simulator suites
+ran red before implementation (the simulator's Playwright spec was written after its
+components, as its implementer reported).
+
+Manual criteria (Owner, AWS credentials): live Bedrock, Transcribe and Polly through
+`pnpm dev`, and Bedrock model access in the console, remain open; `pnpm dev:offline`
+exercises the same loop without AWS.
+
 ## Deviations
 
 ### D1. Branch topology (session, before Phase 0)
@@ -320,6 +380,37 @@ says what to record.
 - Chose: a test-side Hono mock and a local script implementing exactly the three bridge
   routes and the confirm step from phase-3.md; the automated flow runs in `app.test.ts`
   and by hand with `scripts/e2e-link.mjs`. The signed-URL `HEAD` check is skipped
-  against the mock and runs when `SL_SESSION_COOKIE` is set.
+  against the mock and runs when `SL_SESSION_COOKIE` is set. Two details differ from
+  phase-4 section 4: the flow is a normal vitest suite (`app.test.ts`) rather than a
+  separate `e2e` project skipped in CI, because the mock makes it deterministic, and the
+  script reads the cookie from `SL_SESSION_COOKIE` instead of prompting.
 - Why: keeps the public repository's contract with the bridge executable now; the real
   run is a Phase 8 step.
+
+### D11. Tools also serialise `structuredContent` as a text block (Phase 5)
+
+- Plan said: tool results carry a short text summary plus `structuredContent` (and a
+  `resource_link` for `get_family_story`).
+- Found: Strands' `McpTool` maps only `content`, so the agent never saw story ids.
+- Chose: append the structured result as a final text block. The MCP specification
+  recommends exactly this for backwards compatibility; the spoken summary stays first and
+  under 300 characters.
+- Why: the agent is the plan's demo surface; Alexa+ still reads `structuredContent`.
+
+### D12. Entry points live in `packages/app` (Phase 5)
+
+- Plan said: `packages/mcp-server/src/lambda.ts` mounts mcp-server, oauth and agent.
+- Found: the agent's tests need the MCP server in-process, so `agent` depends on
+  `mcp-server`; mounting the agent from `mcp-server` would make a workspace cycle.
+- Chose: a small `packages/app` with `bootstrap.ts`, `local.ts` and `lambda.ts`;
+  `createServerApp` takes `extraApps`. Phase 6 bundles `packages/app/src/lambda.ts`.
+- Why: acyclic workspace; one composed entry point as the plan intends.
+
+### D13. Playwright smoke runs against the SPA's in-app mock (Phase 5)
+
+- Plan said: Playwright drives the keyboard fallback against `pnpm dev:offline`.
+- Found: the CI job has no agent server; the mock transport reproduces the agent API
+  contract inside the SPA and keeps the smoke deterministic.
+- Chose: `VITE_AGENT_MOCK=1` for Playwright; `pnpm dev:offline` for the manual run.
+- Why: the success criterion is "green in CI"; the offline server path is covered by
+  `packages/app/src/bootstrap.test.ts` and the agent route tests.

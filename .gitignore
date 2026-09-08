@@ -18,3 +18,5 @@ docs/agents/
 
 # Test artifacts
 coverage/
+test-results/
+playwright-report/

@@ -31,6 +31,15 @@ describe("CoreStack", () => {
     });
   });
 
+  test("creates the on-demand sla-agent-sessions table keyed by sessionId with TTL", () => {
+    template.hasResourceProperties("AWS::DynamoDB::Table", {
+      TableName: "sla-agent-sessions",
+      BillingMode: "PAY_PER_REQUEST",
+      KeySchema: [{ AttributeName: "sessionId", KeyType: "HASH" }],
+      TimeToLiveSpecification: { AttributeName: "expiresAt", Enabled: true },
+    });
+  });
+
   test("creates an RSA 2048 KMS key for JWT signing with an alias", () => {
     template.hasResourceProperties("AWS::KMS::Key", {
       KeySpec: "RSA_2048",
@@ -49,7 +58,7 @@ describe("CoreStack", () => {
   });
 
   test("keeps the OAuth table and signing key on stack deletion", () => {
-    template.hasResource("AWS::DynamoDB::Table", { DeletionPolicy: "Retain" });
+    template.hasResource("AWS::DynamoDB::Table", { Properties: { TableName: "sla-oauth" }, DeletionPolicy: "Retain" });
     template.hasResource("AWS::KMS::Key", { DeletionPolicy: "Retain" });
   });
 });

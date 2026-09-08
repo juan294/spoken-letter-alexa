@@ -1,4 +1,4 @@
-// Local development server on :4310. `pnpm dev` (root) or `pnpm -F @spoken-letter-alexa/mcp-server dev`.
+// Local development server on :4310 (`pnpm dev` at the root also starts the simulator).
 import path from "node:path";
 
 import { serve } from "@hono/node-server";
@@ -32,6 +32,8 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     providerMode: env.PROVIDER_MODE,
     stories,
     devRoutes: env.DEV_ROUTES === "1",
+    agentOffline: env.AGENT_OFFLINE === "1",
+    model: env.AGENT_OFFLINE === "1" ? null : env.BEDROCK_MODEL_ID,
     generated: Object.keys(generated),
   });
   // Generated secrets are printed once so curl and the mock bridge can use them. Set the

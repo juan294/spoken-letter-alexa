@@ -22,3 +22,5 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm -F infra synth
+      - run: pnpm -F @spoken-letter-alexa/simulator exec playwright install --with-deps chromium
+      - run: pnpm -F @spoken-letter-alexa/simulator test:e2e

@@ -1,0 +1,205 @@
+/* Spoken Letter brand tokens projected as CSS custom properties.
+   Source: packages/shared/src/brand/tokens.json (ADR 0002, verbatim copy of the private
+   design/tokens.json). Every variable below maps to exactly one token and
+   src/styles/theme.test.ts asserts the values, so edit the token file, never this block.
+   Components use these variables only: no hex, rgb(), oklch() or font names anywhere else. */
+:root {
+  /* Global colours (global.color) */
+  --cream: #F7F1E7;
+  --page: #E7E5DF;
+  --white: #FFFFFF;
+  --lamplight: #E4A45C;
+  --lamplight-hover: #DD9846;
+  --lamplight-strong: #C0833B;
+  --clay-rose: #C8826F;
+  --clay-deep: #B06A54;
+  --clay-chip: #A85F4B;
+  --tint-clay-soft: #F3E6E0;
+  --dusk-plum: #5C4D63;
+  --figure-positive: #3F6B4F;
+  --figure-negative: #A1402F;
+  --figure-cost: #A1552F;
+  --dusk-plum-hover: #6B5A75;
+  --evening-ink: #2E2738;
+  --display-accent: #B07A4F;
+  --border-cream: #EFE6D4;
+  --border-strong: #E7DCC8;
+  --input-cream: #E7DDCA;
+  --sidebar: #F4EDE1;
+  --lead-text: #5A564F;
+  --manuscript-text: #3A3340;
+  --wish-row-bg: #FDFBF6;
+  --warm-separator: #D8C4A4;
+  --warm-separator-hover: #C9B088;
+  --cream-overlay-92: rgba(247,241,231,0.92);
+  --cream-overlay-94: rgba(247,241,231,0.94);
+  --destructive: #B23A2E;
+  --destructive-on-ink: #FFB4A8;
+  --on-ink-muted: #C8C2CF;
+  --on-ink-soft: #B9B2C4;
+  --on-ink-faint: #9B94AB;
+  --on-ink-bright: #E2DEE9;
+  --on-ink-divider: #43394F;
+  --on-ink-control-border: rgba(243, 236, 224, 0.26);
+  --on-ink-track: #473F53;
+  --on-dark-surface: rgba(255,255,255,.06);
+  --on-dark-surface-strong: rgba(255,255,255,.12);
+  --on-dark-surface-faint: rgba(255,255,255,.05);
+  --on-dark-hairline: rgba(255,255,255,.1);
+  --on-dark-cream-hairline: rgba(247,241,231,.1);
+  --muted-quiet: #7D6F6C;
+  --chip-neutral-bg: #F6EFE3;
+  --chip-cream-bg: #F9F4EA;
+  --icon-chip-tint: #F3EAD9;
+  --device-shell-ink: #1B1726;
+  --toggle-track-off: #D8CDBB;
+  --on-ink-link: #8A82A0;
+  --link-underline: #D8B48A;
+  --danger-icon-bg: #F4DDD6;
+  --danger-icon-fg: #C25A4C;
+  --destructive-tint-bg: #FBEEEC;
+  --destructive-tint-text: #CF7C72;
+  --destructive-tint-border: #F0D6D1;
+  --danger-page-bg: #FFFAF9;
+  --danger-eyebrow: #C08379;
+  --danger-border: #E7C4BE;
+  --badge-neutral-bg: #ECE9E2;
+  --badge-inactive-bg: #F0ECE8;
+  --icon-muted: #A89F92;
+  --disabled-cta-bg: #F4DCC4;
+  --disabled-cta-text: #C79A6B;
+  --input-disabled-bg: #F3EDE0;
+  --divider-warm: #DCD0BD;
+  --evidence-border-active: #E3C39F;
+  --evidence-divider: #E4DCCA;
+  --evidence-row-zebra: #FAF4E9;
+  --evidence-row-label: #4A4454;
+  --evidence-total-border: #E8DDC9;
+  --tooltip-on-ink-text: #F3ECE0;
+  --tooltip-on-ink-muted: #C9B79F;
+  --avatar-placeholder-bg: #1C2740;
+  --neutral-300: #736D64;
+  --neutral-400: #8A857C;
+  --neutral-500: #6E6A63;
+  --neutral-600: #5E5A53;
+  --neutral-700: #54504A;
+  --neutral-tan: #876539;
+
+  /* Semantic colours (semantic.color); names shared with the global set carry the same value */
+  --background: #F7F1E7;
+  --surface: #FFFFFF;
+  --surface-inverse: #2E2738;
+  --subtle: #E7E5DF;
+  --foreground: #2E2738;
+  --foreground-inverse: #F7F1E7;
+  --muted-foreground: #5E5A53;
+  --muted-foreground-inverse: #C8C2CF;
+  --muted-faint: #736D64;
+  --eyebrow: #876539;
+  --primary: #E4A45C;
+  --primary-foreground: #2E2738;
+  --secondary: #2E2738;
+  --secondary-foreground: #F7F1E7;
+  --border: #EFE6D4;
+  --input: #E7DDCA;
+  --ring: #E4A45C;
+
+  /* Font families (semantic.typography) */
+  --font-heading: Newsreader, Georgia, 'Times New Roman', serif;
+  --font-sans: Mulish, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale (global.fontSizes) */
+  --text-micro: 11px;
+  --text-eyebrow: 11px;
+  --text-caption: 13px;
+  --text-body-sm: 14px;
+  --text-body: 15px;
+  --text-lead: 20px;
+  --text-h3: 22px;
+  --text-h2: 28px;
+  --text-h1: 34px;
+  --text-display: 52px;
+  --text-display-lg: 66px;
+
+  /* Font weights (global.fontWeights) */
+  --weight-display-regular: 400;
+  --weight-display-medium: 500;
+  --weight-body-regular: 400;
+  --weight-body-semibold: 600;
+  --weight-body-bold: 700;
+  --weight-body-extrabold: 800;
+
+  /* Letter spacing (global.letterSpacing) */
+  --tracking-eyebrow: 2px;
+  --tracking-eyebrow-compact: 1.3px;
+
+  /* Radii; the pill is the default (global.borderRadius) */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-card: 14px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 100px;
+  --radius-full: 9999px;
+
+  --radius: 100px;
+
+  /* Shadows (global.boxShadow) */
+  --shadow-card: 0 1px 3px rgba(46,39,56,0.08);
+  --shadow-soft: 0 6px 22px rgba(46,39,56,0.12);
+  --shadow-soft-raised: 0 16px 44px rgba(46,39,56,0.16);
+  --shadow-md: 0 8px 28px rgba(46,39,56,0.2);
+  --shadow-lg: 0 20px 50px rgba(46,39,56,0.22);
+  --shadow-panel: 0 24px 60px rgba(46,39,56,0.26);
+  --shadow-cta: 0 10px 26px rgba(228,164,92,0.4);
+  --shadow-amber-sm: 0 6px 16px rgba(228,164,92,0.36);
+  --shadow-cta-pill: 0 8px 22px rgba(228,164,92,.34);
+  --shadow-cta-pill-plum: 0 8px 22px rgba(92,77,99,.34);
+  --shadow-cta-sm: 0 6px 18px rgba(228,164,92,.3);
+  --shadow-amber-chip: 0 6px 16px rgba(228,164,92,.28);
+  --shadow-panel-card: 0 8px 24px rgba(46,39,56,.06);
+  --shadow-hairline-lift: 0 1px 3px rgba(46,39,56,.05);
+  --shadow-card-lift: 0 10px 30px rgba(46,39,56,.07);
+  --shadow-raised-card: 0 16px 44px rgba(46,39,56,.10);
+  --shadow-dropdown: 0 18px 44px rgba(46,39,56,.18);
+  --shadow-soft-sm: 0 6px 18px rgba(46,39,56,.05);
+  --shadow-chip: 0 1px 4px rgba(46,39,56,.07);
+
+  /* Spacing (global.spacing) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-14: 56px;
+  --space-16: 64px;
+  --space-18: 72px;
+  --space-auth-cookie-clearance: 320px;
+  --space-auth-cookie-clearance-narrow: 480px;
+
+  /* Now Playing panel (component.nowPlaying) */
+  --now-playing-play-shadow: 0 8px 22px rgba(228,164,92,.45);
+  --now-playing-progress-track: rgba(247,241,231,.16);
+
+  /* Voice orb and listening ring (component.voiceIdeation) */
+  --voice-orb-from: #F0C489;
+  --voice-orb-to: #E09B4D;
+  --voice-listening-ring: rgba(228,164,92,.5);
+  --voice-hairline: #F2EAD9;
+  --voice-subnote-muted: #736D64;
+  --voice-transcript-label: #B8B1A5;
+  --voice-bubble-agent-bg: #F4F0EA;
+  --voice-bubble-agent-label: #8A7B8F;
+  --voice-bubble-agent-text: #4B4650;
+  --voice-bubble-user-bg: #FBF0DF;
+  --voice-bubble-user-border: #F2E2C6;
+  --voice-orb-shadow-idle: 0 16px 38px rgba(228,164,92,.4);
+  --voice-orb-shadow-live: 0 14px 34px rgba(228,164,92,.4);
+  --voice-card-shadow: 0 18px 46px rgba(46,39,56,.1);
+
+}

@@ -6,9 +6,11 @@ granted (research 12, decision 4). Until then it is a prepared decision, not an 
 Nothing here has been done.
 
 Why this shape: "The MCP Toolkit is available in the United States"; the CLI defaults to
-`en-US` and the example manifest distributes to `US` only; the simulator's device list
-comes from the account signed into the developer console (research 3.2 and 3.3). The
-Owner's Spanish Alexa+ subscription cannot see a partner add-on.
+`en-US` and the example manifest distributes to `US` only (research 3.2, verified).
+Inferred from the classic ASK rule, not verified for Alexa+ add-ons (research 3.3 is
+marked INFERRED): the simulator's device list comes from the account signed into the
+developer console, and the Owner's Spanish Alexa+ subscription would not see a
+US-distributed add-on.
 
 ## Test the two unknowns first
 
@@ -36,8 +38,9 @@ locale side; the account side is a new question).
       quoted to the Solutions Architect. It must be able to assume
       `arn:aws:iam::372468808636:role/AddOn3PDeveloperToolsRead`. See
       `amazon/runbook.md` step 4.
-- [ ] **Consumer Alexa+ entitlement on the US account.** A `US`-distributed add-on never
-      appears on the amazon.es account. Depends on the two unknowns above.
+- [ ] **Consumer Alexa+ entitlement on the US account.** Inferred (research 3.3): a
+      `US`-distributed add-on is not expected to appear on the amazon.es account. Depends
+      on the two unknowns above.
 - [ ] **Preferred marketplace.** On the US retail account, set the preferred marketplace to
       an Alexa+ supported marketplace (Amazon's setup page wording).
 - [ ] **One test device re-registered to the US account, language `en-US`.** Pick one Echo

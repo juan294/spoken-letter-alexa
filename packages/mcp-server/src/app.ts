@@ -41,6 +41,8 @@ export type ServerAppConfig = {
   suggestions?: SuggestionMemory | undefined;
   /** Inspector contingency (MCP_LEGACY_SESSIONS=1); single instance only, never on Lambda. */
   legacySessions?: boolean | undefined;
+  /** Further Hono apps mounted at `/` (the agent API from packages/app). */
+  extraApps?: Hono[] | undefined;
 };
 
 export async function createServerApp(config: ServerAppConfig): Promise<Hono> {
@@ -79,6 +81,7 @@ export async function createServerApp(config: ServerAppConfig): Promise<Hono> {
 
   app.route("/", oauth);
   app.route("/", mcp);
+  for (const extra of config.extraApps ?? []) app.route("/", extra);
   if (config.devRoutes) {
     app.route(
       "/",

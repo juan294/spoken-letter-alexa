@@ -42,19 +42,40 @@ Not available on the development machine (friction log, 2026-09-08).
 
 ## Amazon Bedrock
 
-Phase 5.
+Wired through Strands' `BedrockModel` (default `us.anthropic.claude-haiku-4-5-20251001-v1:0`,
+temperature 0.3, 600 tokens). Not exercised live yet: enabling model access in the
+console is the Owner's one-time step (phase-5 manual criterion). Read-only listing shows
+the Claude Haiku 4.5 and Nova inference profiles in `us-east-1`.
 
 ## Strands Agents SDK
 
-Phase 5.
+- What worked: `Agent` with `structuredOutputSchema`, `McpClient` as a tool source and
+  the `BeforeToolCallEvent`/`AfterToolCallEvent` hooks gave the simulator's "Under the
+  hood" drawer (tool name, latency) in a few lines. The `Model` base class made a
+  deterministic scripted provider easy, so the whole loop is tested and runs offline.
+- Needs improvement: `McpTool` ignores `structuredContent` (friction log); the client
+  needs an MCP SDK 1.x transport while the server ecosystem is on 2.x; the package pulls
+  native optional dependencies that pnpm refuses to build silently.
+- Onboarding: the README covered every concept used; the typings answered the rest.
+- Would use again: yes for an agent that must talk MCP on AWS.
 
 ## Amazon Transcribe (streaming)
 
-Phase 5.
+- What worked: `StartStreamTranscriptionCommand` takes an async iterable of PCM chunks,
+  which maps directly onto the browser's one-utterance recording; partial and final
+  results are clearly flagged.
+- Needs improvement: browsers record WebM/Opus and Transcribe wants PCM, so every
+  integration re-implements the `ffmpeg` hop; a documented Opus path would remove it.
+- Onboarding: not yet exercised live (Owner step, AWS credentials); the mocked-client
+  test pins the request shape.
 
 ## Amazon Polly
 
-Phase 5.
+- What worked: one `SynthesizeSpeech` call with the neural `Joanna` voice; the MP3 bytes
+  become a data URL locally and an S3 object behind CloudFront when deployed.
+- Needs improvement: nothing yet; live latency is measured in Phase 6.
+- Rule kept: Polly speaks Alexa's one-sentence replies only; the family recording is
+  never synthesized.
 
 ## Amazon Bedrock AgentCore Gateway
 

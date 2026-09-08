@@ -51,6 +51,11 @@ describe("legacy era (Alexa+ live client and Local Inspector)", () => {
     expect(parsed.stories).toHaveLength(2);
     expect(parsed.stories[0]?.id).toBe("st_lighthouse");
     expect(result.content[0]).toMatchObject({ type: "text" });
+    // The structured result is also serialised as the last text block (MCP backwards
+    // compatibility; agent frameworks that map only `content` still see the ids).
+    const last = result.content.at(-1);
+    expect(last?.type).toBe("text");
+    expect(JSON.parse(last?.text ?? "")).toEqual(result.structuredContent);
     expect(JSON.stringify(result.structuredContent)).not.toMatch(/recipient|spaceId|senderId|senderEmail|content|yoto/i);
   });
 

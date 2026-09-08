@@ -19,6 +19,19 @@ export type ToolDeps = {
 
 type TextBlock = { type: "text"; text: string };
 
+function text(value: string): TextBlock {
+  return { type: "text", text: value };
+}
+
+/**
+ * The structured result serialised as a second text block. The MCP specification asks for
+ * it for backwards compatibility, and agent frameworks that map only `content` (Strands'
+ * McpTool among them) would otherwise never see the story ids.
+ */
+function jsonBlock(structured: unknown): TextBlock {
+  return { type: "text", text: JSON.stringify(structured) };
+}
+
 const ERROR_TEXT: Record<ToolErrorCode, string> = {
   unauthenticated: "This Alexa link is no longer valid. Reconnect Spoken Letter in the Alexa app.",
   provider_unavailable: "Spoken Letter is not reachable right now. Try again in a moment.",
@@ -58,7 +71,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       const result = await withLatencyMetric(listName, () =>
         runListFamilyStories(args, subject, deps.providerFor(subject)),
       );
-      return { content: [{ type: "text", text: result.summary }], structuredContent: result.structured };
+      return { content: [text(result.summary), jsonBlock(result.structured)], structuredContent: result.structured };
     } catch (error) {
       return failureResult(listName, error);
     }
@@ -72,7 +85,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         runGetFamilyStory(args, subject, deps.providerFor(subject)),
       );
       return {
-        content: [{ type: "text", text: result.summary }, result.resourceLink],
+        content: [text(result.summary), result.resourceLink, jsonBlock(result.structured)],
         structuredContent: result.structured,
       };
     } catch (error) {
@@ -87,7 +100,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       const result = await withLatencyMetric(suggestName, () =>
         runSuggestNextStory(args, subject, deps.providerFor(subject), deps.suggestions),
       );
-      return { content: [{ type: "text", text: result.summary }], structuredContent: result.structured };
+      return { content: [text(result.summary), jsonBlock(result.structured)], structuredContent: result.structured };
     } catch (error) {
       return failureResult(suggestName, error);
     }

@@ -3,7 +3,15 @@ packages:
   - infra
   - amazon
 allowBuilds:
+  better-sqlite3: false
   esbuild: true
+  ffmpeg-static: true
+  node-llama-cpp: false
+  tree-sitter-go: false
+  tree-sitter-javascript: false
+  tree-sitter-python: false
+  tree-sitter-rust: false
+  tree-sitter-typescript: false
 minimumReleaseAgeExclude:
   - '@types/node@26.5.0'
   - '@typescript-eslint/eslint-plugin@8.70.0'

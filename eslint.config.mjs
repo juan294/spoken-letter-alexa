@@ -2,6 +2,8 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
+import slDesign from "./packages/simulator/eslint-rules/sl-design.mjs";
+
 export default tseslint.config(
   {
     ignores: [
@@ -40,6 +42,15 @@ export default tseslint.config(
       "no-console": ["error", { allow: ["error"] }],
       // The vendored contract and the plan use type aliases throughout.
       "@typescript-eslint/consistent-type-definitions": "off",
+    },
+  },
+  {
+    files: ["packages/simulator/src/**/*.{ts,tsx}"],
+    plugins: { "sl-design": slDesign },
+    rules: {
+      "sl-design/no-hex-in-style": "error",
+      "sl-design/no-literal-font-family": "error",
+      "sl-design/no-micro-font-size": "error",
     },
   },
   {

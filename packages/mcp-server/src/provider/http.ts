@@ -92,33 +92,42 @@ export class HttpProvider implements AccountProvider {
     path: string,
     init: { method: string; headers?: Record<string, string>; body?: string; notFound?: () => Error },
   ): Promise<unknown> {
+    // One timer covers the headers and the body: a bridge that sends headers then stalls
+    // the body is as unavailable as one that never answers.
     const controller = new AbortController();
     const timer = setTimeout(() => {
       controller.abort();
     }, this.timeoutMs);
-    let response: Response;
     try {
-      response = await this.fetchImpl(`${this.base}${path}`, {
-        method: init.method,
-        headers: { authorization: `Bearer ${this.secret}`, accept: "application/json", ...init.headers },
-        ...(init.body !== undefined && { body: init.body }),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      log.warn("bridge_unreachable", { path, message: error instanceof Error ? error.message : String(error) });
-      throw new ProviderUnavailableError(`bridge unreachable: ${path}`);
+      let response: Response;
+      try {
+        response = await this.fetchImpl(`${this.base}${path}`, {
+          method: init.method,
+          headers: { authorization: `Bearer ${this.secret}`, accept: "application/json", ...init.headers },
+          ...(init.body !== undefined && { body: init.body }),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        log.warn("bridge_unreachable", { path, message: error instanceof Error ? error.message : String(error) });
+        throw new ProviderUnavailableError(`bridge unreachable: ${path}`);
+      }
+      if (response.status === 404 && init.notFound) throw init.notFound();
+      if (!response.ok) {
+        log.warn("bridge_error", { path, status: response.status });
+        throw new ProviderUnavailableError(`bridge ${response.status}`);
+      }
+      try {
+        return await response.json();
+      } catch (error) {
+        if (controller.signal.aborted) {
+          log.warn("bridge_body_timeout", { path });
+          throw new ProviderUnavailableError(`bridge body timed out: ${path}`);
+        }
+        log.warn("bridge_malformed", { path, message: error instanceof Error ? error.message : String(error) });
+        throw new ProviderUnavailableError("bridge returned malformed JSON");
+      }
     } finally {
       clearTimeout(timer);
-    }
-    if (response.status === 404 && init.notFound) throw init.notFound();
-    if (!response.ok) {
-      log.warn("bridge_error", { path, status: response.status });
-      throw new ProviderUnavailableError(`bridge ${response.status}`);
-    }
-    try {
-      return await response.json();
-    } catch {
-      throw new ProviderUnavailableError("bridge returned malformed JSON");
     }
   }
 }

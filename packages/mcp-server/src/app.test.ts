@@ -241,7 +241,7 @@ describe("end-to-end link flow against the mock Spoken Letter bridge", () => {
     expect(stale.response.status).toBe(200);
   });
 
-  test("a bridge outage for a real subject is a provider_unavailable tool error", async () => {
+  test("a real subject with nothing delivered gets an empty list", async () => {
     const h = await harness();
     const { token } = await mintAccessToken({
       signer: h.signer,
@@ -251,9 +251,28 @@ describe("end-to-end link flow against the mock Spoken Letter bridge", () => {
       clientId: "simulator",
       scope: "mcp:tools",
     });
-    // The mock has no stories for this uid but answers 200 with an empty list.
     const { message } = await mcpCall(h.app, token, "tools/call", { name: "list_family_stories", arguments: {} });
     expect((message?.result as { structuredContent: { stories: unknown[] } }).structuredContent.stories).toEqual([]);
+  });
+
+  test("a bridge outage for a real subject is a provider_unavailable tool error", async () => {
+    const signer = await LocalSigner.create();
+    const app = await createServerApp({
+      issuer: ISSUER,
+      spokenLetterOrigin: SL_ORIGIN,
+      bridgeSecret: BRIDGE_SECRET,
+      clients: [],
+      store: new MemoryStore(),
+      signer,
+      providerMode: "auto",
+      fixtures: new FixtureProvider({ stories: [], publicBaseUrl: ISSUER }),
+      bridgeFetch: () => Promise.resolve(new Response("down", { status: 503 })),
+    });
+    const { token } = await mintAccessToken({ signer, issuer: ISSUER, audience: `${ISSUER}/mcp`, subject: "uid_owner", clientId: "simulator", scope: "mcp:tools" });
+    const { message } = await mcpCall(app, token, "tools/call", { name: "list_family_stories", arguments: {} });
+    const result = message?.result as { isError?: boolean; structuredContent?: unknown };
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ error: "provider_unavailable" });
   });
 });
 

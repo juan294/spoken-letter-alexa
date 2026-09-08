@@ -83,6 +83,22 @@ describe("HttpProvider.listDeliveredStories", () => {
     await expect(slow.listDeliveredStories("uid_1", 5)).rejects.toBeInstanceOf(ProviderUnavailableError);
   });
 
+  test("a bridge that sends headers then stalls the body times out as provider_unavailable", async () => {
+    const stalling = vi.fn<FetchImpl>((_url, init) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"stories":['));
+          init?.signal?.addEventListener("abort", () => {
+            controller.error(new DOMException("aborted", "AbortError"));
+          });
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200, headers: { "content-type": "application/json" } }));
+    });
+    const slow = new HttpProvider({ base: BASE, secret: SECRET, fetch: stalling, timeoutMs: 20 });
+    await expect(slow.listDeliveredStories("uid_1", 5)).rejects.toBeInstanceOf(ProviderUnavailableError);
+  });
+
   test("caches the list per subject for 30 seconds", async () => {
     let now = 1_000_000;
     const fetchImpl = vi.fn<FetchImpl>(() => Promise.resolve(jsonResponse(BRIDGE_STORIES)));

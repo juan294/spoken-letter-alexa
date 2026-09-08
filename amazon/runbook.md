@@ -100,8 +100,10 @@ resource metadata challenge (Phases 1 and 2).
 ## 7. Physical Device Config (research 2.1, 3.3)
 
 18. In the simulator, use Physical Device Config to route to the Echo re-registered to the
-    US account with device language `en-US`. The device drop-down lists devices on the
-    account signed into the developer console (research 3.3).
+    US account with device language `en-US`. Inferred, not verified (research 3.3 is
+    marked INFERRED; the verified basis is only the classic ASK rule in 3.2): the device
+    drop-down should list devices on the account signed into the developer console.
+    Confirm when access exists.
 19. Speak the first example phrase to the device. Record the utterance, the response and
     whether audio plays. This is the only path to real-device footage for the video.
 20. Everything learned in steps 13 to 19 goes into `docs/friction-log.md` and
@@ -111,5 +113,5 @@ resource metadata challenge (Phases 1 and 2).
 ## Local checks that need no access
 
 - Amazon's Local Inspector against `pnpm dev`: `amazon/inspector.md`.
-- Manifest validation: `pnpm -F amazon test` (once `amazon` is in the workspace) or
+- Manifest validation: `pnpm -F amazon test` or
   `node_modules/.bin/vitest run --root amazon` from the repository root.
