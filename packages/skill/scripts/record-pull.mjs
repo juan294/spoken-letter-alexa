@@ -27,6 +27,8 @@ function sinceMs(argument) {
 }
 
 const startTime = sinceMs(process.argv.find((argument) => argument.startsWith("--since=")));
+// Same account and profile as the CDK deploy and `pnpm -F skill deploy`.
+process.env.AWS_PROFILE ??= "archy";
 const client = new CloudWatchLogsClient({ region: "us-east-1" });
 
 const existing = new Set(existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line).text) : []);

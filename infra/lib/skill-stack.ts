@@ -16,6 +16,8 @@ export type SkillStackProps = StackProps & {
   skillId?: string;
   /** `false` in tests: the marker function instead of the built bundle. */
   bundle?: boolean;
+  /** Recording mode (phase-9.md section 3): `-c sla:recordUtterances=1` for one session. */
+  recordUtterances?: boolean;
 };
 
 /**
@@ -56,9 +58,9 @@ export class SkillStack extends Stack {
         NODE_OPTIONS: "--enable-source-maps",
         PUBLIC_BASE_URL: props.publicBaseUrl,
         SKILL_ID: props.skillId ?? "",
-        // Flip to "1" for a recording session only: utterances are logged for the
-        // interaction-model training file, then turned off again.
-        RECORD_UTTERANCES: "0",
+        // "1" for a recording session only: catch-all phrasings are logged for the
+        // interaction-model training file, then the flag goes back to "0".
+        RECORD_UTTERANCES: props.recordUtterances ? "1" : "0",
         LOG_LEVEL: "info",
       },
       handler: "index.handler",

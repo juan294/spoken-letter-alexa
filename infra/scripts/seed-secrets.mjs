@@ -84,7 +84,7 @@ if (dryRun) {
 }
 
 if (bridgeRotated) await client.send(new PutSecretValueCommand({ SecretId: "sla/bridge", SecretString: bridgeSecret }));
-await client.send(new PutSecretValueCommand({ SecretId: "sla/oauth-clients", SecretString: document }));
+const clientsVersion = await client.send(new PutSecretValueCommand({ SecretId: "sla/oauth-clients", SecretString: document }));
 console.log(
   JSON.stringify({ event: "secrets_seeded", region, clients: clients.map((c) => c.clientId), bridgeRotated, m2mRotated: m2mSecret !== existingM2m }),
 );
@@ -94,5 +94,5 @@ if (bridgeRotated) {
   console.log(`ALEXA_BRIDGE_ORIGIN=${publicBaseUrl}`);
 }
 if (m2mSecret !== existingM2m) {
-  console.log("The alexa-m2m secret changed: deploy the gateway again (-c sla:deployGateway=1) so its credential provider re-resolves it.");
+  console.log(`The alexa-m2m secret changed: pnpm deploy -c sla:deployGateway=1 -c sla:m2mSecretVersion=${clientsVersion.VersionId} so the gateway's credential provider reads the new version.`)
 }

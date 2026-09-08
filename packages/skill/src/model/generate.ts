@@ -40,12 +40,17 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
       "play the story by {storyteller}",
       "play the one {storyteller} sent",
       "play the one from {storyteller}",
-      "play {storyteller}'s story",
+      "play the story of {storyteller}",
+      "put on the story {storyteller} sent",
+      "let's hear the story {storyteller} sent",
       "play {title}",
       "play the story {title}",
       "play the story called {title}",
       "play the one about {title}",
       "play the one called {title}",
+      "put on {title}",
+      "let's hear {title}",
+      "i want to hear {title}",
     ],
   },
   list_family_stories: {
@@ -87,24 +92,21 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
 /**
  * The catch-all: one `AMAZON.SearchQuery` slot behind carrier phrases (Alexa rejects a
  * sample that is only the slot), so unmatched speech reaches the agent as plain text.
+ * Alexa returns only the slot value, so every carrier is intent-neutral: the verb stays
+ * inside `{text}` ("to play the lighthouse one" arrives as "play the lighthouse one").
  */
 const CATCH_ALL_SAMPLES = [
   "to {text}",
-  "for {text}",
-  "about {text}",
-  "that {text}",
-  "put on {text}",
-  "play {text}",
-  "hear {text}",
-  "let's hear {text}",
-  "i want {text}",
-  "i want to hear {text}",
-  "i would like {text}",
-  "i'd like {text}",
+  "please {text}",
   "can you {text}",
   "could you {text}",
-  "please {text}",
+  "would you {text}",
+  "i want to {text}",
+  "i would like to {text}",
+  "i'd like to {text}",
+  "ask spoken letter to {text}",
   "ask spoken letter {text}",
+  "tell spoken letter to {text}",
   "tell spoken letter {text}",
 ];
 

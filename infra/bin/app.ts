@@ -19,13 +19,17 @@ const app = new App();
 //   sla:alertEmail      Owner address for the latency alarm
 //   sla:deployGateway   "1" on the second deploy, after seed:secrets, once DNS resolves
 //   sla:gatewayUrl      the GatewayUrl output; on the third deploy the agent targets the gateway
+//   sla:m2mSecretVersion the sla/oauth-clients version printed by seed:secrets --rotate-m2m
 //   sla:skillId         the Alexa skill id once `pnpm -F skill deploy` has run (Phase 9)
+//   sla:recordUtterances "1" for one recording session (phase-9 section 3), then unset
 const context = (key: string) => app.node.tryGetContext(key) as string | undefined;
 const certificateArn = context("sla:certificateArn");
 const alertEmail = context("sla:alertEmail") ?? "juan294@gmail.com";
 const gatewayUrl = context("sla:gatewayUrl");
 const deployGateway = context("sla:deployGateway") === "1";
+const m2mSecretVersionId = context("sla:m2mSecretVersion");
 const skillId = context("sla:skillId");
+const recordUtterances = context("sla:recordUtterances") === "1";
 
 const core = new CoreStack(app, "SpokenLetterAlexaCore", { env });
 const simulator = new SimulatorStack(app, "SpokenLetterAlexaSimulator", { env });
@@ -52,10 +56,16 @@ if (certificateArn) {
   edge.addStackDependency(simulator);
 }
 if (deployGateway) {
-  const gateway = new GatewayStack(app, "SpokenLetterAlexaGateway", { env, core, api, mcpEndpoint: `${PUBLIC_BASE_URL}/mcp` });
+  const gateway = new GatewayStack(app, "SpokenLetterAlexaGateway", {
+    env,
+    core,
+    api,
+    mcpEndpoint: `${PUBLIC_BASE_URL}/mcp`,
+    ...(m2mSecretVersionId && { m2mSecretVersionId }),
+  });
   // The target synchronizes tools from the public endpoint: DNS and TLS must exist first.
   if (edge) gateway.addStackDependency(edge);
 }
 new ObservabilityStack(app, "SpokenLetterAlexaObservability", { env, api, alertEmail });
-new SkillStack(app, "SpokenLetterAlexaSkill", { env, publicBaseUrl: PUBLIC_BASE_URL, ...(skillId && { skillId }) });
+new SkillStack(app, "SpokenLetterAlexaSkill", { env, publicBaseUrl: PUBLIC_BASE_URL, recordUtterances, ...(skillId && { skillId }) });
 // The Phase 7 LegacyStack (infra/lib/legacy-stack.ts) is intentionally not instantiated.

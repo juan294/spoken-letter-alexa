@@ -13,6 +13,8 @@ export type GatewayStackProps = StackProps & {
   /** The public MCP endpoint the gateway targets. */
   mcpEndpoint: string;
   issuer?: string;
+  /** Secrets Manager version id of `sla/oauth-clients` after `seed:secrets --rotate-m2m`. */
+  m2mSecretVersionId?: string;
 };
 
 /**
@@ -21,7 +23,9 @@ export type GatewayStackProps = StackProps & {
  * bound to the `alexa-m2m` static client (secret from `sla/oauth-clients`, so this stack
  * deploys only after `seed:secrets`); inbound auth is IAM for the agent Lambda, which
  * signs with SigV4 when `MCP_URL` is the gateway. The target is created after the edge
- * exists (bin/app.ts orders the stacks) and synchronized once by a custom resource.
+ * exists (bin/app.ts orders the stacks) and synchronized by a custom resource on every
+ * deploy. After `seed:secrets --rotate-m2m`, pass the printed version as
+ * `-c sla:m2mSecretVersion=...` so the credential provider re-resolves the secret.
  */
 export class GatewayStack extends Stack {
   readonly gateway: agentcore.Gateway;
@@ -34,7 +38,12 @@ export class GatewayStack extends Stack {
     const provider = agentcore.OAuth2CredentialProvider.usingCustom(this, "M2mProvider", {
       oAuth2CredentialProviderName: "sla-alexa-m2m",
       clientId: "alexa-m2m",
-      clientSecret: SecretValue.secretsManager(props.core.oauthClientsSecret.secretArn, { jsonField: "m2mSecret" }),
+      // Unversioned dynamic references are resolved only when the resource changes, so a
+      // rotation must name the new version to reach the provider (F6-18).
+      clientSecret: SecretValue.secretsManager(props.core.oauthClientsSecret.secretArn, {
+        jsonField: "m2mSecret",
+        ...(props.m2mSecretVersionId && { versionId: props.m2mSecretVersionId }),
+      }),
       authorizationServerMetadata: {
         issuer,
         authorizationEndpoint: `${issuer}/oauth/authorize`,
@@ -73,20 +82,22 @@ export class GatewayStack extends Stack {
       });
     }
 
-    // One synchronization after the target exists so the cached tool list is populated.
+    // Synchronize the target on every deploy so the cached tool list follows the server:
+    // the physical id carries the synth time, which changes the Update payload each time.
+    const syncId = `${this.gateway.gatewayId}:sync:${Date.now()}`;
     const sync = new cr.AwsCustomResource(this, "SynchronizeTarget", {
       resourceType: "Custom::SlaSynchronizeGatewayTarget",
       onCreate: {
         service: "@aws-sdk/client-bedrock-agentcore-control",
         action: "SynchronizeGatewayTargetsCommand",
         parameters: { gatewayIdentifier: this.gateway.gatewayId, targetIdList: [this.target.targetId] },
-        physicalResourceId: cr.PhysicalResourceId.of(`${this.gateway.gatewayId}:sync`),
+        physicalResourceId: cr.PhysicalResourceId.of(syncId),
       },
       onUpdate: {
         service: "@aws-sdk/client-bedrock-agentcore-control",
         action: "SynchronizeGatewayTargetsCommand",
         parameters: { gatewayIdentifier: this.gateway.gatewayId, targetIdList: [this.target.targetId] },
-        physicalResourceId: cr.PhysicalResourceId.of(`${this.gateway.gatewayId}:sync`),
+        physicalResourceId: cr.PhysicalResourceId.of(syncId),
       },
       policy: cr.AwsCustomResourcePolicy.fromStatements([
         new iam.PolicyStatement({ actions: ["bedrock-agentcore:SynchronizeGatewayTargets"], resources: [this.gateway.gatewayArn, `${this.gateway.gatewayArn}/*`] }),

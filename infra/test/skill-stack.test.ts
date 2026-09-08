@@ -14,7 +14,7 @@ describe("SkillStack", () => {
   beforeAll(() => {
     // One App per template: synthesizing twice from the same tree is refused by CDK.
     withId = Template.fromStack(new SkillStack(new App(), "SkillWithId", { env, publicBaseUrl: "https://alexa.spokenletter.com", skillId: SKILL_ID, bundle: false }));
-    withoutId = Template.fromStack(new SkillStack(new App(), "SkillWithoutId", { env, publicBaseUrl: "https://alexa.spokenletter.com", bundle: false }));
+    withoutId = Template.fromStack(new SkillStack(new App(), "SkillWithoutId", { env, publicBaseUrl: "https://alexa.spokenletter.com", bundle: false, recordUtterances: true }));
   });
 
   test("a small arm64 Node 24 Lambda pointed at the public host, with 30-day logs", () => {
@@ -26,6 +26,7 @@ describe("SkillStack", () => {
       Environment: { Variables: Match.objectLike({ PUBLIC_BASE_URL: "https://alexa.spokenletter.com", SKILL_ID, RECORD_UTTERANCES: "0" }) },
     });
     withId.hasResourceProperties("AWS::Logs::LogGroup", { RetentionInDays: 30 });
+    withoutId.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ SKILL_ID: "", RECORD_UTTERANCES: "1" }) } });
   });
 
   test("Alexa may invoke it only with the skill id as the event source token", () => {

@@ -36,14 +36,26 @@ function jsonError(c: Context, status: 400 | 404 | 413 | 500, error: string, mes
   return c.json({ error, message }, status);
 }
 
+function claimsOf(accessToken: string): { sub?: unknown; exp?: unknown } {
+  try {
+    return JSON.parse(Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")) as { sub?: unknown; exp?: unknown };
+  } catch {
+    return {};
+  }
+}
+
 /** Display-only subject from an access token (the MCP server verifies the token itself). */
 function subjectOf(accessToken: string): string {
-  try {
-    const payload = JSON.parse(Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")) as { sub?: unknown };
-    return typeof payload.sub === "string" ? payload.sub : "unknown";
-  } catch {
-    return "unknown";
-  }
+  const { sub } = claimsOf(accessToken);
+  return typeof sub === "string" ? sub : "unknown";
+}
+
+/** Service tokens live 1 hour and sessions 2; a token without a readable `exp` counts as expiring. */
+export const TOKEN_RENEWAL_WINDOW_SECONDS = 300;
+
+export function tokenExpiresWithin(accessToken: string, seconds: number, now: number): boolean {
+  const { exp } = claimsOf(accessToken);
+  return typeof exp !== "number" || exp - now <= seconds;
 }
 
 export function createAgentApp(deps: AgentDeps): Hono {
@@ -79,8 +91,13 @@ export function createAgentApp(deps: AgentDeps): Hono {
   app.post("/agent/turn", async (c) => {
     const parsed = turnBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "sessionId and text are required");
-    const session = await deps.sessions.get(parsed.data.sessionId);
+    let session = await deps.sessions.get(parsed.data.sessionId);
     if (!session) return jsonError(c, 404, "session_not_found", "Start a new session");
+    // Demo and device sessions hold the service token; a warm skill container keeps a
+    // device session for hours, so the token is renewed here before it lapses (F9-2).
+    if (session.mode !== "linked" && tokenExpiresWithin(session.accessToken, TOKEN_RENEWAL_WINDOW_SECONDS, deps.now ? deps.now() : Math.floor(Date.now() / 1000))) {
+      session = { ...session, accessToken: await deps.demoToken() };
+    }
     const result = await runTurn(
       { model: deps.model, mcpUrl: deps.mcpUrl, accessToken: session.accessToken, fetch: deps.mcpFetch, history: session.history },
       parsed.data.text,

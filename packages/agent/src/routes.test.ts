@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { createOfflineDeps } from "./offline.ts";
 import { createAgentApp, type AgentDeps } from "./routes.ts";
 import { ScriptedModel } from "./scripted-model.ts";
-import { MemorySessionStore } from "./sessions.ts";
+import { deviceSessionId, MemorySessionStore, newSession } from "./sessions.ts";
 import { ISSUER, MCP_URL, mcpHarness, type McpHarness } from "./test-support.ts";
 
 type SessionBody = { sessionId: string; mode: string; subject: string; offline: boolean };
@@ -90,6 +90,15 @@ describe("agent routes", () => {
     const next = (await (await post(app, "/agent/turn", { sessionId: again.sessionId, text: "play another" })).json()) as TurnBody;
     expect(next.play?.title).toBe("The owl who forgot how to hoot");
     expect((await post(app, "/agent/session", { mode: "device" })).status).toBe(400);
+  });
+
+  test("a turn on a device session whose service token lapsed renews the token instead of failing", async () => {
+    const stale = `x.${Buffer.from(JSON.stringify({ sub: "svc:alexa-m2m", exp: 1 })).toString("base64url")}.y`;
+    const id = deviceSessionId("amzn1.ask.account.STALE");
+    await deps.sessions.put(newSession({ id, mode: "device", subject: "svc:alexa-m2m", accessToken: stale }));
+    const turn = (await (await post(app, "/agent/turn", { sessionId: id, text: "play a story" })).json()) as TurnBody;
+    expect(turn.play?.title).toBe("A lighthouse for Mateo");
+    expect((await deps.sessions.get(id))?.accessToken).not.toBe(stale);
   });
 
   test("validation and unknown sessions answer RFC-style JSON errors", async () => {

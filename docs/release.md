@@ -101,24 +101,26 @@ pnpm build                                        # simulator dist + infra/dist/
 pnpm -F infra exec cdk bootstrap                  # once per account/region
 
 # Deploy 1: Core, Simulator, Api, Edge, Observability, Skill (no gateway yet)
-pnpm deploy -- -c sla:certificateArn=arn:aws:acm:us-east-1:106403001709:certificate/<id>
+pnpm deploy -c sla:certificateArn=arn:aws:acm:us-east-1:106403001709:certificate/<id>
 pnpm -F infra seed:secrets                        # keeps existing values; --rotate-bridge / --rotate-m2m to rotate
 node scripts/verify-deploy.mjs                    # DNS, TLS and the server answer before the gateway exists
 
 # Deploy 2: the AgentCore Gateway (needs the public endpoint to resolve)
-pnpm deploy -- -c sla:certificateArn=... -c sla:deployGateway=1
+pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1
 #   prints SpokenLetterAlexaGateway.GatewayUrl
 
 # Deploy 3: the agent targets the gateway (SigV4-signed, D19)
-pnpm deploy -- -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
+pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
 
-# Skill (Phase 9): create the development-stage skill, then lock the Lambda to its id
-pnpm -F skill deploy                              # ask deploy; records sla:skillId in infra/cdk.context.json
-pnpm deploy -- -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=...
+# Skill (Phase 9): create the development-stage skill, lock the Lambda to its id, finish the manifest
+pnpm -F skill deploy                              # creates the skill; records sla:skillId (manifest validation fails until the permission exists)
+pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=...
+pnpm -F skill deploy                              # manifest and interaction model now deploy
 ```
 
-Put the context keys in `infra/cdk.context.json` after the first run so the commands
-shorten to `pnpm deploy`. Keys: `sla:certificateArn` (the ACM certificate for
+Pass `-c` directly after `pnpm deploy` (a `--` separator makes pnpm swallow the flags
+and the stacks silently skip). Put the context keys in `infra/cdk.context.json` after the
+first run so the commands shorten to `pnpm deploy`. Keys: `sla:certificateArn` (the ACM certificate for
 `alexa.spokenletter.com` in `us-east-1`; without it EdgeStack is skipped and the function
 URL answers 403 to everything, since only CloudFront carries `x-origin-verify`, D18),
 `sla:alertEmail` (defaults to the Owner's address), `sla:deployGateway` (`1` from the

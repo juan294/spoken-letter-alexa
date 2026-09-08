@@ -40,7 +40,13 @@ function synth(): Templates {
     zoneName: "spokenletter.com",
     domainName: "alexa.spokenletter.com",
   });
-  const gateway = new GatewayStack(app, "SpokenLetterAlexaGateway", { env, core, api, mcpEndpoint: "https://alexa.spokenletter.com/mcp" });
+  const gateway = new GatewayStack(app, "SpokenLetterAlexaGateway", {
+    env,
+    core,
+    api,
+    mcpEndpoint: "https://alexa.spokenletter.com/mcp",
+    m2mSecretVersionId: "11111111-2222-4333-8444-555555555555",
+  });
   const observability = new ObservabilityStack(app, "SpokenLetterAlexaObservability", { env, api, alertEmail: "owner@example.com" });
   return {
     core: Template.fromStack(core),
@@ -251,6 +257,8 @@ describe("Phase 6 stacks", () => {
       });
       expect(resources(t.gateway, "Custom::SlaSynchronizeGatewayTarget")).toHaveLength(1);
       expect(Object.keys((t.gateway.toJSON() as { Outputs?: Record<string, unknown> }).Outputs ?? {})).toContain("GatewayUrl");
+      // The rotated secret version reaches the credential provider through the dynamic reference.
+      expect(JSON.stringify(t.gateway.toJSON())).toContain(":SecretString:m2mSecret::11111111-2222-4333-8444-555555555555}}");
       // The API stack no longer references the gateway, so it deploys first.
       expect(JSON.stringify(t.api.toJSON())).not.toContain("SpokenLetterAlexaGateway");
     });

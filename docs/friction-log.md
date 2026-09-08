@@ -256,12 +256,27 @@ entries by tool.
 - **`X-Forwarded-For` is viewer-controlled up to the last hop.** Severity low. The rate
   limiter now keys on `CloudFront-Viewer-Address` (forwarded by the origin request
   policy) and otherwise on the last `X-Forwarded-For` entry.
+- **`AwsCustomResource` has no SDK metadata for `bedrock-agentcore-control` in CDK
+  2.268.** Severity low. The custom resource sets `InstallLatestAwsSdk`, so the first
+  synchronization installs the SDK inside the provider Lambda (slow first run, then
+  cached). A constant physical id would also have made the sync run once; the id now
+  carries the synth time so every deploy refreshes the gateway's tool list.
+- **Unversioned Secrets Manager dynamic references are not re-resolved.** Severity
+  medium. Rotating `alexa-m2m` leaves the AgentCore credential provider on the old
+  value until the resource changes; `seed:secrets --rotate-m2m` prints the new
+  `VersionId` and the deploy passes it as `-c sla:m2mSecretVersion=...`.
+- **`pnpm deploy -- -c key=value` loses the flags.** Severity medium (documentation).
+  With the `--` separator pnpm does not forward `-c` to the nested `cdk deploy`, so the
+  edge and gateway stacks silently skip; `pnpm deploy -c ...` works. Verified with
+  `pnpm synth` on both forms.
 
 ## 2026-09-08: Phase 9 (classic-skill front end, written, not registered)
 
 - **`AMAZON.SearchQuery` needs a carrier phrase.** Severity low. A sample that is only
-  `{text}` is rejected by the console; seventeen carrier phrases route free text to the
-  catch-all instead (D21). The bridge's README does not mention this.
+  `{text}` is rejected by the console; intent-neutral carrier phrases ("to {text}",
+  "can you {text}") route free text to the catch-all instead, and Alexa hands the skill
+  only the slot value, so a carrier must never hold the verb (D21). The bridge's README
+  does not mention either point.
 - **A Lambda endpoint receives no request signature.** Severity low. Verification is
   the Alexa Skills Kit trigger permission (restricted with `EventSourceToken` to the
   skill id) plus the `applicationId` check in the handler; both are in place, and the
@@ -270,9 +285,12 @@ entries by tool.
 - **No store is needed for pause and resume.** The stream token Alexa echoes back
   carries the whole `play` object (URL, title, storyteller, duration), so
   `AMAZON.ResumeIntent` rebuilds the directive from the token and the reported offset.
-- **ASK CLI is a separate toolchain.** Severity low. `ask configure` needs the developer
-  console account (Owner gate); `pnpm -F skill deploy` wraps `ask deploy`, checks the
-  fixed Lambda ARN first, and records the skill id for the next CDK deploy. Whether an
+- **ASK CLI is a separate toolchain, and registration is circular.** Severity low.
+  `ask configure` needs the developer console account (Owner gate); the Skill Management
+  API refuses a Lambda endpoint whose resource policy does not yet allow
+  `alexa-appkit.amazon.com`, while that permission should be restricted to a skill id
+  that does not exist before the first `ask deploy`. `pnpm -F skill deploy` therefore
+  records the id even when the manifest fails, and runs again after `pnpm deploy`. Whether an
   Alexa+ device in Spain routes to a development-stage `en-US` skill is still the open
   question from `amazon/us-account-checklist.md`; the first device test answers it.
 

@@ -382,6 +382,17 @@ Fifteen findings; dispositions and the repair commit:
 | F6-14 | `verify-deploy` p95 assertion hard-coded | Rejected: `ASSERT_P95=0` already documented for runs from Spain |
 | F6-15 | `Mcp-*` headers not all forwarded | Fixed: `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Mcp-Session-Id` in the origin request policy; tested |
 
+Re-verification (`review-phase-6-verify`, fresh context) against `bbb47ac`: F6-1 to F6-7
+and F6-9 to F6-15 verified fixed with file:line evidence; F6-8 partial and four new
+findings, all handled in the follow-up commit:
+
+| Id | Finding | Disposition |
+| --- | --- | --- |
+| F6-8 / F6-17 | The sync custom resource had a constant physical id, so it ran once, not on every deploy | Fixed: the physical id carries the synth time; comments and D20 aligned |
+| F6-16 | `pnpm deploy -- -c ...` in `docs/release.md` makes pnpm swallow the context flags (verified with `pnpm synth`) | Fixed: `pnpm deploy -c ...` everywhere, with a warning line |
+| F6-18 | After `--rotate-m2m` the gateway's unversioned dynamic reference is never re-resolved | Fixed: `sla:m2mSecretVersion` context passes the printed `VersionId` into `SecretValue.secretsManager(..., { versionId })`; tested |
+| F6-19 | CDK 2.268 ships no SDK metadata for `bedrock-agentcore-control`; the custom resource installs the latest SDK at first invoke | Recorded in the friction log; no change |
+
 Repair commit: the Phase 6 fix commit that follows `0e9ec79`. Checks on that tree:
 `pnpm typecheck` pass (10 packages); `pnpm lint` pass; `pnpm test` pass, 48 files, 315
 tests; `pnpm build` and `pnpm -F infra synth` pass (5 stacks without the certificate
@@ -469,6 +480,22 @@ account from `amazon/us-account-checklist.md`; `pnpm deploy` (creates the functi
 `pnpm -F skill deploy`; `pnpm deploy` again with the recorded `sla:skillId`; enable
 testing in the developer console; the simulator and Echo checks recorded in the friction
 log, including whether an Alexa+ device in Spain routes to the development-stage skill.
+
+## Phase 9 review
+
+Independent reviewer (fresh context, `review-phase-9`) against `0ecdff9`. Seven findings:
+
+| Id | Finding | Disposition |
+| --- | --- | --- |
+| F9-1 | `ask deploy` fails manifest validation until the Lambda trigger permission exists, and the script then lost the skill id | Fixed: `spawnSync`, the id is recorded either way, the script explains the second run (D22) |
+| F9-2 | Device sessions (2 h) outlive the service token (1 h); a warm container's turns failed silently | Fixed: `/agent/turn` renews the token for demo and device sessions within 5 minutes of `exp`; tested with a lapsed token |
+| F9-3 | Verb-carrying catch-all carriers stripped the verb from the text | Fixed: intent-neutral carriers only; verb phrasings moved into `PlayStoryIntent` (D21) |
+| F9-4 | `"play {storyteller}'s story"` puts punctuation against a slot | Fixed: "play the story of {storyteller}" |
+| F9-5 | Icons absent without a deviation | Recorded (D22) |
+| F9-6 | Recording mode needed a stack edit; profile mismatch between the two scripts | Fixed: `-c sla:recordUtterances=1`; `record-pull` defaults `AWS_PROFILE` to `archy` |
+| F9-7 | Test file location and token-based resume undocumented | Recorded (D22) |
+
+Repair commit follows `0ecdff9`; checks re-run on that tree (see the final gate below).
 
 ## Plan amendment (2026-09-08): Phase 9
 
@@ -669,8 +696,10 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Found (F6-5, F6-8): the target synchronizes tools from the public endpoint at create
   time, so DNS and TLS must exist first; the tool list never refreshed after that.
 - Chose: `-c sla:deployGateway=1` on the second deploy, `GatewayStack` depends on
-  `EdgeStack`, an `AwsCustomResource` calls `SynchronizeGatewayTargets` on every deploy,
-  and `GatewayUrl` is a stack output; `docs/release.md` A3a lists the three deploys.
+  `EdgeStack`, an `AwsCustomResource` calls `SynchronizeGatewayTargets` on every deploy
+  (its physical id carries the synth time, F6-17), and `GatewayUrl` is a stack output;
+  `docs/release.md` A3a lists the three deploys with `-c` flags (never after a `--`,
+  which pnpm swallows, F6-16).
 - Why: deterministic first deploy; the tool list follows the server.
 
 ### D21. Catch-all samples carry a phrase before the slot (Phase 9)
@@ -678,7 +707,25 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Plan said: sample utterances "{text}", "ask spoken letter {text}", "tell spoken letter {text}".
 - Found: Alexa rejects an `AMAZON.SearchQuery` sample that is only the slot; a carrier
   phrase is required.
-- Chose: seventeen carrier phrases ("to {text}", "play {text}", "let's hear {text}",
-  "ask spoken letter {text}", ...); recorded phrasings are appended as literal samples
-  for the Owner to move into the right intent's list at review time.
-- Why: the model must pass the developer console's validation.
+- Chose: twelve intent-neutral carrier phrases ("to {text}", "please {text}", "can you
+  {text}", "i want to {text}", "ask spoken letter to {text}", ...). Alexa returns only
+  the slot value, so a carrier that holds the verb ("play {text}") would strip it before
+  the agent sees the text (review F9-3); verb phrasings ("put on {title}", "let's hear
+  {title}") live in `PlayStoryIntent` instead. Recorded phrasings are appended as literal
+  samples for the Owner to move into the right intent's list at review time.
+- Why: the model must pass the developer console's validation and the agent must
+  receive the action, not just its object.
+
+### D22. Phase 9 small departures (Phase 9 review)
+
+- Plan said: skill icons (108 px and 512 px) from the brand tokens; `SkillStack`
+  assertions in `infra/test/stacks.test.ts`; "offset storage for pause and resume".
+- Found: icons are not needed for development-stage testing (only for certification,
+  which the plan excludes); the stack has its own `infra/test/skill-stack.test.ts`; the
+  `AudioPlayer` stream token can carry the whole `play`, so resume needs no store.
+- Chose: no icons and no store; the tests live in the dedicated file. Registration runs
+  `pnpm -F skill deploy` twice around a `pnpm deploy` because the Skill Management API
+  validates the Lambda trigger permission, which exists only once the skill id is known
+  (F9-1); `docs/release.md` and the script say so.
+- Why: same behaviour with less state; the icon work is deferred until a store listing
+  is in scope.
