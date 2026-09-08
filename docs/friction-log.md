@@ -1,5 +1,23 @@
 # Friction log
 
+## By tool (submission summary; the dated entries below are the evidence)
+
+| Tool | Severity | One-line suggested fix |
+| --- | --- | --- |
+| Alexa+ MCP Toolkit access (`alexa-ai` CLI, Inspector, simulator) | high | A self-serve access tier for hackathon entrants, and the manifest schema outside the gated toolkit. |
+| Alexa+ audio playback contract | high | One page stating which content types Alexa+ renders and plays from a tool result (`resource_link`, screened vs screenless). |
+| Alexa+ protocol facts | medium | Publish the live client's `initialize` version (2025-03-26), the Inspector's (2025-06-18) and its `Mcp-Session-Id` expectation on one page. |
+| CloudFront OAC in front of a Lambda function URL | high | Document that the OAC overwrites the viewer's `Authorization` header, or let the OAC use another header; the viewer-request copy function is the workaround. |
+| MCP TypeScript SDK v2 | low | Export the modern revision constant; one "minimal modern request" example (three `_meta` keys, three headers). |
+| Strands Agents SDK | medium | Map `structuredContent` in `McpTool`; ship a 2.x-compatible client transport; stop pulling native optional dependencies. |
+| AgentCore Gateway (CDK L2) | low | Enumerate 2025-11-25 and 2026-07-28 in `MCPProtocolVersion`; avoid the wildcard secret grant when the ARN is a token. |
+| Amazon Transcribe streaming | low | Accept Opus so browsers need no `ffmpeg` hop. |
+| Amazon Polly | none | Nothing yet. |
+| Bedrock model access | medium | Surface "model access not enabled" before the first invoke, ideally from the CLI. |
+| AWS CDK (`NodejsFunction`, typings) | medium | Run esbuild through its API when the bin is a native binary; add `| undefined` to optional members for `exactOptionalPropertyTypes`; document the S3 OAC cross-stack cycle. |
+| Kiro Crew | low | Publish an installable CLI. |
+| pnpm 11 (not Amazon) | low | Recorded for completeness: minimum release age and `allowBuilds` prompts. |
+
 Dated entries, kept from day one, for the AWS Builder mini challenge and the hackathon's
 product-feedback requirement. Each entry names the tool, what happened, the severity
 (low, medium, high) and a one-line suggested fix. The final pass (Phase 8) groups the

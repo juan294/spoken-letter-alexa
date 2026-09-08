@@ -358,6 +358,45 @@ Owner gates (phase-6 manual criteria and section 2): ACM certificate, `cdk boots
 in `OK`, the gateway target `READY`, the demo page playing a fixture story. The
 `workflow_dispatch` runner job for the latency check is a Phase 8 item.
 
+## Phase 8 handoff
+
+Objective: submission materials and October production wiring (phase-8.md). The public
+repository's written materials are in place; everything else in Phase 8 is an Owner or
+post-freeze action and is listed here as the remaining checklist.
+
+Done in the public repository:
+
+- `README.md`: architecture, "Amazon tools used" with one line per service and its
+  phase, quick start, local link flow, simulator commands, "Built during the hackathon
+  window", licence.
+- `docs/friction-log.md`: dated entries for every phase plus the by-tool summary with
+  severity and a one-line fix; `docs/product-feedback.md`: one section per Amazon tool,
+  API or SDK used, with what worked, what needs improvement, onboarding and future intent.
+- `.github/workflows/latency.yml`: the manual `us-east-1` latency measurement
+  (phase-6 section 3); `verify.yml` stays the single verify job.
+
+Owner checklist (in order):
+
+1. Say "push": `gh repo create juan294/spoken-letter-alexa --public --license mit`, push
+   `develop` and `main`, add the topics `alexa-plus`, `mcp`, `aws`, `hackathon`, add the
+   `verify` required check on `main` (phase-8 section 3), the repository secret
+   `SLA_M2M_SECRET` for the latency workflow.
+2. Request the ACM certificate for `alexa.spokenletter.com` (phase-0 section 7), record
+   the ARN as `sla:certificateArn`, then `docs/release.md` A3a: build, bootstrap,
+   deploy, seed, second deploy with `sla:gatewayUrl`, `verify-deploy` from Spain
+   (`ASSERT_P95=0`) and from the runner.
+3. Export three own recordings per `fixtures/README.md`, run `pnpm build` and deploy
+   again so the demo plays them; enable Bedrock model access for the chosen model.
+4. After 2026-10-01: Phase 3 in `../spoken-letter` (branch `feat/alexa-bridge`), the
+   private release with `ALEXA_BRIDGE_SECRET`, `ALEXA_BRIDGE_ORIGIN`,
+   `NEXT_PUBLIC_ALEXA_CONNECT_URL`, then `PROVIDER_MODE=auto` on the deployed server and
+   the real `scripts/e2e-link.mjs` run with `SL_SESSION_COOKIE`.
+5. Video per the phase-8 shot list (parent asking, never a child; no Recipient name on
+   screen), Devpost form, the $150 AWS credit form, judge-access notes.
+6. If toolkit access arrives: `amazon/runbook.md` and `amazon/inspector.md`.
+
+Post-submission notes (phase-8 section 5) are recorded there and not executed.
+
 ## Deviations
 
 ### D1. Branch topology (session, before Phase 0)

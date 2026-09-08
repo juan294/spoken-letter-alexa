@@ -113,6 +113,19 @@ scripts/             mock-spoken-letter.mjs (stand-in for the private bridge), e
 docs/                research, plans, decisions, friction log, product feedback, release
 ```
 
+## Built during the hackathon window
+
+Everything in this repository was created between 2026-09-03 (plan) and the submission
+date, on the public `develop` and `main` branches. The dated history lives in
+`docs/plans/2026-09-03-alexa-plus-mcp-add-on-notes.md` (one handoff per phase, every
+review finding and its disposition, and the deviation register D1 to D17) and in
+`docs/friction-log.md`. The private Spoken Letter repository receives only the small
+bridge described in Phase 3 of the plan, after its freeze lifts on 2026-10-01; that pull
+request is linked here when it exists.
+
+Manual `latency` workflow: `.github/workflows/latency.yml` runs `scripts/verify-deploy.mjs`
+from a `us-east-1` runner against the deployed host (never deploys).
+
 ## Working in this repository
 
 Agent workflow follows cc-rpi (Research, Plan, Implement, Validate). Shared project
