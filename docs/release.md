@@ -95,20 +95,37 @@ Before Phase 6 the probes run locally against the Hono handler (Phases 1 and 2 t
 ### A3a. Deploy procedure (Owner's machine, profile `archy`, account `106403001709`)
 
 ```bash
-aws sso login --profile archy                     # or the profile's credential flow
-pnpm build                                        # simulator dist + infra/dist/lambda (esbuild, linux/arm64 ffmpeg)
-pnpm -F infra exec cdk bootstrap --profile archy  # once per account/region
-pnpm deploy                                       # cdk deploy --all --require-approval broadening --profile archy
-pnpm -F infra seed:secrets                        # writes sla/bridge and sla/oauth-clients; prints the bridge secret ONCE
+export AWS_PROFILE=archy
+aws sso login                                     # or the profile's credential flow
+pnpm build                                        # simulator dist + infra/dist/lambda + infra/dist/skill
+pnpm -F infra exec cdk bootstrap                  # once per account/region
+
+# Deploy 1: Core, Simulator, Api, Edge, Observability, Skill (no gateway yet)
+pnpm deploy -- -c sla:certificateArn=arn:aws:acm:us-east-1:106403001709:certificate/<id>
+pnpm -F infra seed:secrets                        # keeps existing values; --rotate-bridge / --rotate-m2m to rotate
+node scripts/verify-deploy.mjs                    # DNS, TLS and the server answer before the gateway exists
+
+# Deploy 2: the AgentCore Gateway (needs the public endpoint to resolve)
+pnpm deploy -- -c sla:certificateArn=... -c sla:deployGateway=1
+#   prints SpokenLetterAlexaGateway.GatewayUrl
+
+# Deploy 3: the agent targets the gateway (SigV4-signed, D19)
+pnpm deploy -- -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
+
+# Skill (Phase 9): create the development-stage skill, then lock the Lambda to its id
+pnpm -F skill deploy                              # ask deploy; records sla:skillId in infra/cdk.context.json
+pnpm deploy -- -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=...
 ```
 
-Context the app reads (`-c key=value` or `infra/cdk.context.json`): `sla:certificateArn`
-(the ACM certificate for `alexa.spokenletter.com` in `us-east-1`; without it EdgeStack is
-skipped and the function URL is reachable only through CloudFront once EdgeStack
-exists), `sla:alertEmail` (defaults to the Owner's address), `sla:gatewayUrl` (the
-AgentCore Gateway MCP endpoint printed by GatewayStack; pass it on the second deploy so the
-agent's `MCP_URL` becomes the gateway). The first deploy runs with `PROVIDER_MODE=fixtures`
-for every subject; Phase 8 switches to `auto` after the private bridge lands.
+Put the context keys in `infra/cdk.context.json` after the first run so the commands
+shorten to `pnpm deploy`. Keys: `sla:certificateArn` (the ACM certificate for
+`alexa.spokenletter.com` in `us-east-1`; without it EdgeStack is skipped and the function
+URL answers 403 to everything, since only CloudFront carries `x-origin-verify`, D18),
+`sla:alertEmail` (defaults to the Owner's address), `sla:deployGateway` (`1` from the
+second deploy on), `sla:gatewayUrl` (the `GatewayUrl` output; from the third deploy on
+the agent's `MCP_URL` is the gateway), `sla:skillId` (written by `pnpm -F skill deploy`).
+Every deploy runs with `PROVIDER_MODE=fixtures` for every subject; Phase 8 switches to
+`auto` after the private bridge lands.
 
 After every deploy: `node scripts/verify-deploy.mjs` (discovery, legacy `initialize`,
 modern `server/discover`, tool latency, SSE pass-through); with `M2M_SECRET` from the

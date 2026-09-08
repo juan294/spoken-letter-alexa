@@ -318,7 +318,8 @@ Delivered:
 
 - `infra/lib/api-stack.ts`: one Lambda (Node 24, arm64, 1024 MB, 60 s, reserved
   concurrency 20, X-Ray) from `infra/dist/lambda`, function URL `RESPONSE_STREAM` with
-  IAM auth, environment of ARNs and flags (never secrets), least-privilege grants
+  auth type NONE plus the `x-origin-verify` gate (D18, after review), environment of
+  ARNs and flags (never secrets), least-privilege grants
   (DynamoDB on the two tables, the two secrets, `kms:Sign`/`GetPublicKey`, `s3:PutObject`
   on `polly/*`, Bedrock on the chosen model, Transcribe and Polly on `*` because they
   have no resource-level permissions), explicit log group with 30-day retention.
@@ -358,6 +359,35 @@ Owner gates (phase-6 manual criteria and section 2): ACM certificate, `cdk boots
 in `OK`, the gateway target `READY`, the demo page playing a fixture story. The
 `workflow_dispatch` runner job for the latency check is a Phase 8 item.
 
+## Phase 6 review
+
+Independent reviewer (fresh context, `review-phase-6`) against commit `890d4cd`.
+Fifteen findings; dispositions and the repair commit:
+
+| Id | Finding | Disposition |
+| --- | --- | --- |
+| F6-1 | OAC on a function URL makes Lambda reject every POST that lacks `x-amz-content-sha256`; CloudFront does not add it, so `/mcp`, `/oauth/token` and `/agent/*` would all 403 | Fixed: auth type NONE, `sla/origin-verify` shared header checked in constant time by `packages/app/src/lambda.ts` (D18) |
+| F6-2 | Distribution-wide 403 to 200 error response rewrote API refusals into the SPA | Fixed: no `errorResponses`; a viewer-request function handles SPA deep links |
+| F6-3 | `/demo` without a slash matched the API behaviour | Fixed: `/demo` behaviour on S3 that redirects to `/demo/` |
+| F6-4 | Alarm read `ToolLatencyMs` with no dimensions while EMF published only `Tool` | Fixed: EMF publishes `[["Tool"], []]`; alarm and comment agree; `metrics.test.ts` |
+| F6-5 | Gateway target synced against an endpoint that may not resolve; no `GatewayUrl` output; Api depended on Gateway | Fixed: `sla:deployGateway` context, Gateway depends on Edge, invoke policy lives in GatewayStack, `CfnOutput GatewayUrl` |
+| F6-6 | `seed:secrets` rotated the m2m secret on every run, breaking the gateway's credential provider | Fixed: existing values kept unless `--rotate-bridge` / `--rotate-m2m` |
+| F6-7 | The agent called the IAM-authorized gateway without SigV4 | Fixed: `packages/agent/src/sigv4-fetch.ts` used by `bootstrap.ts` when `MCP_URL` is not the local `/mcp` (D19) |
+| F6-8 | Target listing mode unset; tools never synchronized after the first deploy | Fixed: `ListingMode: DEFAULT`, `AwsCustomResource` calling `SynchronizeGatewayTargets` on every deploy |
+| F6-9 | Rate limit keyed on the first `X-Forwarded-For` entry, which a viewer forges | Fixed: `CloudFront-Viewer-Address`, else the last hop; tested |
+| F6-10 | Simulator bucket policy duplicated the Edge one | Fixed with F6-2 rewrite (single policy) |
+| F6-11 | Grant helpers gave `dynamodb:*Batch*`, `s3:Abort*`, `secretsmanager:DescribeSecret` | Fixed: explicit statements with exactly the plan's verbs; tested |
+| F6-12 | A synth without the bundle deployed the marker function | Fixed: `ApiStack` and `SkillStack` throw when `index.mjs` is missing |
+| F6-13 | "Phase 4 placeholder" wording on the bridge secret | Fixed |
+| F6-14 | `verify-deploy` p95 assertion hard-coded | Rejected: `ASSERT_P95=0` already documented for runs from Spain |
+| F6-15 | `Mcp-*` headers not all forwarded | Fixed: `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Mcp-Session-Id` in the origin request policy; tested |
+
+Repair commit: the Phase 6 fix commit that follows `0e9ec79`. Checks on that tree:
+`pnpm typecheck` pass (10 packages); `pnpm lint` pass; `pnpm test` pass, 48 files, 315
+tests; `pnpm build` and `pnpm -F infra synth` pass (5 stacks without the certificate
+context). TDD: `metrics.test.ts`, `sigv4-fetch.test.ts`, the `originVerified`,
+`secrets` and rate-limit tests and the `stacks.test.ts` changes ran red first.
+
 ## Phase 8 handoff
 
 Objective: submission materials and October production wiring (phase-8.md). The public
@@ -396,6 +426,49 @@ Owner checklist (in order):
 6. If toolkit access arrives: `amazon/runbook.md` and `amazon/inspector.md`.
 
 Post-submission notes (phase-8 section 5) are recorded there and not executed.
+
+## Phase 9 handoff
+
+Objective: the classic-skill front end for real-device footage (phase-9.md). Everything
+is written and tested; the skill itself is not created (ASK CLI and the developer
+console are Owner gates), and nothing was deployed.
+
+Delivered:
+
+- `packages/skill`: `handler.ts` (skill-id check, every row of the phase-9 section 2
+  table, SSML escaping, `AudioPlayer.Play` with metadata, pause/resume from the stream
+  token and the reported offset, stop/cancel, lifecycle no-ops, help/fallback, the
+  "still looking" reply on any agent failure, recording mode), `agent-client.ts` (device
+  session per Alexa user, one reopen on `session_not_found`, whole-turn abort budget),
+  `audio.ts` (stream token carries the whole `play`, so resume needs no store),
+  `model/generate.ts` and `generate-cli.ts` (one intent per `TOOL_METADATA` entry,
+  catch-all with `AMAZON.SearchQuery` behind carrier phrases, training phrasings
+  normalised, filtered and deduplicated, built-ins), `lambda.ts` (entry), `index.ts`.
+- `packages/skill/skill-package/skill.json` (custom API, `AUDIO_PLAYER`, `en-US`, the
+  fixed Lambda ARN `sla-alexa-skill`, development-stage wording),
+  `interactionModels/custom/en-US.json` (generated, committed, drift-checked),
+  `ask-resources.json`, `scripts/deploy.mjs` (preflight, `ask deploy`, records
+  `sla:skillId` into `infra/cdk.context.json`), `scripts/record-pull.mjs` (CloudWatch
+  `utterance_recorded` lines into `skill-package/training/en-US.jsonl`).
+- `infra/lib/skill-stack.ts` (Node 24, arm64, 256 MB, 8 s, fixed name, logs and X-Ray
+  only, `alexa-appkit.amazon.com` permission with `EventSourceToken` once `sla:skillId`
+  exists), instantiated in `infra/bin/app.ts`; `bundle-lambda.mjs` builds
+  `infra/dist/skill`.
+- `packages/agent`: `/agent/session` accepts `{ mode: "device", deviceUserId }`; the
+  session id is `dev_<sha256(deviceUserId) prefix>`, reused across invocations with a
+  fresh service token each time (`deviceSessionId`, `sessions.ts`).
+- Tests: `handler.test.ts` (13), `agent-client.test.ts` (3), `model/generate.test.ts`
+  (6, drift check included), `infra/test/skill-stack.test.ts` (3), `routes.test.ts`
+  device mode. All ran red first (modules missing); 315 tests green after.
+
+Checks on the Phase 9 commit: the same run as the Phase 6 review record above
+(typecheck, lint, 315 tests, build, synth of 5 stacks plus `SpokenLetterAlexaSkill`).
+
+Owner gates (phase-9 section 4 and success criteria): `ask configure` with the developer
+account from `amazon/us-account-checklist.md`; `pnpm deploy` (creates the function);
+`pnpm -F skill deploy`; `pnpm deploy` again with the recorded `sla:skillId`; enable
+testing in the developer console; the simulator and Echo checks recorded in the friction
+log, including whether an Alexa+ device in Spain routes to the development-stage skill.
 
 ## Plan amendment (2026-09-08): Phase 9
 
@@ -569,3 +642,43 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Chose: omit `supportedVersions`; record what the deployed gateway reports in the
   friction log.
 - Why: the server negotiates whatever the gateway's client sends.
+
+### D18. Function URL auth type NONE with a shared origin header (Phase 6 review)
+
+- Plan said: IAM auth on the function URL and a CloudFront origin access control.
+- Found (review F6-1): Lambda function URLs behind an OAC reject any POST that lacks
+  `x-amz-content-sha256`, and CloudFront does not add it; every JSON-RPC and OAuth
+  request would fail with 403.
+- Chose: auth type NONE; CloudFront adds `x-origin-verify` from `sla/origin-verify`
+  (Secrets Manager dynamic reference) and the Lambda refuses requests without it in
+  constant time before the app runs.
+- Why: the only reliable way to keep the URL private to CloudFront while streaming POSTs.
+
+### D19. SigV4-signed fetch for the gateway path (Phase 6 review)
+
+- Plan said: the agent's `MCP_URL` becomes the AgentCore Gateway on the second deploy.
+- Found (F6-7): the gateway's inbound authorizer is IAM; the agent's MCP client sent a
+  bearer only.
+- Chose: `createSigV4Fetch` (`@smithy/signature-v4`, service `bedrock-agentcore`) with
+  the Lambda's credentials, used whenever `MCP_URL` is not this server's own `/mcp`.
+- Why: the gateway path serves the demo subject and must actually connect.
+
+### D20. Gateway deploy is opt-in and ordered after Edge (Phase 6 review)
+
+- Plan said: one `cdk deploy --all`.
+- Found (F6-5, F6-8): the target synchronizes tools from the public endpoint at create
+  time, so DNS and TLS must exist first; the tool list never refreshed after that.
+- Chose: `-c sla:deployGateway=1` on the second deploy, `GatewayStack` depends on
+  `EdgeStack`, an `AwsCustomResource` calls `SynchronizeGatewayTargets` on every deploy,
+  and `GatewayUrl` is a stack output; `docs/release.md` A3a lists the three deploys.
+- Why: deterministic first deploy; the tool list follows the server.
+
+### D21. Catch-all samples carry a phrase before the slot (Phase 9)
+
+- Plan said: sample utterances "{text}", "ask spoken letter {text}", "tell spoken letter {text}".
+- Found: Alexa rejects an `AMAZON.SearchQuery` sample that is only the slot; a carrier
+  phrase is required.
+- Chose: seventeen carrier phrases ("to {text}", "play {text}", "let's hear {text}",
+  "ask spoken letter {text}", ...); recorded phrasings are appended as literal samples
+  for the Owner to move into the right intent's list at review time.
+- Why: the model must pass the developer console's validation.

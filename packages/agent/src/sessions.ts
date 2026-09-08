@@ -1,13 +1,13 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { randomToken } from "@spoken-letter-alexa/shared";
+import { randomToken, sha256Hex } from "@spoken-letter-alexa/shared";
 import { type MessageData } from "@strands-agents/sdk";
 
 export const SESSION_TTL_SECONDS = 2 * 60 * 60;
 
 export type AgentSession = {
   id: string;
-  mode: "demo" | "linked";
-  /** Display only: `svc:<clientId>` for demo, the Spoken Letter uid for linked. */
+  mode: "demo" | "linked" | "device";
+  /** Display only: `svc:<clientId>` for demo and device, the Spoken Letter uid for linked. */
   subject: string;
   /** Held in memory or in the session table with a 2-hour TTL; never logged. */
   accessToken: string;
@@ -22,11 +22,21 @@ export interface SessionStore {
 }
 
 export function newSession(
-  input: { mode: AgentSession["mode"]; subject: string; accessToken: string },
+  input: { mode: AgentSession["mode"]; subject: string; accessToken: string; id?: string },
   now: () => number = () => Math.floor(Date.now() / 1000),
 ): AgentSession {
   const createdAt = now();
-  return { id: randomToken(24), ...input, history: [], createdAt, expiresAt: createdAt + SESSION_TTL_SECONDS };
+  const { id, ...rest } = input;
+  return { id: id ?? randomToken(24), ...rest, history: [], createdAt, expiresAt: createdAt + SESSION_TTL_SECONDS };
+}
+
+/**
+ * Device sessions (the classic skill, Phase 9) are keyed by a hash of Alexa's opaque
+ * per-skill user id, so one Echo keeps its conversation across invocations and the id
+ * itself is never stored.
+ */
+export function deviceSessionId(deviceUserId: string): string {
+  return `dev_${sha256Hex(`device:${deviceUserId}`).slice(0, 32)}`;
 }
 
 export class MemorySessionStore implements SessionStore {
@@ -75,7 +85,7 @@ export class DynamoSessionStore implements SessionStore {
     if (!item || typeof item.expiresAt !== "number" || item.expiresAt <= this.now()) return null;
     return {
       id: String(item.id ?? item.sessionId),
-      mode: item.mode === "linked" ? "linked" : "demo",
+      mode: item.mode === "linked" ? "linked" : item.mode === "device" ? "device" : "demo",
       subject: String(item.subject),
       accessToken: String(item.accessToken),
       history: Array.isArray(item.history) ? (item.history as MessageData[]) : [],

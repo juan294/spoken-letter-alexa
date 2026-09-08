@@ -26,9 +26,7 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: {
-          allowDefaultProject: ["eslint.config.mjs", "scripts/*.mjs", "infra/scripts/*.mjs"],
-        },
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -56,7 +54,9 @@ export default tseslint.config(
   {
     files: ["**/*.mjs", "**/*.js"],
     ...tseslint.configs.disableTypeChecked,
+    // Scripts are plain ESM outside every tsconfig: no type information, no default project.
     languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
       globals: {
         process: "readonly",
         console: "readonly",
@@ -70,7 +70,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.test.ts", "**/*.test.tsx", "scripts/**", "infra/scripts/**"],
+    files: ["**/*.test.ts", "**/*.test.tsx", "scripts/**", "infra/scripts/**", "packages/skill/scripts/**"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
       "no-console": "off",

@@ -4,7 +4,7 @@ import { type Context, Hono } from "hono";
 import { z } from "zod";
 
 import { type SpeechSynthesizer } from "./polly.ts";
-import { type SessionStore, newSession } from "./sessions.ts";
+import { type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
 import { runTurn } from "./turn.ts";
 
@@ -28,6 +28,7 @@ const MAX_UTTERANCE_BYTES = 5 * 1024 * 1024;
 const sessionBodySchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("demo") }),
   z.object({ mode: z.literal("linked"), accessToken: z.string().min(16) }),
+  z.object({ mode: z.literal("device"), deviceUserId: z.string().min(1).max(256) }),
 ]);
 const turnBodySchema = z.object({ sessionId: z.string().min(1).max(128), text: z.string().trim().min(1).max(500) });
 
@@ -56,9 +57,20 @@ export function createAgentApp(deps: AgentDeps): Hono {
 
   app.post("/agent/session", async (c) => {
     const parsed = sessionBodySchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return jsonError(c, 400, "invalid_request", "mode must be demo, or linked with an accessToken");
-    const accessToken = parsed.data.mode === "demo" ? await deps.demoToken() : parsed.data.accessToken;
-    const session = newSession({ mode: parsed.data.mode, subject: subjectOf(accessToken), accessToken }, deps.now);
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "mode must be demo, device with a deviceUserId, or linked with an accessToken");
+    const accessToken = parsed.data.mode === "linked" ? parsed.data.accessToken : await deps.demoToken();
+    let session;
+    if (parsed.data.mode === "device") {
+      // One conversation per Echo user, reopened with a fresh service token each time.
+      const id = deviceSessionId(parsed.data.deviceUserId);
+      const existing = await deps.sessions.get(id);
+      const now = deps.now ? deps.now() : Math.floor(Date.now() / 1000);
+      session = existing
+        ? { ...existing, accessToken, expiresAt: now + SESSION_TTL_SECONDS }
+        : newSession({ id, mode: "device", subject: subjectOf(accessToken), accessToken }, deps.now);
+    } else {
+      session = newSession({ mode: parsed.data.mode, subject: subjectOf(accessToken), accessToken }, deps.now);
+    }
     await deps.sessions.put(session);
     log.info("agent_session", { mode: session.mode, offline: deps.offline });
     return c.json({ sessionId: session.id, mode: session.mode, subject: session.subject, offline: deps.offline });

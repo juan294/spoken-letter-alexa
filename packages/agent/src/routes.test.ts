@@ -78,6 +78,20 @@ describe("agent routes", () => {
     expect(turn.toolCalls.map((call) => call.name)).toEqual(["list_family_stories"]);
   });
 
+  test("device mode keys the session by the Alexa user id, reuses it and never stores the id in clear", async () => {
+    const first = (await (await post(app, "/agent/session", { mode: "device", deviceUserId: "amzn1.ask.account.OWNER" })).json()) as SessionBody;
+    expect(first).toMatchObject({ mode: "device", subject: "svc:alexa-m2m", offline: false });
+    expect(first.sessionId).toMatch(/^dev_[0-9a-f]{32}$/);
+    expect(first.sessionId).not.toContain("OWNER");
+    const turn = (await (await post(app, "/agent/turn", { sessionId: first.sessionId, text: "play a story" })).json()) as TurnBody;
+    expect(turn.play?.title).toBe("A lighthouse for Mateo");
+    const again = (await (await post(app, "/agent/session", { mode: "device", deviceUserId: "amzn1.ask.account.OWNER" })).json()) as SessionBody;
+    expect(again.sessionId).toBe(first.sessionId);
+    const next = (await (await post(app, "/agent/turn", { sessionId: again.sessionId, text: "play another" })).json()) as TurnBody;
+    expect(next.play?.title).toBe("The owl who forgot how to hoot");
+    expect((await post(app, "/agent/session", { mode: "device" })).status).toBe(400);
+  });
+
   test("validation and unknown sessions answer RFC-style JSON errors", async () => {
     expect((await post(app, "/agent/session", { mode: "linked" })).status).toBe(400);
     expect((await post(app, "/agent/turn", { sessionId: "nope", text: "hi" })).status).toBe(404);

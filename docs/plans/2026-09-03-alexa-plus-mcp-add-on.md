@@ -1,7 +1,7 @@
 # Plan: Alexa+ MCP add-on for the Amazon App Dev 2026 hackathon
 
 Date: 2026-09-03
-Status: Planned 2026-09-03; amended 2026-09-08 with Phase 9 (classic-skill front end for real-device footage). Implementation record: `2026-09-03-alexa-plus-mcp-add-on-notes.md`.
+Status: Planned 2026-09-03; amended 2026-09-08 with Phase 9 (classic-skill front end for real-device footage). Phases 0 to 2 and 4 to 9 implemented locally on 2026-09-08 (Phase 3 waits for the private freeze to lift). Implementation record: `2026-09-03-alexa-plus-mcp-add-on-notes.md`.
 Research inputs: `docs/research/2026-09-03-alexa-plus-hackathon-mcp-add-on.md` (hackathon rules, access, geography, MCP spec, audio contract, Owner decisions in section 12), `docs/research/2026-08-17-alexa-plus-device-playback-integration.md` (platform analysis), four Explore sweeps on 2026-09-03 (MCP route and claim-token flow, story catalog and audio, route and test conventions, design system), and direct inspection of `@modelcontextprotocol/server` 2.0.0 type definitions.
 
 ## Goal

@@ -235,6 +235,47 @@ entries by tool.
   `cdk deploy`, `seed:secrets`, the ACM certificate and the AgentCore Gateway creation
   all wait for the Owner. `scripts/verify-deploy.mjs` is ready for the first run.
 
+## 2026-09-08: Phase 6 review (function URL, gateway, rate limiting)
+
+- **Lambda function URLs behind an origin access control refuse streaming POSTs.**
+  Severity high (found in review, before any deploy). With an OAC, Lambda validates
+  `x-amz-content-sha256` on every request that has a body; CloudFront does not compute
+  it, so every JSON-RPC and OAuth POST would answer 403. The documented workaround (a
+  Lambda@Edge or CloudFront function that hashes the body) cannot see streaming bodies.
+  The stack now uses auth type NONE with a shared `x-origin-verify` header from Secrets
+  Manager, checked in constant time inside the handler (D18). Amazon: a first-class
+  "CloudFront only" option for function URLs that does not require the payload hash
+  would remove a whole class of misconfiguration.
+- **AgentCore Gateway inbound IAM means SigV4 from the agent.** Severity medium. The
+  Strands MCP client takes a `fetch`; a SigV4-signing `fetch` (`@smithy/signature-v4`,
+  service `bedrock-agentcore`) was 50 lines (D19). Documented nowhere for MCP clients.
+- **Gateway targets synchronize at creation.** Severity medium. The MCP server target
+  fetches `tools/list` when created, so the public endpoint must resolve first; a later
+  tool change needs `SynchronizeGatewayTargets`, which the L2 does not expose. An
+  `AwsCustomResource` runs it on every deploy (D20).
+- **`X-Forwarded-For` is viewer-controlled up to the last hop.** Severity low. The rate
+  limiter now keys on `CloudFront-Viewer-Address` (forwarded by the origin request
+  policy) and otherwise on the last `X-Forwarded-For` entry.
+
+## 2026-09-08: Phase 9 (classic-skill front end, written, not registered)
+
+- **`AMAZON.SearchQuery` needs a carrier phrase.** Severity low. A sample that is only
+  `{text}` is rejected by the console; seventeen carrier phrases route free text to the
+  catch-all instead (D21). The bridge's README does not mention this.
+- **A Lambda endpoint receives no request signature.** Severity low. Verification is
+  the Alexa Skills Kit trigger permission (restricted with `EventSourceToken` to the
+  skill id) plus the `applicationId` check in the handler; both are in place, and the
+  permission does not exist until `sla:skillId` is known, so nothing can invoke the
+  function before the skill does.
+- **No store is needed for pause and resume.** The stream token Alexa echoes back
+  carries the whole `play` object (URL, title, storyteller, duration), so
+  `AMAZON.ResumeIntent` rebuilds the directive from the token and the reported offset.
+- **ASK CLI is a separate toolchain.** Severity low. `ask configure` needs the developer
+  console account (Owner gate); `pnpm -F skill deploy` wraps `ask deploy`, checks the
+  fixed Lambda ARN first, and records the skill id for the next CDK deploy. Whether an
+  Alexa+ device in Spain routes to a development-stage `en-US` skill is still the open
+  question from `amazon/us-account-checklist.md`; the first device test answers it.
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.

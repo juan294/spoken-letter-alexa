@@ -96,6 +96,12 @@ the Playwright smoke against the simulator's in-app mock.
 
 Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.md`.
 
+Real device (Phase 9): a thin classic Alexa Skill in `packages/skill` calls the same agent
+endpoint and plays the family MP3 through `AudioPlayer` on an Echo. `pnpm -F skill generate`
+rebuilds the interaction model from the tool metadata; `pnpm -F skill deploy` creates the
+development-stage skill with the ASK CLI (Owner gate); `pnpm -F skill record:pull` collects
+real phrasings while `RECORD_UTTERANCES=1`.
+
 ## Repository layout
 
 ```
@@ -107,7 +113,8 @@ packages/oauth       OAuth 2.1 authorization server: PKCE, client_credentials, R
 packages/agent       Strands + Bedrock agent loop, scripted offline model, Polly, Transcribe, sessions (Phase 5)
 packages/simulator   simulated Alexa+ SPA: Vite + React, brand tokens, Playwright smoke (Phase 5)
 packages/app         the composed server: OAuth + MCP + agent on one Hono app; local and Lambda entry points
-infra/               CDK app: Core, Simulator, Api, Edge, Gateway, Observability stacks; bundle and seed scripts
+packages/skill       classic Alexa Skill front end for real-device footage: handler, agent client, generated interaction model (Phase 9)
+infra/               CDK app: Core, Simulator, Api, Edge, Gateway, Observability, Skill stacks; bundle and seed scripts
 amazon/              addon.json, agent-skill placeholder, runbook, US account checklist, Inspector guide (Phase 7)
 scripts/             mock-spoken-letter.mjs (stand-in for the private bridge), e2e-link.mjs, verify-deploy.mjs, add-fixture-story.mjs
 docs/                research, plans, decisions, friction log, product feedback, release
@@ -118,7 +125,7 @@ docs/                research, plans, decisions, friction log, product feedback,
 Everything in this repository was created between 2026-09-03 (plan) and the submission
 date, on the public `develop` and `main` branches. The dated history lives in
 `docs/plans/2026-09-03-alexa-plus-mcp-add-on-notes.md` (one handoff per phase, every
-review finding and its disposition, and the deviation register D1 to D17) and in
+review finding and its disposition, and the deviation register D1 to D21) and in
 `docs/friction-log.md`. The private Spoken Letter repository receives only the small
 bridge described in Phase 3 of the plan, after its freeze lifts on 2026-10-01; that pull
 request is linked here when it exists.

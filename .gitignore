@@ -17,6 +17,9 @@ cdk.out/
 # Agent operational reports: public repository, kept local (Rule #70)
 docs/agents/
 
+# ASK CLI state (skill id and deploy state; machine-specific)
+packages/skill/.ask/
+
 # Test artifacts
 coverage/
 test-results/
