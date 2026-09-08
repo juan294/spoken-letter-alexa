@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "synth": "cdk synth --quiet",
+    "synth": "node scripts/bundle-lambda.mjs && cdk synth --quiet",
     "deploy": "cdk deploy --all --require-approval broadening --profile archy",
     "seed:secrets": "node scripts/seed-secrets.mjs",
     "build": "node scripts/bundle-lambda.mjs"

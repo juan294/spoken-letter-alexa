@@ -519,8 +519,9 @@ importing `Play` from the agent package into the skill (would pull the agent int
 skill's graph; documented in `audio.ts`).
 
 Final gate after the simplify pass: `pnpm typecheck` pass (10 packages); `pnpm lint`
-pass; `pnpm test` pass, 48 files, 317 tests; `pnpm build` and `pnpm -F infra synth`
-pass. TDD note: the F9-2 test and its fix landed in the same edit; it was then
+pass; `pnpm test` pass, 48 files, 317 tests; `pnpm -F infra synth` pass (the script now
+bundles both Lambdas first, since F6-12 made a synth without the bundle fail; the CI job
+and the local gate keep the same four commands). TDD note: the F9-2 test and its fix landed in the same edit; it was then
 re-targeted at the cached token (the stored stale token is ignored) and stays green.
 
 ## Plan amendment (2026-09-08): Phase 9
