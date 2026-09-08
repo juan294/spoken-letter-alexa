@@ -1,0 +1,39 @@
+{
+  "name": "@spoken-letter-alexa/app",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "tsx watch src/local.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1127.0",
+    "@aws-sdk/client-kms": "3.1127.0",
+    "@aws-sdk/client-polly": "3.1127.0",
+    "@aws-sdk/client-s3": "3.1127.0",
+    "@aws-sdk/client-secrets-manager": "3.1127.0",
+    "@aws-sdk/client-transcribe-streaming": "3.1127.0",
+    "@aws-sdk/credential-provider-node": "3.972.82",
+    "@aws-sdk/lib-dynamodb": "3.1127.0",
+    "@hono/node-server": "2.1.1",
+    "@spoken-letter-alexa/agent": "workspace:*",
+    "@spoken-letter-alexa/mcp-server": "workspace:*",
+    "@spoken-letter-alexa/oauth": "workspace:*",
+    "@spoken-letter-alexa/shared": "workspace:*",
+    "@strands-agents/sdk": "1.16.0",
+    "hono": "4.13.7",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "aws-sdk-client-mock": "4.1.0",
+    "tsx": "4.23.13",
+    "typescript": "6.0.3",
+    "vitest": "5.0.0"
+  }
+}

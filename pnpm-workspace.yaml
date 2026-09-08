@@ -1,0 +1,27 @@
+packages:
+  - packages/*
+  - infra
+  - amazon
+allowBuilds:
+  better-sqlite3: false
+  esbuild: true
+  ffmpeg-static: true
+  node-llama-cpp: false
+  tree-sitter-go: false
+  tree-sitter-javascript: false
+  tree-sitter-python: false
+  tree-sitter-rust: false
+  tree-sitter-typescript: false
+minimumReleaseAgeExclude:
+  - '@types/node@26.5.0'
+  - '@typescript-eslint/eslint-plugin@8.70.0'
+  - '@typescript-eslint/parser@8.70.0'
+  - '@typescript-eslint/project-service@8.70.0'
+  - '@typescript-eslint/scope-manager@8.70.0'
+  - '@typescript-eslint/tsconfig-utils@8.70.0'
+  - '@typescript-eslint/type-utils@8.70.0'
+  - '@typescript-eslint/types@8.70.0'
+  - '@typescript-eslint/typescript-estree@8.70.0'
+  - '@typescript-eslint/utils@8.70.0'
+  - '@typescript-eslint/visitor-keys@8.70.0'
+  - typescript-eslint@8.70.0

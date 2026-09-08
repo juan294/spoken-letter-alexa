@@ -1,0 +1,126 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "spoken letter",
+      "intents": [
+        {
+          "name": "WhatIsNewIntent",
+          "samples": [
+            "what is new",
+            "what's new",
+            "what family stories are new",
+            "what stories are new",
+            "what stories do i have",
+            "what stories are there",
+            "which stories are new",
+            "which family stories do i have",
+            "list my family stories",
+            "list the stories",
+            "is there a new story",
+            "are there new stories",
+            "any new stories"
+          ]
+        },
+        {
+          "name": "PlayStoryIntent",
+          "slots": [
+            {
+              "name": "title",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "storyteller",
+              "type": "AMAZON.FirstName"
+            }
+          ],
+          "samples": [
+            "play a family story",
+            "play a story",
+            "play the latest story",
+            "play the newest story",
+            "play the story {storyteller} sent",
+            "play the story from {storyteller}",
+            "play the story by {storyteller}",
+            "play the one {storyteller} sent",
+            "play the one from {storyteller}",
+            "play the story of {storyteller}",
+            "put on the story {storyteller} sent",
+            "let's hear the story {storyteller} sent",
+            "play {title}",
+            "play the story {title}",
+            "play the story called {title}",
+            "play the one about {title}",
+            "play the one called {title}",
+            "put on {title}",
+            "let's hear {title}",
+            "i want to hear {title}"
+          ]
+        },
+        {
+          "name": "NextStoryIntent",
+          "samples": [
+            "play the next family story",
+            "play the next story",
+            "play the next one",
+            "play another story",
+            "play another one",
+            "next story",
+            "next one",
+            "another story",
+            "another one",
+            "what should i hear next",
+            "which story is next"
+          ]
+        },
+        {
+          "name": "CatchAllIntent",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "to {text}",
+            "please {text}",
+            "can you {text}",
+            "could you {text}",
+            "would you {text}",
+            "i want to {text}",
+            "i would like to {text}",
+            "i'd like to {text}",
+            "ask spoken letter to {text}",
+            "ask spoken letter {text}",
+            "tell spoken letter to {text}",
+            "tell spoken letter {text}"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.PauseIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ResumeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        }
+      ],
+      "types": []
+    }
+  }
+}

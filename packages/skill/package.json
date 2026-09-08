@@ -1,0 +1,28 @@
+{
+  "name": "@spoken-letter-alexa/skill",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "generate": "tsx src/model/generate-cli.ts",
+    "deploy": "node scripts/deploy.mjs",
+    "record:pull": "node scripts/record-pull.mjs"
+  },
+  "dependencies": {
+    "@spoken-letter-alexa/mcp-server": "workspace:*",
+    "@spoken-letter-alexa/shared": "workspace:*",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "3.1127.0",
+    "tsx": "4.23.13",
+    "typescript": "6.0.3",
+    "vitest": "5.0.0"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@spoken-letter-alexa/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./app": "./src/app.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "@spoken-letter-alexa/oauth": "workspace:*",
+    "@spoken-letter-alexa/shared": "workspace:*",
+    "hono": "4.13.7",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "5.0.0"
+  }
+}

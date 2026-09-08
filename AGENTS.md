@@ -41,22 +41,23 @@ Deployed with CDK at `alexa.spokenletter.com`.
 ## Plan and research
 
 - Main plan: `docs/plans/2026-09-03-alexa-plus-mcp-add-on.md`; phases in
-  `docs/plans/2026-09-03-alexa-plus-mcp-add-on-phases/phase-0.md` to `phase-8.md`.
+  `docs/plans/2026-09-03-alexa-plus-mcp-add-on-phases/phase-0.md` to `phase-9.md` (Phase 9
+  added 2026-09-08: classic-skill front end for real-device footage).
 - Research: `docs/research/2026-09-03-alexa-plus-hackathon-mcp-add-on.md` and
   `docs/research/2026-08-17-alexa-plus-device-playback-integration.md`.
 - These are copies. The originals are committed in the private repository on the local
   branch `docs/alexa-plus-plan`. Edit the copies here; sync back after the freeze.
 - Adoption record: `docs/plans/2026-09-08-rpi-adoption.md`.
-- Next step: `rpi-implement` on the main plan, Phase 0. Phase 0 creates the monorepo,
-  CI, CDK skeleton, LICENSE and README content. Nothing in this repository is product
-  code until Phase 0 lands.
+- Implementation notes and deviations:
+  `docs/plans/2026-09-03-alexa-plus-mcp-add-on-notes.md` (per-phase handoffs).
 
 ## Stack (fixed by the plan, created in Phase 0)
 
 - pnpm workspaces, Node 24, TypeScript 6 (strict, `noUncheckedIndexedAccess`, NodeNext),
-  ESLint 9 flat config, vitest, AWS CDK (`aws-cdk-lib` 2.x).
+  ESLint flat config (ESLint 10, same contract as 9), vitest, AWS CDK (`aws-cdk-lib` 2.x).
 - Packages: `packages/mcp-server` (Phase 1), `packages/oauth` (Phase 2),
-  `packages/agent` and `packages/simulator` (Phase 5), `packages/shared` (Phase 0),
+  `packages/agent` and `packages/simulator` (Phase 5), `packages/app` (composed server and
+  entry points, D12), `packages/skill` and `skill-package/` (Phase 9), `packages/shared` (Phase 0),
   `infra/` CDK app (Phase 0 skeleton, Phase 6 stacks), `amazon/` packaging (Phase 7),
   `fixtures/audio/` (Phase 1).
 - Pinned: `@modelcontextprotocol/server`, `/hono`, `/node` 2.0.0; `hono` 4.x; `zod` 4.x;
@@ -73,9 +74,9 @@ The complete local gate, declared in `.rpi/policy.json` and run by
 pnpm typecheck && pnpm lint && pnpm test && pnpm -F infra synth
 ```
 
-Run checks sequentially, never as parallel Bash calls. The same four commands are the
-single CI job `verify` in `.github/workflows/verify.yml` (Phase 0). Until Phase 0 lands
-these commands do not exist and the runner reports failure; that is the truthful state.
+Run checks sequentially, never as parallel Bash calls. The same four commands, plus the
+simulator's Playwright smoke (`pnpm test:e2e`, offline, in-app mock), are the single CI
+job `verify` in `.github/workflows/verify.yml`.
 
 ## Git and deployment topology
 

@@ -1,0 +1,26 @@
+name: verify
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+# One job, the four commands from AGENTS.md "Verification". No deploy from CI.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm -F infra synth
+      - run: pnpm -F @spoken-letter-alexa/simulator exec playwright install --with-deps chromium
+      - run: pnpm -F @spoken-letter-alexa/simulator test:e2e

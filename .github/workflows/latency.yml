@@ -1,0 +1,33 @@
+name: latency
+
+# Manual only (phase-6 section 3): measures the deployed MCP server from a us-east-1
+# runner and asserts p95 under 500 ms. Never deploys. Needs the repository secret
+# SLA_M2M_SECRET (the alexa-m2m client secret from sla/oauth-clients) for the
+# authenticated checks; without it only the discovery checks run.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployed origin
+        default: https://alexa.spokenletter.com
+        required: true
+      rounds:
+        description: tools/call samples
+        default: "20"
+        required: true
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/verify-deploy.mjs
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          ROUNDS: ${{ inputs.rounds }}
+          M2M_SECRET: ${{ secrets.SLA_M2M_SECRET }}
+          VANTAGE: github-actions us-east-1

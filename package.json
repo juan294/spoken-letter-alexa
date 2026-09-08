@@ -1,0 +1,31 @@
+{
+  "name": "spoken-letter-alexa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spoken Letter for Alexa+: a dual-era MCP server, OAuth 2.1 authorization server, and simulated Alexa+ experience, built for the Amazon App Dev 2026 hackathon",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "pnpm -r --if-present build",
+    "synth": "pnpm -F infra synth",
+    "deploy": "pnpm -F infra deploy",
+    "dev": "node scripts/dev.mjs",
+    "dev:offline": "AGENT_OFFLINE=1 node scripts/dev.mjs",
+    "test:e2e": "pnpm -F @spoken-letter-alexa/simulator test:e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.5.0",
+    "eslint": "10.10.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.0",
+    "vitest": "5.0.0"
+  }
+}
