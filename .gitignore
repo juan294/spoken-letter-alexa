@@ -5,3 +5,16 @@ cdk.out/
 !.env.example
 *.pem
 .DS_Store
+
+# Claude Code local settings and telemetry (machine-specific)
+.claude/settings.local.json
+.claude/metrics/
+
+# cc-rpi lifecycle recovery, local plans and verification evidence
+.rpi/local/
+
+# Agent operational reports: public repository, kept local (Rule #70)
+docs/agents/
+
+# Test artifacts
+coverage/
