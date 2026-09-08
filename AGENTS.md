@@ -53,7 +53,7 @@ Deployed with CDK at `alexa.spokenletter.com`.
 ## Stack (fixed by the plan, created in Phase 0)
 
 - pnpm workspaces, Node 24, TypeScript 6 (strict, `noUncheckedIndexedAccess`, NodeNext),
-  ESLint 9 flat config, vitest, AWS CDK (`aws-cdk-lib` 2.x).
+  ESLint flat config (ESLint 10, same contract as 9), vitest, AWS CDK (`aws-cdk-lib` 2.x).
 - Packages: `packages/mcp-server` (Phase 1), `packages/oauth` (Phase 2),
   `packages/agent` and `packages/simulator` (Phase 5), `packages/shared` (Phase 0),
   `infra/` CDK app (Phase 0 skeleton, Phase 6 stacks), `amazon/` packaging (Phase 7),

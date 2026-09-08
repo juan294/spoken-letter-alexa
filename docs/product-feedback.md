@@ -13,7 +13,18 @@ in `amazon/` is prepared so the remaining steps are CLI commands.
 
 ## Model Context Protocol TypeScript SDK v2 (`@modelcontextprotocol/server`)
 
-Phase 1.
+- What worked: `createMcpHandler` with the default `legacy: 'stateless'` answered the
+  2025-03-26, 2025-06-18 and 2025-11-25 `initialize` handshakes and 2026-07-28
+  `server/discover` from one tool registration, with no code specific to either era.
+  `registerTool` with zod input and output schemas published JSON Schema and validated
+  `structuredContent` for free. `requireBearerAuth` and `bearerAuthChallengeResponse`
+  produced the RFC 9728 challenge without hand-rolling headers.
+- Needs improvement: the modern-era request envelope is underdocumented (three `_meta`
+  keys plus three headers; see the friction log), and the exported
+  `LATEST_PROTOCOL_VERSION` names the newest legacy revision rather than 2026-07-28.
+- Onboarding: the type definitions are excellent and the error messages name the exact
+  missing key, so a probe script answered every question in under an hour.
+- Would use again: yes. It is the reason a 2026-spec server can serve Alexa+ at all.
 
 ## AWS CDK
 

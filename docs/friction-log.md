@@ -47,6 +47,45 @@ entries by tool.
   the Owner (read-only check on 2026-09-08 with profile `archy`: no certificates exist in
   `us-east-1`).
 
+## 2026-09-08: Phase 1 (MCP server core)
+
+- **MCP SDK v2 reports `LATEST_PROTOCOL_VERSION = "2025-11-25"` while serving
+  2026-07-28.** Severity low. The constant names the newest *legacy* revision; the modern
+  revision is internal (`FIRST_MODERN_PROTOCOL_VERSION`). Discovered by probing
+  `createMcpHandler` directly. Fix: export the modern revision constant and say so in the
+  migration guide.
+- **The modern envelope needs three `_meta` keys, not one.** Severity low. A 2026-07-28
+  request is rejected with `-32602` unless `params._meta` carries
+  `io.modelcontextprotocol/protocolVersion`, `.../clientCapabilities` and `.../clientInfo`
+  together with the `MCP-Protocol-Version`, `Mcp-Method` and (for `tools/call`)
+  `Mcp-Name` headers. The error message names the missing key, which made it a
+  ten-minute detour rather than an hour. Fix: one "minimal modern request" example in
+  the server package README.
+- **Legacy responses are SSE even for a single JSON-RPC reply.** Severity low. With
+  `Accept: application/json, text/event-stream` the stateless legacy fallback answers
+  `text/event-stream` with one `event: message` frame; modern requests answer plain
+  JSON. Tests parse both. Alexa+'s client handles SSE per the Streamable HTTP spec, so
+  this is informational.
+- **`WWW-Authenticate` carries `error` and `error_description` before
+  `resource_metadata`.** Severity low. Amazon's quickstart text shows only the
+  `resource_metadata` parameter; the SDK's `bearerAuthChallengeResponse` emits the RFC
+  6750 parameters too, which is spec-conformant. Kept the SDK shape; the test asserts the
+  parameter, not the whole header.
+- **Tool auth reaches handlers under `ctx.http.authInfo`.** Severity low. The v2
+  handler signature is `(args, ctx)` and the pass-through `authInfo` is nested under
+  `ctx.http`, not at the top level as the v1 `extra.authInfo` was. The migration guide
+  covers it; noted here because the plan's pseudo-code assumed `ctx.authInfo`.
+- **Latency with the fixture provider.** Measured by `latency.test.ts` on the build
+  machine (Apple silicon, Node 24.18, 50 calls per tool through the full handler, run
+  2026-09-08): list p50 0.4 ms / p95 1.0 ms / p99 2.2 ms; get p50 0.3 / p95 0.6 /
+  p99 1.3 ms; suggest p50 0.3 / p95 0.4 / p99 0.9 ms. Amazon's 500 ms budget is spent
+  on the network, not the handler; Phase 6 measures the rest.
+- **Fixture recordings are an Owner step.** No author-voice story exists anywhere in the
+  private repository (only placeholder samples, AI voice auditions and marketing audio),
+  so `fixtures/audio/` and `fixtures/stories.json` wait for the Owner's MP3 export;
+  `scripts/add-fixture-story.mjs` measures the duration with `ffprobe` and appends the
+  entry. The local server and the tests run without them.
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.

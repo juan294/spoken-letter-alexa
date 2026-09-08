@@ -40,6 +40,7 @@ Filled in per phase. Every entry does real work in code and has a friction-log e
 | Tool | Function | Status |
 | --- | --- | --- |
 | AWS CDK | One-command deploy; `CoreStack` (DynamoDB, KMS, Secrets Manager) | Phase 0: synthesized and tested |
+| MCP TypeScript SDK v2 (`@modelcontextprotocol/server`) | Dual-era `/mcp` handler: 2026-07-28 plus the 2025-era `initialize` Alexa+ sends | Phase 1: protocol and latency tests green |
 | Lambda function URL (RESPONSE_STREAM), CloudFront, ACM, Route53 | Serves `alexa.spokenletter.com` | Phase 6 |
 | DynamoDB | OAuth state, links, agent sessions | Phase 2 (memory store), Phase 6 |
 | KMS (asymmetric RSA) | JWT signing and JWKS | Phase 2 (local signer), Phase 6 |
@@ -66,13 +67,24 @@ The same four commands are the single `verify` job in `.github/workflows/verify.
 The complete local gate is declared in `.rpi/policy.json` and run by
 `python3 .rpi/scripts/rpi-verify.py`.
 
+Run the MCP server locally on `:4310` (prints a one-time `MCP_DEV_TOKEN` unless one is set):
+
+```bash
+pnpm dev
+curl -s -X POST http://localhost:4310/mcp \
+  -H "authorization: Bearer $MCP_DEV_TOKEN" -H "content-type: application/json" \
+  -H "accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_family_stories","arguments":{}}}'
+```
+
 Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.md`.
 
 ## Repository layout
 
 ```
 packages/shared      env parsing, JSON logger, vendored agent-tool contract
-packages/mcp-server  Phase 1: dual-era MCP server, fixture provider, three read-only tools
+packages/mcp-server  dual-era MCP server, fixture provider, three read-only tools (Phase 1)
+fixtures/            the Owner's recorded stories for the demo subject (see fixtures/README.md)
 packages/oauth       Phase 2: OAuth 2.1 authorization server
 packages/agent       Phase 5: Strands + Bedrock agent, Polly, Transcribe
 packages/simulator   Phase 5: simulated Alexa+ SPA

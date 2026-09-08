@@ -1,6 +1,8 @@
 // Vendored from juan294/spoken-letter `src/lib/agent-tools/contract.ts` on 2026-09-08.
-// The only intentional differences: `CLASS_C_DENYLIST` is exported so this repository's
-// test can pin it by value, and the module is ESM with explicit `.ts` imports.
+// Intentional differences, all without runtime effect: `CLASS_C_DENYLIST` is exported so
+// this repository's test can pin it by value; `ZodType<unknown>` is written `ZodType`;
+// `annotations` and `safetyClass` accept an explicit `undefined` because this workspace
+// compiles with `exactOptionalPropertyTypes`; two statements are reformatted.
 import { z, type ZodType } from "zod";
 
 export const AGENT_TOOL_BUDGETS = {

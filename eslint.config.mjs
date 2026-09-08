@@ -25,7 +25,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["eslint.config.mjs"],
+          allowDefaultProject: ["eslint.config.mjs", "scripts/*.mjs"],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -45,6 +45,9 @@ export default tseslint.config(
   {
     files: ["**/*.mjs", "**/*.js"],
     ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly", URL: "readonly", fetch: "readonly" },
+    },
   },
   {
     files: ["**/*.test.ts", "**/*.test.tsx", "scripts/**"],

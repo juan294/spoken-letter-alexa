@@ -23,6 +23,18 @@ describe("log", () => {
     expect(typeof parsed[0]?.time).toBe("string");
   });
 
+  test("respects LOG_LEVEL as the minimum level", () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.stubEnv("LOG_LEVEL", "warn");
+    log.info("hidden");
+    log.warn("shown");
+    vi.stubEnv("LOG_LEVEL", "silent");
+    log.error("also hidden");
+    vi.unstubAllEnvs();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(String(write.mock.calls[0]?.[0])).toContain('"event":"shown"');
+  });
+
   test("survives unserialisable fields", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const cyclic: Record<string, unknown> = {};

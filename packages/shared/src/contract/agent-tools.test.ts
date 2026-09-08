@@ -11,26 +11,26 @@ import {
 // Pinned by value to `src/lib/agent-tools/contract.ts` in juan294/spoken-letter (the
 // private repository). A change on either side must be re-vendored deliberately.
 const PRIVATE_REPO_DENYLIST = [
-  "send",
-  "download",
-  "checkout",
-  "credit",
-  "voucher",
-  "purchase",
-  "pay",
-  "recipient",
-  "delete",
-  "remove",
-  "admin",
-  "yoto",
-  "approve",
-  "narration",
-  "record",
-  "upload",
-  "audio",
-  "member",
-  "space",
-  "invite",
+  { fragment: "send", reason: "delivery stays human-owned" },
+  { fragment: "download", reason: "delivery stays human-owned" },
+  { fragment: "checkout", reason: "commerce mutates account state" },
+  { fragment: "credit", reason: "credits are paid entitlements" },
+  { fragment: "voucher", reason: "vouchers mutate entitlements" },
+  { fragment: "purchase", reason: "commerce mutates account state" },
+  { fragment: "pay", reason: "commerce mutates account state" },
+  { fragment: "recipient", reason: "recipient data is outside the agent boundary" },
+  { fragment: "delete", reason: "deletion mutates durable state" },
+  { fragment: "remove", reason: "removal mutates durable state" },
+  { fragment: "admin", reason: "administration is never agent-exposed" },
+  { fragment: "yoto", reason: "Yoto delivery stays human-owned" },
+  { fragment: "approve", reason: "approval stays human-owned" },
+  { fragment: "narration", reason: "narration stays human-owned" },
+  { fragment: "record", reason: "recording stays human-owned" },
+  { fragment: "upload", reason: "audio upload stays human-owned" },
+  { fragment: "audio", reason: "audio handling stays human-owned" },
+  { fragment: "member", reason: "membership mutates account state" },
+  { fragment: "space", reason: "family-space changes mutate account state" },
+  { fragment: "invite", reason: "invites mutate membership state" },
 ] as const;
 
 const VALID_METADATA: AgentToolMetadata = {
@@ -51,10 +51,9 @@ describe("vendored agent tool contract", () => {
     });
   });
 
-  test("pins the twenty denylisted fragments to the private repository's list", () => {
-    expect(CLASS_C_DENYLIST.map((entry) => entry.fragment)).toEqual([...PRIVATE_REPO_DENYLIST]);
+  test("pins the twenty denylisted fragments and reasons to the private repository's list", () => {
+    expect(CLASS_C_DENYLIST).toEqual(PRIVATE_REPO_DENYLIST);
     expect(CLASS_C_DENYLIST).toHaveLength(20);
-    for (const entry of CLASS_C_DENYLIST) expect(entry.reason.length).toBeGreaterThan(0);
   });
 
   test("accepts valid metadata", () => {
