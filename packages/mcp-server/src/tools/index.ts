@@ -1,4 +1,4 @@
-import { type McpServer } from "@modelcontextprotocol/server";
+import { type McpServer, OAuthError } from "@modelcontextprotocol/server";
 import { log } from "@spoken-letter-alexa/shared";
 
 import { withLatencyMetric } from "../metrics.ts";
@@ -34,22 +34,27 @@ function toolError(code: ToolErrorCode, message = ERROR_TEXT[code]) {
   };
 }
 
-/** Maps a thrown error to a tool error result; anything unknown is logged and rethrown. */
+/**
+ * Maps a thrown error to a tool error result. Unknown errors are logged with their
+ * message and answered with the generic `provider_unavailable` text: the SDK would
+ * otherwise echo the raw message to the client, and Alexa would speak it.
+ */
 function failureResult(toolName: string, error: unknown) {
   if (error instanceof ToolFailure) return toolError(error.code, error.message);
+  if (error instanceof OAuthError) return toolError("unauthenticated");
   if (error instanceof ProviderUnavailableError) {
     log.warn("provider_unavailable", { tool: toolName, message: error.message });
     return toolError("provider_unavailable");
   }
   log.error("tool_failed", { tool: toolName, message: error instanceof Error ? error.message : String(error) });
-  throw error;
+  return toolError("provider_unavailable");
 }
 
 export function registerTools(server: McpServer, deps: ToolDeps): void {
   const { name: listName, ...listConfig } = LIST_TOOL;
   server.registerTool(listName, listConfig, async (args, ctx) => {
-    const subject = deps.subjectOf(ctx);
     try {
+      const subject = deps.subjectOf(ctx);
       const result = await withLatencyMetric(listName, () =>
         runListFamilyStories(args, subject, deps.providerFor(subject)),
       );
@@ -61,8 +66,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
 
   const { name: getName, ...getConfig } = GET_TOOL;
   server.registerTool(getName, getConfig, async (args, ctx) => {
-    const subject = deps.subjectOf(ctx);
     try {
+      const subject = deps.subjectOf(ctx);
       const result = await withLatencyMetric(getName, () =>
         runGetFamilyStory(args, subject, deps.providerFor(subject)),
       );
@@ -77,8 +82,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
 
   const { name: suggestName, ...suggestConfig } = SUGGEST_TOOL;
   server.registerTool(suggestName, suggestConfig, async (args, ctx) => {
-    const subject = deps.subjectOf(ctx);
     try {
+      const subject = deps.subjectOf(ctx);
       const result = await withLatencyMetric(suggestName, () =>
         runSuggestNextStory(args, subject, deps.providerFor(subject), deps.suggestions),
       );

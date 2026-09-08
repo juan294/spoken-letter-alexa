@@ -1,5 +1,6 @@
 export { readEnv, type EnvSource } from "./env.ts";
 export { log } from "./logger.ts";
+export { constantTimeEqual, hmacSha256Hex, randomToken, sha256Base64Url, sha256Hex } from "./crypto.ts";
 export {
   AGENT_TOOL_BUDGETS,
   CLASS_C_DENYLIST,

@@ -67,4 +67,12 @@ describe("parseFixtureCatalog", () => {
   test("rejects a malformed catalog with the offending path", () => {
     expect(() => parseFixtureCatalog({ stories: [{ id: "x" }] })).toThrow(/stories\.0\.title/);
   });
+
+  test("requires the audio file to be named after the id", () => {
+    expect(() =>
+      parseFixtureCatalog({
+        stories: [{ id: "st_x", title: "T", storyteller: "S", deliveredAt: "2026-09-01T00:00:00.000Z", file: "other.mp3" }],
+      }),
+    ).toThrow(/stories\.0\.file/);
+  });
 });

@@ -1,7 +1,7 @@
 import { assertAgentToolMetadata } from "@spoken-letter-alexa/shared";
 import { describe, expect, test } from "vitest";
 
-import { FixtureProvider } from "../provider/fixtures.ts";
+import { FixtureProvider, type FixtureStory } from "../provider/fixtures.ts";
 import { TEST_BASE_URL, TEST_STORIES } from "../test-support.ts";
 import { runGetFamilyStory } from "./get.ts";
 import { TOOL_METADATA } from "./index.ts";
@@ -9,6 +9,17 @@ import { runListFamilyStories } from "./list.ts";
 import { runSuggestNextStory, SuggestionMemory } from "./suggest.ts";
 
 const provider = new FixtureProvider({ stories: TEST_STORIES, publicBaseUrl: TEST_BASE_URL });
+
+function manyStories(count: number): FixtureStory[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `st_m${i}`,
+    title: `Story number ${i}`,
+    storyteller: "Grandpa Juan",
+    durationSeconds: 60 + i,
+    deliveredAt: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
+    file: `st_m${i}.mp3`,
+  }));
+}
 
 describe("TOOL_METADATA", () => {
   test("declares exactly the three read-only tools", () => {
@@ -39,8 +50,31 @@ describe("tool runners", () => {
   });
 
   test("list defaults to ten", async () => {
-    const result = await runListFamilyStories({}, "demo", provider);
-    expect(result.structured.stories).toHaveLength(3);
+    const many = new FixtureProvider({ stories: manyStories(12), publicBaseUrl: TEST_BASE_URL });
+    const result = await runListFamilyStories({}, "demo", many);
+    expect(result.structured.stories).toHaveLength(10);
+  });
+
+  test("summaries end on a word boundary when titles are long", async () => {
+    const long = new FixtureProvider({
+      stories: manyStories(3).map((story) => ({ ...story, title: `${story.title} ${"wonderful ".repeat(20).trim()}` })),
+      publicBaseUrl: TEST_BASE_URL,
+    });
+    const result = await runListFamilyStories({}, "demo", long);
+    expect(result.summary.length).toBeLessThan(300);
+    expect(result.summary.endsWith("…")).toBe(true);
+    expect(result.summary).not.toMatch(/\S…$/);
+  });
+
+  test("suggest rotates through more than twenty delivered stories", async () => {
+    const many = new FixtureProvider({ stories: manyStories(25), publicBaseUrl: TEST_BASE_URL });
+    const memory = new SuggestionMemory();
+    const seen = new Set<string>();
+    for (let i = 0; i < 25; i += 1) {
+      const result = await runSuggestNextStory({}, "demo", many, memory);
+      seen.add(result.structured.story!.id);
+    }
+    expect(seen.size).toBe(25);
   });
 
   test("get returns the story with audio and a resource link", async () => {

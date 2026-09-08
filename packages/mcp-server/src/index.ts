@@ -1,7 +1,7 @@
 export { createApp, protectedResourceMetadata, type AppDeps } from "./http.ts";
 export { createHandler, SERVER_NAME, SERVER_VERSION } from "./server.ts";
-export { constantTimeEqual, devTokenGate, subjectFromAuth, MCP_SCOPES, type BearerGate } from "./auth.ts";
-export { readServerEnv, serverEnvShape, type ServerEnv } from "./env.ts";
+export { devTokenGate, subjectFromAuth, MCP_SCOPES, type BearerGate } from "./auth.ts";
+export { DEFAULT_FIXTURES_PATH, readServerEnv, serverEnvShape, type ServerEnv } from "./env.ts";
 export { FixtureProvider, loadFixtureCatalog, parseFixtureCatalog, type FixtureStory } from "./provider/fixtures.ts";
 export {
   ProviderUnavailableError,

@@ -4,15 +4,17 @@ import { z } from "zod";
 
 import { type AccountProvider, type StorySummary, type StoryWithAudio } from "./types.ts";
 
-const fixtureStorySchema = z.object({
-  id: z.string().min(1).max(64),
-  title: z.string().min(1).max(200),
-  storyteller: z.string().min(1).max(80),
-  durationSeconds: z.number().int().positive().optional(),
-  deliveredAt: z.iso.datetime(),
-  /** File name under `fixtures/audio/`. */
-  file: z.string().regex(/^[a-z0-9_-]+\.mp3$/),
-});
+const fixtureStorySchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9_-]{1,64}$/),
+    title: z.string().min(1).max(200),
+    storyteller: z.string().min(1).max(80),
+    durationSeconds: z.number().int().positive().optional(),
+    deliveredAt: z.iso.datetime(),
+    /** File name under `fixtures/audio/`; always `<id>.mp3`. */
+    file: z.string().regex(/^[a-z0-9_-]+\.mp3$/),
+  })
+  .refine((story) => story.file === `${story.id}.mp3`, { path: ["file"], message: "file must be <id>.mp3" });
 
 const fixtureCatalogSchema = z.object({ stories: z.array(fixtureStorySchema) });
 

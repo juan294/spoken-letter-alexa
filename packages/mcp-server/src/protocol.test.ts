@@ -8,6 +8,7 @@ import { ProviderUnavailableError, type AccountProvider } from "./provider/types
 import {
   LEGACY_INITIALIZE,
   TEST_BASE_URL,
+  TEST_DEV_TOKEN,
   legacyCall,
   mcpPost,
   modernCall,
@@ -50,7 +51,7 @@ describe("legacy era (Alexa+ live client and Local Inspector)", () => {
     expect(parsed.stories).toHaveLength(2);
     expect(parsed.stories[0]?.id).toBe("st_lighthouse");
     expect(result.content[0]).toMatchObject({ type: "text" });
-    expect(JSON.stringify(result.structuredContent)).not.toMatch(/recipient|spaceId|senderId|yoto/i);
+    expect(JSON.stringify(result.structuredContent)).not.toMatch(/recipient|spaceId|senderId|senderEmail|content|yoto/i);
   });
 
   test("tools/call get_family_story includes a resource_link to the MP3", async () => {
@@ -95,10 +96,34 @@ describe("legacy era (Alexa+ live client and Local Inspector)", () => {
     expect(result.content[0]?.text).toMatch(/not reachable/i);
   });
 
+  test("an unexpected provider failure never leaks its message to the client", async () => {
+    const exploding: AccountProvider = {
+      listDeliveredStories: () => Promise.reject(new Error("db exploded at https://internal.example?token=abc")),
+      getStory: () => Promise.reject(new Error("db exploded")),
+    };
+    const broken = testApp({ providerFor: () => exploding });
+    const message = await legacyCall(broken, "tools/call", { name: "list_family_stories", arguments: {} });
+    const result = message.result as { isError?: boolean; content: { text: string }[]; structuredContent?: unknown };
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/exploded|internal\.example|token=abc/);
+    expect(result.structuredContent).toMatchObject({ error: "provider_unavailable" });
+  });
+
+  test("a token without a subject is an unauthenticated tool error", async () => {
+    const noSubject = testApp({
+      bearerGate: () =>
+        Promise.resolve({ token: "t", clientId: "x", scopes: ["mcp:tools"], expiresAt: Math.floor(Date.now() / 1000) + 60 }),
+    });
+    const message = await legacyCall(noSubject, "tools/call", { name: "list_family_stories", arguments: {} });
+    const result = message.result as { isError?: boolean; structuredContent?: unknown };
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ error: "unauthenticated" });
+  });
+
   test("legacy GET /mcp is 405 (stateless serving, no session stream)", async () => {
     const response = await app.request("/mcp", {
       method: "GET",
-      headers: { accept: "text/event-stream", authorization: "Bearer dev-token-for-tests-only" },
+      headers: { accept: "text/event-stream", authorization: `Bearer ${TEST_DEV_TOKEN}` },
     });
     expect(response.status).toBe(405);
   });

@@ -1,7 +1,7 @@
 import { type z } from "zod";
 
 import { type AccountProvider, type StorySummary } from "../provider/types.ts";
-import { spokenDuration, suggestInputSchema, suggestOutputSchema } from "./schemas.ts";
+import { clipSummary, spokenDuration, suggestInputSchema, suggestOutputSchema } from "./schemas.ts";
 
 export const SUGGEST_TOOL = {
   name: "suggest_next_story",
@@ -36,7 +36,8 @@ export class SuggestionMemory {
 
 export type SuggestResult = { summary: string; structured: z.infer<typeof suggestOutputSchema> };
 
-const SUGGEST_LIMIT = 20;
+/** Rotation window. Larger than the tool's list cap so old stories are not starved. */
+const SUGGEST_LIMIT = 100;
 
 export async function runSuggestNextStory(
   _args: z.infer<typeof suggestInputSchema>,
@@ -68,5 +69,5 @@ export async function runSuggestNextStory(
   ring.add(pick.id);
   const duration = spokenDuration(pick.durationSeconds);
   const summary = `How about "${pick.title}" by ${pick.storyteller}${duration ? ` (${duration})` : ""}? ${reason}`;
-  return { summary: summary.slice(0, 299), structured: { story: pick, reason } };
+  return { summary: clipSummary(summary), structured: { story: pick, reason } };
 }

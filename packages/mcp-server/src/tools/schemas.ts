@@ -55,7 +55,17 @@ export class ToolFailure extends Error {
 /** Formats a duration for a spoken summary: "3 minutes", "1 minute", "45 seconds". */
 export function spokenDuration(seconds: number | undefined): string | null {
   if (seconds === undefined) return null;
-  if (seconds < 60) return `${seconds} seconds`;
+  if (seconds < 60) return seconds === 1 ? "1 second" : `${seconds} seconds`;
   const minutes = Math.round(seconds / 60);
   return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+}
+
+/** Spoken summaries stay under 300 characters; long text is cut at a word boundary. */
+export const SUMMARY_MAX = 299;
+
+export function clipSummary(text: string, max = SUMMARY_MAX): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const boundary = cut.lastIndexOf(" ");
+  return `${(boundary > max / 2 ? cut.slice(0, boundary) : cut).trimEnd()} …`;
 }

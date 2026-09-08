@@ -1,7 +1,7 @@
 import { type z } from "zod";
 
 import { type AccountProvider } from "../provider/types.ts";
-import { getInputSchema, spokenDuration, storyWithAudioSchema, ToolFailure } from "./schemas.ts";
+import { clipSummary, getInputSchema, spokenDuration, storyWithAudioSchema, ToolFailure } from "./schemas.ts";
 
 export const GET_TOOL = {
   name: "get_family_story",
@@ -33,7 +33,7 @@ export async function runGetFamilyStory(
   const duration = spokenDuration(story.durationSeconds);
   const summary = `"${story.title}" by ${story.storyteller}${duration ? `, ${duration}` : ""}. The recording is ready to play.`;
   return {
-    summary: summary.slice(0, 299),
+    summary: clipSummary(summary),
     structured: story,
     resourceLink: { type: "resource_link", uri: story.audio.url, name: story.title, mimeType: "audio/mpeg" },
   };

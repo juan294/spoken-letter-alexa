@@ -1,7 +1,7 @@
 import { type z } from "zod";
 
 import { type AccountProvider } from "../provider/types.ts";
-import { listInputSchema, listOutputSchema, spokenDuration } from "./schemas.ts";
+import { clipSummary, listInputSchema, listOutputSchema, spokenDuration } from "./schemas.ts";
 
 export const LIST_TOOL = {
   name: "list_family_stories",
@@ -30,5 +30,5 @@ export async function runListFamilyStories(
   });
   const more = stories.length > 3 ? ` and ${stories.length - 3} more` : "";
   const summary = `${stories.length} delivered ${stories.length === 1 ? "story" : "stories"}, newest first: ${named.join(", ")}${more}.`;
-  return { summary: summary.slice(0, 299), structured: { stories } };
+  return { summary: clipSummary(summary), structured: { stories } };
 }

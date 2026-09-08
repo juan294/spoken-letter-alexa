@@ -1,17 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { type AuthInfo, bearerAuthChallengeResponse, OAuthError, OAuthErrorCode } from "@modelcontextprotocol/server";
-
-/** Constant-time string comparison; unequal lengths are compared against themselves. */
-export function constantTimeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a, "utf8");
-  const right = Buffer.from(b, "utf8");
-  if (left.length !== right.length) {
-    timingSafeEqual(left, left);
-    return false;
-  }
-  return timingSafeEqual(left, right);
-}
+import { constantTimeEqual } from "@spoken-letter-alexa/shared";
 
 export const MCP_SCOPES = ["mcp:tools", "mcp:resources"] as const;
 

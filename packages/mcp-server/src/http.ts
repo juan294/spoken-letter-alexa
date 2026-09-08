@@ -3,8 +3,7 @@ import { Hono } from "hono";
 
 import { type BearerGate, devTokenGate, MCP_SCOPES } from "./auth.ts";
 import { type ProviderResolver } from "./provider/types.ts";
-import { createHandler } from "./server.ts";
-import { SERVER_VERSION } from "./server.ts";
+import { createHandler, SERVER_VERSION } from "./server.ts";
 import { type SuggestionMemory } from "./tools/suggest.ts";
 
 export type AppDeps = {
