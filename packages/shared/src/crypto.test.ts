@@ -1,6 +1,15 @@
 import { describe, expect, test } from "vitest";
 
-import { constantTimeEqual, hmacSha256Hex, randomToken, sha256Base64Url, sha256Hex } from "./crypto.ts";
+import { constantTimeEqual, decodeJwtClaims, hmacSha256Hex, randomToken, sha256Base64Url, sha256Hex } from "./crypto.ts";
+
+describe("decodeJwtClaims", () => {
+  test("reads the payload without verifying and tolerates garbage", () => {
+    const payload = Buffer.from(JSON.stringify({ sub: "uid_1", exp: 42 })).toString("base64url");
+    expect(decodeJwtClaims(`h.${payload}.s`)).toEqual({ sub: "uid_1", exp: 42 });
+    expect(decodeJwtClaims("not-a-jwt")).toEqual({});
+    expect(decodeJwtClaims(`h.${Buffer.from("[1]").toString("base64url")}.s`)).toEqual({});
+  });
+});
 
 describe("constantTimeEqual", () => {
   test("is true only for identical strings", () => {

@@ -388,7 +388,7 @@ findings, all handled in the follow-up commit:
 
 | Id | Finding | Disposition |
 | --- | --- | --- |
-| F6-8 / F6-17 | The sync custom resource had a constant physical id, so it ran once, not on every deploy | Fixed: the physical id carries the synth time; comments and D20 aligned |
+| F6-8 / F6-17 | The sync custom resource had a constant physical id, so it ran once, not on every deploy | Fixed: the physical id carries the API bundle hash, so the target re-synchronizes whenever the deployed code changes and the template stays deterministic (the simplify pass moved it off the synth time) |
 | F6-16 | `pnpm deploy -- -c ...` in `docs/release.md` makes pnpm swallow the context flags (verified with `pnpm synth`) | Fixed: `pnpm deploy -c ...` everywhere, with a warning line |
 | F6-18 | After `--rotate-m2m` the gateway's unversioned dynamic reference is never re-resolved | Fixed: `sla:m2mSecretVersion` context passes the printed `VersionId` into `SecretValue.secretsManager(..., { versionId })`; tested |
 | F6-19 | CDK 2.268 ships no SDK metadata for `bedrock-agentcore-control`; the custom resource installs the latest SDK at first invoke | Recorded in the friction log; no change |
@@ -488,14 +488,40 @@ Independent reviewer (fresh context, `review-phase-9`) against `0ecdff9`. Seven 
 | Id | Finding | Disposition |
 | --- | --- | --- |
 | F9-1 | `ask deploy` fails manifest validation until the Lambda trigger permission exists, and the script then lost the skill id | Fixed: `spawnSync`, the id is recorded either way, the script explains the second run (D22) |
-| F9-2 | Device sessions (2 h) outlive the service token (1 h); a warm container's turns failed silently | Fixed: `/agent/turn` renews the token for demo and device sessions within 5 minutes of `exp`; tested with a lapsed token |
+| F9-2 | Device sessions (2 h) outlive the service token (1 h); a warm container's turns failed silently | Fixed: demo and device turns use a per-process service token cached until 5 minutes before `exp` and never the token stored with the session; tested with a lapsed stored token |
 | F9-3 | Verb-carrying catch-all carriers stripped the verb from the text | Fixed: intent-neutral carriers only; verb phrasings moved into `PlayStoryIntent` (D21) |
 | F9-4 | `"play {storyteller}'s story"` puts punctuation against a slot | Fixed: "play the story of {storyteller}" |
 | F9-5 | Icons absent without a deviation | Recorded (D22) |
 | F9-6 | Recording mode needed a stack edit; profile mismatch between the two scripts | Fixed: `-c sla:recordUtterances=1`; `record-pull` defaults `AWS_PROFILE` to `archy` |
 | F9-7 | Test file location and token-based resume undocumented | Recorded (D22) |
 
-Repair commit follows `0ecdff9`; checks re-run on that tree (see the final gate below).
+Repair commit `2526db7`; checks re-run on that tree and again after the simplify pass.
+
+## Simplify pass (2026-09-08)
+
+Four read-only reviewers (reuse, simplification, efficiency, altitude) over the diff
+`0e9ec79..2526db7`. Applied: one `decodeJwtClaims` in `shared` (agent routes and the dev
+callback); a cached per-process service token instead of renewing the token stored on
+demo and device sessions; Polly skipped for device turns (the Echo speaks `say` itself)
+and session write plus synthesis in parallel; one header lookup in `forwarded-auth.ts`;
+`bundledCode` shared by `ApiStack` and `SkillStack`; the gateway sync keyed on the API
+bundle hash (deterministic templates); a `bundle()` helper and parallel builds in
+`bundle-lambda.mjs`; parallel reads and no rewrite of an unchanged document in
+`seed-secrets.mjs`; `ask`, `tell` and `control` response helpers in the skill handler;
+`readTraining` shared by the CLI and the drift test; dead exports removed;
+`utteranceAllowed` asserted over every fixed sample. Skipped with reasons: a CDK-owned
+`sla/oauth-m2m` secret in place of the version plumbing (architecture change; revisit if
+rotation becomes routine); `/agent/turn` accepting `deviceUserId` directly (API contract
+change; the extra round trip is per container, not per turn); the origin-verify check
+as Hono middleware (the pre-Hono reject is intentional and cheaper); `RECORD_UTTERANCES`
+through `LOG_LEVEL` (an explicit flag is clearer for a mode that logs spoken phrasings);
+importing `Play` from the agent package into the skill (would pull the agent into the
+skill's graph; documented in `audio.ts`).
+
+Final gate after the simplify pass: `pnpm typecheck` pass (10 packages); `pnpm lint`
+pass; `pnpm test` pass, 48 files, 317 tests; `pnpm build` and `pnpm -F infra synth`
+pass. TDD note: the F9-2 test and its fix landed in the same edit; it was then
+re-targeted at the cached token (the stored stale token is ignored) and stays green.
 
 ## Plan amendment (2026-09-08): Phase 9
 
@@ -696,8 +722,8 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Found (F6-5, F6-8): the target synchronizes tools from the public endpoint at create
   time, so DNS and TLS must exist first; the tool list never refreshed after that.
 - Chose: `-c sla:deployGateway=1` on the second deploy, `GatewayStack` depends on
-  `EdgeStack`, an `AwsCustomResource` calls `SynchronizeGatewayTargets` on every deploy
-  (its physical id carries the synth time, F6-17), and `GatewayUrl` is a stack output;
+  `EdgeStack`, an `AwsCustomResource` calls `SynchronizeGatewayTargets` whenever the API
+  bundle hash changes (F6-17), and `GatewayUrl` is a stack output;
   `docs/release.md` A3a lists the three deploys with `-c` flags (never after a `--`,
   which pnpm swallows, F6-16).
 - Why: deterministic first deploy; the tool list follows the server.

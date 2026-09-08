@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { Duration, Stack, type StackProps } from "aws-cdk-lib";
@@ -7,7 +6,9 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import { type Construct } from "constructs";
 
-export const SKILL_FUNCTION_NAME = "sla-alexa-skill";
+import { bundledCode } from "./lambda-code.ts";
+
+const SKILL_FUNCTION_NAME = "sla-alexa-skill";
 
 export type SkillStackProps = StackProps & {
   /** The Alexa+ host; the skill's agent client calls `${publicBaseUrl}/agent/*`. */
@@ -37,11 +38,7 @@ export class SkillStack extends Stack {
     const logGroup = new logs.LogGroup(this, "SkillLogs", { logGroupName: "/aws/lambda/sla-alexa-skill", retention: logs.RetentionDays.ONE_MONTH });
 
     // Built by `pnpm -F infra build` next to the API bundle (infra/scripts/bundle-lambda.mjs).
-    const bundleDir = path.resolve(import.meta.dirname, "../dist/skill");
-    const useBundle = props.bundle !== false;
-    if (useBundle && !existsSync(path.join(bundleDir, "index.mjs"))) {
-      throw new Error(`${bundleDir}/index.mjs is missing: run pnpm build before cdk synth or deploy`);
-    }
+    const bundle = bundledCode(path.resolve(import.meta.dirname, "../dist/skill"), props.bundle !== false);
 
     this.fn = new lambda.Function(this, "Skill", {
       // Fixed so skill-package/skill.json carries the endpoint ARN before the first deploy.
@@ -64,7 +61,7 @@ export class SkillStack extends Stack {
         LOG_LEVEL: "info",
       },
       handler: "index.handler",
-      code: useBundle ? lambda.Code.fromAsset(bundleDir) : lambda.Code.fromInline("export const handler = async () => ({ statusCode: 501 });"),
+      code: bundle.code,
     });
 
     if (props.skillId) {

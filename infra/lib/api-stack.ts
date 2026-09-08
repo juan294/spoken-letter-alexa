@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { Duration, Stack, type StackProps } from "aws-cdk-lib";
@@ -8,6 +7,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import { type Construct } from "constructs";
 
 import { type CoreStack } from "./core-stack.ts";
+import { bundledCode } from "./lambda-code.ts";
 
 export type ApiStackProps = StackProps & {
   core: CoreStack;
@@ -38,6 +38,8 @@ export class ApiStack extends Stack {
   readonly fn: lambda.Function;
   readonly url: lambda.FunctionUrl;
   readonly logGroup: logs.LogGroup;
+  /** Identifies the deployed bundle; the gateway target re-syncs when it changes. */
+  readonly bundleHash: string;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -72,13 +74,9 @@ export class ApiStack extends Stack {
     };
 
     // Built by `pnpm -F infra build` (infra/scripts/bundle-lambda.mjs): index.mjs, the
-    // linux/arm64 ffmpeg-static binary and the fixture catalog. Tests use a marker
-    // function; a real synth without the bundle fails instead of deploying the marker.
-    const bundleDir = path.resolve(import.meta.dirname, "../dist/lambda");
-    const useBundle = props.bundle !== false;
-    if (useBundle && !existsSync(path.join(bundleDir, "index.mjs"))) {
-      throw new Error(`${bundleDir}/index.mjs is missing: run pnpm build before cdk synth or deploy`);
-    }
+    // linux/arm64 ffmpeg-static binary and the fixture catalog.
+    const bundle = bundledCode(path.resolve(import.meta.dirname, "../dist/lambda"), props.bundle !== false);
+    this.bundleHash = bundle.hash;
     this.fn = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
@@ -89,7 +87,7 @@ export class ApiStack extends Stack {
       logGroup: this.logGroup,
       environment,
       handler: "index.handler",
-      code: useBundle ? lambda.Code.fromAsset(bundleDir) : lambda.Code.fromInline("export const handler = async () => ({ statusCode: 501 });"),
+      code: bundle.code,
     });
 
     this.url = this.fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE, invokeMode: lambda.InvokeMode.RESPONSE_STREAM });

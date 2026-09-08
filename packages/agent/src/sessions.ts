@@ -83,9 +83,10 @@ export class DynamoSessionStore implements SessionStore {
     const result = await this.client.send(new GetCommand({ TableName: this.table, Key: { sessionId: id } }));
     const item = result.Item;
     if (!item || typeof item.expiresAt !== "number" || item.expiresAt <= this.now()) return null;
+    const mode: unknown = item.mode;
     return {
       id: String(item.id ?? item.sessionId),
-      mode: item.mode === "linked" ? "linked" : item.mode === "device" ? "device" : "demo",
+      mode: mode === "linked" || mode === "device" ? mode : "demo",
       subject: String(item.subject),
       accessToken: String(item.accessToken),
       history: Array.isArray(item.history) ? (item.history as MessageData[]) : [],

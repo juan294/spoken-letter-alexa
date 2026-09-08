@@ -1,4 +1,8 @@
-/** The agent's `play` reply: the story MP3 and what to show on a screen device. */
+/**
+ * The agent's `play` reply: the story MP3 and what to show on a screen device. Declared
+ * here rather than imported from `@spoken-letter-alexa/agent` on purpose: the skill bundle
+ * must not depend on the agent package (Strands, Bedrock, Polly, Transcribe).
+ */
 export type Play = { url: string; title: string; storyteller: string; durationSeconds: number | null };
 
 export type PlayDirective = {

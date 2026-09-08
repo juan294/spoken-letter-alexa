@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
-import path from "node:path";
 
 import { CLASS_C_DENYLIST } from "@spoken-letter-alexa/shared";
 import { describe, expect, test } from "vitest";
 
-import { generateInteractionModel, MODEL_PATH } from "./generate.ts";
+import { generateInteractionModel, MODEL_PATH, readTraining, utteranceAllowed } from "./generate.ts";
 
 const model = generateInteractionModel({ training: [] });
 const intents = model.interactionModel.languageModel.intents;
@@ -48,6 +47,8 @@ describe("generateInteractionModel", () => {
   test("no utterance names a child, a denylisted fragment or a non-ASCII character", () => {
     const samples = intents.flatMap((intent) => intent.samples);
     for (const sample of samples) {
+      // The generator's own filter for recorded phrasings must accept every fixed sample too.
+      expect(utteranceAllowed(sample)).toBe(true);
       expect(sample).toMatch(/^[a-z0-9 {}']+$/);
       for (const denied of CLASS_C_DENYLIST) {
         if (denied.fragment === "record" || denied.fragment === "audio") continue; // never appear either; asserted below
@@ -67,19 +68,6 @@ describe("generateInteractionModel", () => {
 
   test("the committed en-US model is exactly what the generator produces (drift check)", () => {
     const committed = readFileSync(MODEL_PATH, "utf8");
-    const training = readTrainingForTest();
-    expect(committed).toBe(`${JSON.stringify(generateInteractionModel({ training }), null, 2)}\n`);
+    expect(committed).toBe(`${JSON.stringify(generateInteractionModel({ training: readTraining() }), null, 2)}\n`);
   });
 });
-
-function readTrainingForTest(): string[] {
-  const file = path.join(path.dirname(MODEL_PATH), "../../training/en-US.jsonl");
-  try {
-    return readFileSync(file, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => (JSON.parse(line) as { text: string }).text);
-  } catch {
-    return [];
-  }
-}

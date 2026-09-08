@@ -52,7 +52,7 @@ const RETRY = "I'm still looking for that one. Ask again in a moment.";
 const NOTHING_TO_RESUME = "There is nothing to resume. Ask for a family story first.";
 const NOTHING_TO_PLAY = "Which family story would you like? You can say: play the story Grandpa sent.";
 
-export function escapeSsml(text: string): string {
+function escapeSsml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
@@ -74,13 +74,20 @@ function speak(text: string, options: { reprompt?: string; endSession: boolean; 
 
 const EMPTY: AlexaResponseEnvelope = { version: "1.0", response: {} };
 
+/** A question: the session stays open with the standard reprompt. */
+const ask = (text: string) => speak(text, { reprompt: REPROMPT, endSession: false });
+/** A closing line, optionally with playback: the session ends. */
+const tell = (text: string, directives?: AudioDirective[]) => speak(text, { endSession: true, ...(directives && { directives }) });
+/** Playback control without speech. */
+const control = (directives: AudioDirective[]): AlexaResponseEnvelope => ({ version: "1.0", response: { directives, shouldEndSession: true } });
+
 function slotValue(event: AlexaRequestEnvelope, name: string): string | undefined {
   const value = event.request.intent?.slots?.[name]?.value?.trim();
   return value === undefined || value === "" ? undefined : value;
 }
 
 /** The one line of text the agent receives for an intent (phase-9.md section 2). */
-export function textForIntent(event: AlexaRequestEnvelope): string | null {
+function textForIntent(event: AlexaRequestEnvelope): string | null {
   const name = event.request.intent?.name;
   switch (name) {
     case "PlayStoryIntent": {
@@ -116,42 +123,41 @@ export function createHandler(options: HandlerOptions): SkillHandler {
     const { type } = event.request;
     const locale = event.request.locale ?? "en-US";
 
-    if (type === "LaunchRequest") return speak(LAUNCH, { reprompt: REPROMPT, endSession: false });
+    if (type === "LaunchRequest") return ask(LAUNCH);
     if (type === "SessionEndedRequest" || type.startsWith("AudioPlayer.") || type.startsWith("PlaybackController.")) return EMPTY;
-    if (type !== "IntentRequest") return speak(HELP, { reprompt: REPROMPT, endSession: false });
+    if (type !== "IntentRequest") return ask(HELP);
 
     const intent = event.request.intent?.name ?? "";
     switch (intent) {
       case "AMAZON.PauseIntent":
       case "AMAZON.StopIntent":
       case "AMAZON.CancelIntent":
-        return { version: "1.0", response: { directives: [STOP_DIRECTIVE], shouldEndSession: true } };
+        return control([STOP_DIRECTIVE]);
       case "AMAZON.ResumeIntent": {
         const token = event.context.AudioPlayer?.token;
         const play = token ? decodeStreamToken(token) : null;
-        if (!play) return speak(NOTHING_TO_RESUME, { reprompt: REPROMPT, endSession: false });
-        return { version: "1.0", response: { directives: [playDirective(play, event.context.AudioPlayer?.offsetInMilliseconds ?? 0)], shouldEndSession: true } };
+        if (!play) return ask(NOTHING_TO_RESUME);
+        return control([playDirective(play, event.context.AudioPlayer?.offsetInMilliseconds ?? 0)]);
       }
       case "AMAZON.HelpIntent":
       case "AMAZON.FallbackIntent":
-        return speak(HELP, { reprompt: REPROMPT, endSession: false });
+        return ask(HELP);
       default:
         break;
     }
 
     const text = textForIntent(event);
-    if (text === null) return speak(NOTHING_TO_PLAY, { reprompt: REPROMPT, endSession: false });
+    if (text === null) return ask(NOTHING_TO_PLAY);
     if (intent === "CatchAllIntent") options.recordUtterance?.({ locale, text });
 
     const deviceUserId = event.context.System.user.userId;
     try {
       const reply = await options.agent.turn({ deviceUserId, text });
       log.info("skill_turn", { intent, tools: reply.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(reply.play) });
-      if (reply.play) return speak(reply.say, { endSession: true, directives: [playDirective(reply.play)] });
-      return speak(reply.say, { reprompt: REPROMPT, endSession: false });
+      return reply.play ? tell(reply.say, [playDirective(reply.play)]) : ask(reply.say);
     } catch (error) {
       log.warn("skill_turn_failed", { intent, message: error instanceof Error ? error.message : String(error) });
-      return speak(RETRY, { reprompt: REPROMPT, endSession: false });
+      return ask(RETRY);
     }
   };
 }

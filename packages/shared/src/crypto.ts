@@ -23,6 +23,16 @@ export function hmacSha256Hex(secret: string, value: string): string {
   return createHmac("sha256", secret).update(value, "utf8").digest("hex");
 }
 
+/** The payload of a compact JWS without verification (display and scheduling only). */
+export function decodeJwtClaims(token: string): Record<string, unknown> {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as unknown;
+    return typeof payload === "object" && payload !== null && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** `bytes` random bytes as base64url (no padding). */
 export function randomToken(bytes = 24): string {
   return randomBytes(bytes).toString("base64url");

@@ -2,7 +2,7 @@
 // `GET /dev/start` redirects to `/oauth/authorize` with a fresh PKCE pair, and
 // `GET /dev/callback` finishes the code exchange and prints the tokens. Mounted only when
 // DEV_ROUTES=1; never in the Lambda build.
-import { randomToken } from "@spoken-letter-alexa/shared";
+import { decodeJwtClaims, randomToken } from "@spoken-letter-alexa/shared";
 import { Hono } from "hono";
 
 import { pkceChallenge } from "../pkce.ts";
@@ -58,8 +58,8 @@ export function createDevAuthRoutes(options: DevAuthOptions): Hono {
     const body = (await response.json()) as Record<string, unknown>;
     if (!response.ok) return c.json(body, 400);
     const accessToken = String(body.access_token);
-    const claims = JSON.parse(Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")) as { sub?: string };
-    return c.json({ ...body, subject: claims.sub ?? null, redirect_uri: redirectUri }, 200, { "cache-control": "no-store" });
+    const { sub } = decodeJwtClaims(accessToken);
+    return c.json({ ...body, subject: typeof sub === "string" ? sub : null, redirect_uri: redirectUri }, 200, { "cache-control": "no-store" });
   });
 
   return app;

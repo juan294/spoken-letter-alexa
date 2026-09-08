@@ -1,4 +1,4 @@
-import { log } from "@spoken-letter-alexa/shared";
+import { decodeJwtClaims, log } from "@spoken-letter-alexa/shared";
 import { type Model } from "@strands-agents/sdk";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
@@ -36,30 +36,37 @@ function jsonError(c: Context, status: 400 | 404 | 413 | 500, error: string, mes
   return c.json({ error, message }, status);
 }
 
-function claimsOf(accessToken: string): { sub?: unknown; exp?: unknown } {
-  try {
-    return JSON.parse(Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")) as { sub?: unknown; exp?: unknown };
-  } catch {
-    return {};
-  }
-}
-
 /** Display-only subject from an access token (the MCP server verifies the token itself). */
 function subjectOf(accessToken: string): string {
-  const { sub } = claimsOf(accessToken);
+  const { sub } = decodeJwtClaims(accessToken);
   return typeof sub === "string" ? sub : "unknown";
 }
 
 /** Service tokens live 1 hour and sessions 2; a token without a readable `exp` counts as expiring. */
 export const TOKEN_RENEWAL_WINDOW_SECONDS = 300;
 
-export function tokenExpiresWithin(accessToken: string, seconds: number, now: number): boolean {
-  const { exp } = claimsOf(accessToken);
-  return typeof exp !== "number" || exp - now <= seconds;
+/**
+ * One service token per process, re-minted shortly before `exp`. Demo and device sessions
+ * never rely on the token stored with them: a warm skill container keeps a device session
+ * for hours, longer than any token (review F9-2).
+ */
+export function cachedServiceToken(mint: () => Promise<string>, now: () => number): () => Promise<string> {
+  let token: string | undefined;
+  let exp = 0;
+  return async () => {
+    if (token !== undefined && exp - now() > TOKEN_RENEWAL_WINDOW_SECONDS) return token;
+    token = await mint();
+    const claims = decodeJwtClaims(token);
+    exp = typeof claims.exp === "number" ? claims.exp : 0;
+    return token;
+  };
 }
 
 export function createAgentApp(deps: AgentDeps): Hono {
   const app = new Hono();
+  const now = deps.now ?? (() => Math.floor(Date.now() / 1000));
+  const serviceToken = cachedServiceToken(deps.demoToken, now);
+
   app.onError((error, c) => {
     log.error("agent_unhandled", { path: c.req.path, message: error.message });
     return c.json({ error: "server_error", message: "The agent hit an internal error" }, 500);
@@ -70,19 +77,14 @@ export function createAgentApp(deps: AgentDeps): Hono {
   app.post("/agent/session", async (c) => {
     const parsed = sessionBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "mode must be demo, device with a deviceUserId, or linked with an accessToken");
-    const accessToken = parsed.data.mode === "linked" ? parsed.data.accessToken : await deps.demoToken();
-    let session;
-    if (parsed.data.mode === "device") {
-      // One conversation per Echo user, reopened with a fresh service token each time.
-      const id = deviceSessionId(parsed.data.deviceUserId);
-      const existing = await deps.sessions.get(id);
-      const now = deps.now ? deps.now() : Math.floor(Date.now() / 1000);
-      session = existing
-        ? { ...existing, accessToken, expiresAt: now + SESSION_TTL_SECONDS }
-        : newSession({ id, mode: "device", subject: subjectOf(accessToken), accessToken }, deps.now);
-    } else {
-      session = newSession({ mode: parsed.data.mode, subject: subjectOf(accessToken), accessToken }, deps.now);
-    }
+    const { mode } = parsed.data;
+    const accessToken = parsed.data.mode === "linked" ? parsed.data.accessToken : await serviceToken();
+    // A device (Echo user) keeps one conversation across invocations; other modes start fresh.
+    const id = parsed.data.mode === "device" ? deviceSessionId(parsed.data.deviceUserId) : undefined;
+    const existing = id === undefined ? null : await deps.sessions.get(id);
+    const session = existing
+      ? { ...existing, expiresAt: now() + SESSION_TTL_SECONDS }
+      : newSession({ mode, subject: subjectOf(accessToken), accessToken, ...(id !== undefined && { id }) }, now);
     await deps.sessions.put(session);
     log.info("agent_session", { mode: session.mode, offline: deps.offline });
     return c.json({ sessionId: session.id, mode: session.mode, subject: session.subject, offline: deps.offline });
@@ -91,19 +93,15 @@ export function createAgentApp(deps: AgentDeps): Hono {
   app.post("/agent/turn", async (c) => {
     const parsed = turnBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "sessionId and text are required");
-    let session = await deps.sessions.get(parsed.data.sessionId);
+    const session = await deps.sessions.get(parsed.data.sessionId);
     if (!session) return jsonError(c, 404, "session_not_found", "Start a new session");
-    // Demo and device sessions hold the service token; a warm skill container keeps a
-    // device session for hours, so the token is renewed here before it lapses (F9-2).
-    if (session.mode !== "linked" && tokenExpiresWithin(session.accessToken, TOKEN_RENEWAL_WINDOW_SECONDS, deps.now ? deps.now() : Math.floor(Date.now() / 1000))) {
-      session = { ...session, accessToken: await deps.demoToken() };
-    }
-    const result = await runTurn(
-      { model: deps.model, mcpUrl: deps.mcpUrl, accessToken: session.accessToken, fetch: deps.mcpFetch, history: session.history },
-      parsed.data.text,
-    );
-    await deps.sessions.put({ ...session, history: result.history });
-    const speechUrl = await deps.speech.synthesize(result.say);
+    const accessToken = session.mode === "linked" ? session.accessToken : await serviceToken();
+    const result = await runTurn({ model: deps.model, mcpUrl: deps.mcpUrl, accessToken, fetch: deps.mcpFetch, history: session.history }, parsed.data.text);
+    // The skill speaks `say` with Alexa's own voice, so Polly runs for the simulator only.
+    const [speechUrl] = await Promise.all([
+      session.mode === "device" ? Promise.resolve(null) : deps.speech.synthesize(result.say),
+      deps.sessions.put({ ...session, history: result.history }),
+    ]);
     log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play) });
     return c.json({ say: result.say, play: result.play, speechUrl, toolCalls: result.toolCalls });
   });

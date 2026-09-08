@@ -50,10 +50,7 @@ function oauthError(c: Context, status: 400 | 401 | 404 | 429, error: OAuthError
  */
 function clientIp(c: Context): string {
   const viewer = c.req.header("cloudfront-viewer-address");
-  if (viewer) {
-    const ip = viewer.includes("]") ? viewer.slice(0, viewer.indexOf("]") + 1) : viewer.slice(0, viewer.lastIndexOf(":") > 0 ? viewer.lastIndexOf(":") : undefined);
-    if (ip) return ip;
-  }
+  if (viewer) return viewer.replace(/:\d+$/, "");
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded === undefined) return "local";
   const last = forwarded.split(",").at(-1)?.trim();

@@ -42,8 +42,7 @@ async function existing(secretId) {
     return undefined;
   }
 }
-const existingBridge = await existing("sla/bridge");
-const existingClients = await existing("sla/oauth-clients");
+const [existingBridge, existingClients] = await Promise.all([existing("sla/bridge"), existing("sla/oauth-clients")]);
 let existingM2m;
 try {
   existingM2m = existingClients ? JSON.parse(existingClients).m2mSecret : undefined;
@@ -84,7 +83,8 @@ if (dryRun) {
 }
 
 if (bridgeRotated) await client.send(new PutSecretValueCommand({ SecretId: "sla/bridge", SecretString: bridgeSecret }));
-const clientsVersion = await client.send(new PutSecretValueCommand({ SecretId: "sla/oauth-clients", SecretString: document }));
+// An unchanged document is not written: every PutSecretValue creates a new version.
+const clientsVersion = document === existingClients ? { VersionId: "unchanged" } : await client.send(new PutSecretValueCommand({ SecretId: "sla/oauth-clients", SecretString: document }));
 console.log(
   JSON.stringify({ event: "secrets_seeded", region, clients: clients.map((c) => c.clientId), bridgeRotated, m2mRotated: m2mSecret !== existingM2m }),
 );

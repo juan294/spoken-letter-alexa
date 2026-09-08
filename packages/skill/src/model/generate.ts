@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
@@ -16,6 +17,15 @@ export const MODEL_PATH = path.resolve(import.meta.dirname, "../../skill-package
 export const TRAINING_PATH = path.resolve(import.meta.dirname, "../../skill-package/training/en-US.jsonl");
 
 export const INVOCATION_NAME = "spoken letter";
+
+/** Recorded phrasings, one `{ text }` JSON object per line (written by `record:pull`). */
+export function readTraining(file = TRAINING_PATH): string[] {
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => (JSON.parse(line) as { text: string }).text);
+}
 
 /**
  * One intent per MCP tool. The mapping is by tool name so a new or renamed tool fails
@@ -115,7 +125,7 @@ const BUILT_IN_INTENTS = ["AMAZON.CancelIntent", "AMAZON.FallbackIntent", "AMAZO
 const CHILD_WORDS = /\b(kid|kids|child|children|son|daughter|grandson|granddaughter)\b/;
 
 /** Alexa's utterance alphabet: lowercase letters, digits, spaces, apostrophes, slot braces. */
-export function normaliseUtterance(text: string): string {
+function normaliseUtterance(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9 {}']/g, " ")

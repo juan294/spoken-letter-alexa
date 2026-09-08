@@ -16,53 +16,42 @@ const repoRoot = path.resolve(here, "../..");
 const outDir = path.resolve(here, "../dist/lambda");
 const entry = path.join(repoRoot, "packages/app/src/lambda-entry.ts");
 
-rmSync(outDir, { recursive: true, force: true });
-mkdirSync(outDir, { recursive: true });
-
-await esbuild.build({
-  entryPoints: [entry],
-  outfile: path.join(outDir, "index.mjs"),
-  bundle: true,
-  platform: "node",
-  target: "node24",
-  format: "esm",
-  mainFields: ["module", "main"],
-  sourcemap: true,
-  minify: false,
-  // The ffmpeg binary is installed below for linux/arm64; everything else is inlined.
-  external: ["ffmpeg-static"],
-  banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
-  logLevel: "warning",
-});
-
-// ffmpeg-static downloads the binary for npm_config_platform/arch at install time.
-writeFileSync(path.join(outDir, "package.json"), JSON.stringify({ name: "sla-lambda", private: true, type: "module" }, null, 2));
-execFileSync("npm", ["install", "--no-save", "--no-package-lock", "--no-audit", "--no-fund", "--omit=dev", "ffmpeg-static@5.3.0"], {
-  cwd: outDir,
-  stdio: "inherit",
-  env: { ...process.env, npm_config_platform: "linux", npm_config_arch: "arm64" },
-});
+async function bundle(name, entryFile, dir, external = []) {
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  await esbuild.build({
+    entryPoints: [entryFile],
+    outfile: path.join(dir, "index.mjs"),
+    bundle: true,
+    platform: "node",
+    target: "node24",
+    format: "esm",
+    mainFields: ["module", "main"],
+    sourcemap: true,
+    minify: false,
+    external,
+    banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
+    logLevel: "warning",
+  });
+  writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name, private: true, type: "module" }, null, 2));
+}
 
 // Phase 9: the classic-skill Lambda (infra/lib/skill-stack.ts), a plain handler with no
 // binaries and no fixtures.
 const skillOutDir = path.resolve(here, "../dist/skill");
 const skillEntry = path.join(repoRoot, "packages/skill/src/lambda.ts");
-rmSync(skillOutDir, { recursive: true, force: true });
-mkdirSync(skillOutDir, { recursive: true });
-await esbuild.build({
-  entryPoints: [skillEntry],
-  outfile: path.join(skillOutDir, "index.mjs"),
-  bundle: true,
-  platform: "node",
-  target: "node24",
-  format: "esm",
-  mainFields: ["module", "main"],
-  sourcemap: true,
-  minify: false,
-  banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
-  logLevel: "warning",
+await Promise.all([
+  // The ffmpeg binary is installed below for linux/arm64; everything else is inlined.
+  bundle("sla-lambda", entry, outDir, ["ffmpeg-static"]),
+  bundle("sla-skill-lambda", skillEntry, skillOutDir),
+]);
+
+// ffmpeg-static downloads the binary for npm_config_platform/arch at install time.
+execFileSync("npm", ["install", "--no-save", "--no-package-lock", "--no-audit", "--no-fund", "--omit=dev", "ffmpeg-static@5.3.0"], {
+  cwd: outDir,
+  stdio: "inherit",
+  env: { ...process.env, npm_config_platform: "linux", npm_config_arch: "arm64" },
 });
-writeFileSync(path.join(skillOutDir, "package.json"), JSON.stringify({ name: "sla-skill-lambda", private: true, type: "module" }, null, 2));
 
 const fixtures = path.join(repoRoot, "fixtures");
 mkdirSync(path.join(outDir, "fixtures"), { recursive: true });

@@ -23,8 +23,8 @@ export type GatewayStackProps = StackProps & {
  * bound to the `alexa-m2m` static client (secret from `sla/oauth-clients`, so this stack
  * deploys only after `seed:secrets`); inbound auth is IAM for the agent Lambda, which
  * signs with SigV4 when `MCP_URL` is the gateway. The target is created after the edge
- * exists (bin/app.ts orders the stacks) and synchronized by a custom resource on every
- * deploy. After `seed:secrets --rotate-m2m`, pass the printed version as
+ * exists (bin/app.ts orders the stacks) and re-synchronized by a custom resource whenever
+ * the API bundle changes. After `seed:secrets --rotate-m2m`, pass the printed version as
  * `-c sla:m2mSecretVersion=...` so the credential provider re-resolves the secret.
  */
 export class GatewayStack extends Stack {
@@ -82,23 +82,19 @@ export class GatewayStack extends Stack {
       });
     }
 
-    // Synchronize the target on every deploy so the cached tool list follows the server:
-    // the physical id carries the synth time, which changes the Update payload each time.
-    const syncId = `${this.gateway.gatewayId}:sync:${Date.now()}`;
+    // The cached tool list follows the server: the physical id carries the API bundle
+    // hash, so the target re-synchronizes exactly when the deployed code changes and
+    // the template stays deterministic otherwise.
+    const synchronize: cr.AwsSdkCall = {
+      service: "@aws-sdk/client-bedrock-agentcore-control",
+      action: "SynchronizeGatewayTargetsCommand",
+      parameters: { gatewayIdentifier: this.gateway.gatewayId, targetIdList: [this.target.targetId] },
+      physicalResourceId: cr.PhysicalResourceId.of(`${this.gateway.gatewayId}:sync:${props.api.bundleHash}`),
+    };
     const sync = new cr.AwsCustomResource(this, "SynchronizeTarget", {
       resourceType: "Custom::SlaSynchronizeGatewayTarget",
-      onCreate: {
-        service: "@aws-sdk/client-bedrock-agentcore-control",
-        action: "SynchronizeGatewayTargetsCommand",
-        parameters: { gatewayIdentifier: this.gateway.gatewayId, targetIdList: [this.target.targetId] },
-        physicalResourceId: cr.PhysicalResourceId.of(syncId),
-      },
-      onUpdate: {
-        service: "@aws-sdk/client-bedrock-agentcore-control",
-        action: "SynchronizeGatewayTargetsCommand",
-        parameters: { gatewayIdentifier: this.gateway.gatewayId, targetIdList: [this.target.targetId] },
-        physicalResourceId: cr.PhysicalResourceId.of(syncId),
-      },
+      onCreate: synchronize,
+      onUpdate: synchronize,
       policy: cr.AwsCustomResourcePolicy.fromStatements([
         new iam.PolicyStatement({ actions: ["bedrock-agentcore:SynchronizeGatewayTargets"], resources: [this.gateway.gatewayArn, `${this.gateway.gatewayArn}/*`] }),
       ]),

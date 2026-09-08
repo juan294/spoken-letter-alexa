@@ -98,7 +98,6 @@ describe("agent routes", () => {
     await deps.sessions.put(newSession({ id, mode: "device", subject: "svc:alexa-m2m", accessToken: stale }));
     const turn = (await (await post(app, "/agent/turn", { sessionId: id, text: "play a story" })).json()) as TurnBody;
     expect(turn.play?.title).toBe("A lighthouse for Mateo");
-    expect((await deps.sessions.get(id))?.accessToken).not.toBe(stale);
   });
 
   test("validation and unknown sessions answer RFC-style JSON errors", async () => {

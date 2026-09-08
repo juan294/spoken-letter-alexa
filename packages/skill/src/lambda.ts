@@ -6,7 +6,7 @@ import { createAgentClient } from "./agent-client.ts";
 import { type AlexaRequestEnvelope, type AlexaResponseEnvelope, createHandler } from "./handler.ts";
 
 /** Alexa waits about 8 s for the skill; the whole agent round trip gets 6. */
-export const AGENT_BUDGET_MS = 6_000;
+const AGENT_BUDGET_MS = 6_000;
 
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
 const skillId = process.env.SKILL_ID;
