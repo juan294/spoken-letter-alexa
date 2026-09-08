@@ -108,12 +108,29 @@ Verified in this session:
   pre-Phase-0 state; evidence in `.rpi/local/verification.json` (ignored).
 
 Not done, by design: LICENSE, package.json, CI workflow, pre-commit hook (Phase 0
-deliverables); Agent Teams (opt-in); user-scope lifecycle skills in `~/.claude/skills`
-(user-level decision, see below); no push, no remote.
+deliverables); no push, no remote.
 
-Follow-up for the Owner: `~/.claude/commands/{adopt,bootstrap,update,detach}.md` are the
-v1 copies. cc-rpi 2.0.2 installs the v2 lifecycle skills at user scope with
-`bash scripts/install.sh --scope user --harness both --route direct --output <plan>`
-from the cc-rpi checkout. Until then, invoke the engine directly as this session did.
+### Completion pass (same day, Owner asked for 100 percent)
+
+- **Agent Teams enabled.** Owner decision: batch phases (1, 2, 3, 7) need it.
+  `.claude/settings.json` gains `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"`, the
+  form documented in cc-rpi `methodology/agent-design.md`. Engine `check` stays healthy
+  after the edit (the engine preserves project-owned settings keys).
+- **User-scope lifecycle skills installed.** `rpi-adopt`, `rpi-bootstrap`, `rpi-update`,
+  `rpi-detach` in `~/.claude/skills/` and `~/.agents/skills/`, state under
+  `~/.config/cc-rpi/installations/user`, engine check `healthy`. Future adoptions and
+  updates use `/rpi-update` and `/rpi-adopt`, not the v1 commands.
+- **v1 user commands preserved.** `~/.claude/commands/{adopt,bootstrap,update,detach}.md`
+  are not byte-identical to any revision of cc-rpi `templates/commands/*.md`, so their
+  ownership is unproven and the migration guide says preserve. They still work as
+  explicit `/adopt`-style invocations but describe the v1 copy-files flow. Deleting them
+  is an Owner decision.
+- **Codex native discovery verified.** `codex debug prompt-input` from this directory
+  renders the model-visible input; it contains the AGENTS.md project facts, the Boundaries
+  block, the managed rule map, `.rpi/rules/testing.md`, and the skills `rpi-research`,
+  `rpi-implement`, `codex-simplify` and `rpi-adopt`. Hook trust in Codex is granted
+  natively on first use and was not exercised.
+- **Codex project trust.** `~/.codex/config.toml` trusts `/Users/juan` and several
+  siblings but has no entry for this directory yet; Codex asks on first launch here.
 
 Next: `/rpi-implement docs/plans/2026-09-03-alexa-plus-mcp-add-on.md`, Phase 0.
