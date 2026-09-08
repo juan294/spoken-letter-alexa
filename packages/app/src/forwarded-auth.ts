@@ -7,6 +7,20 @@
  * callers, local tests).
  */
 export const FORWARDED_AUTHORIZATION_HEADER = "x-forwarded-authorization";
+export const ORIGIN_VERIFY_HEADER = "x-origin-verify";
+
+/**
+ * The function URL is public (D18); only requests carrying the `x-origin-verify` value
+ * CloudFront adds from `sla/origin-verify` are served. Compared in constant time.
+ */
+export function originVerified(event: HeaderedEvent, expected: string): boolean {
+  const headers = event.headers ?? {};
+  const key = Object.keys(headers).find((name) => name.toLowerCase() === ORIGIN_VERIFY_HEADER);
+  const value = key === undefined ? undefined : headers[key];
+  return typeof value === "string" && value.length > 0 && constantTimeEqual(value, expected);
+}
+
+import { constantTimeEqual } from "@spoken-letter-alexa/shared";
 
 export type HeaderedEvent = { headers?: Record<string, string | undefined> | undefined };
 

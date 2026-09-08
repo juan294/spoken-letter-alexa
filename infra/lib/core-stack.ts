@@ -15,6 +15,7 @@ export class CoreStack extends Stack {
   readonly jwtKey: kms.Key;
   readonly bridgeSecret: secretsmanager.Secret;
   readonly oauthClientsSecret: secretsmanager.Secret;
+  readonly originVerifySecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
@@ -63,10 +64,16 @@ export class CoreStack extends Stack {
       generateSecretString: { secretStringTemplate: JSON.stringify({ clients: [] }), generateStringKey: "m2mSecret", excludePunctuation: true, passwordLength: 48 },
     });
 
+    this.originVerifySecret = new secretsmanager.Secret(this, "OriginVerifySecret", {
+      secretName: "sla/origin-verify",
+      description: "Shared header value CloudFront presents to the function URL (x-origin-verify); the Lambda refuses requests without it.",
+      generateSecretString: { excludePunctuation: true, passwordLength: 48 },
+    });
+
     this.bridgeSecret = new secretsmanager.Secret(this, "BridgeSecret", {
       secretName: "sla/bridge",
       description:
-        "ALEXA_BRIDGE_SECRET shared with the private Spoken Letter API. Placeholder until rotated by hand in Phase 4.",
+        "ALEXA_BRIDGE_SECRET shared with the private Spoken Letter API. Generated here; pnpm -F infra seed:secrets rotates it on request.",
       generateSecretString: {
         excludePunctuation: true,
         passwordLength: 48,

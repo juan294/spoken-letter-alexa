@@ -393,9 +393,9 @@ describe("bridge authentication", () => {
 });
 
 describe("rate limiting", () => {
-  test("/oauth/* allows 60 requests per minute per IP then answers 429", async () => {
+  test("/oauth/* allows 60 requests per minute per viewer address then answers 429", async () => {
     const h = await harness();
-    const headers = { "x-forwarded-for": "203.0.113.9, 10.0.0.1" };
+    const headers = { "cloudfront-viewer-address": "203.0.113.9:51234", "x-forwarded-for": "198.51.100.1, 203.0.113.9" };
     const request = form({ client_id: "simulator" });
     let last = 0;
     for (let i = 0; i < 60; i += 1) {
@@ -405,8 +405,11 @@ describe("rate limiting", () => {
     const limited = await h.app.request("/oauth/token", { method: "POST", headers: { ...headers, ...request.headers }, body: request.body });
     expect(limited.status).toBe(429);
     await expect(limited.json()).resolves.toMatchObject({ error: "temporarily_unavailable" });
-    const other = await h.app.request("/oauth/token", { method: "POST", headers: { "x-forwarded-for": "203.0.113.10", ...request.headers }, body: request.body });
+    const other = await h.app.request("/oauth/token", { method: "POST", headers: { "cloudfront-viewer-address": "203.0.113.10:4", ...request.headers }, body: request.body });
     expect(other.status).toBe(400);
+    // A forged first X-Forwarded-For entry does not change the key: the last hop is the viewer.
+    const forged = await h.app.request("/oauth/token", { method: "POST", headers: { "x-forwarded-for": "10.9.9.9, 203.0.113.9", ...request.headers }, body: request.body });
+    expect(forged.status).toBe(429);
     const wellKnown = await h.app.request("/.well-known/oauth-authorization-server", { headers });
     expect(wellKnown.status).toBe(200);
   });

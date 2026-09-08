@@ -19,6 +19,7 @@
     "@aws-sdk/client-s3": "3.1127.0",
     "@aws-sdk/client-secrets-manager": "3.1127.0",
     "@aws-sdk/client-transcribe-streaming": "3.1127.0",
+    "@aws-sdk/credential-provider-node": "3.972.82",
     "@aws-sdk/lib-dynamodb": "3.1127.0",
     "@hono/node-server": "2.1.1",
     "@spoken-letter-alexa/agent": "workspace:*",

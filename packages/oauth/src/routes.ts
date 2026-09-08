@@ -43,11 +43,21 @@ function oauthError(c: Context, status: 400 | 401 | 404 | 429, error: OAuthError
   return c.json({ error, error_description: description }, status, { ...NO_STORE, ...headers });
 }
 
+/**
+ * Rate-limit key. Behind CloudFront the trustworthy address is `CloudFront-Viewer-Address`
+ * (`ip:port`, set by the edge); the last `X-Forwarded-For` hop is the fallback because
+ * CloudFront appends the viewer address while a viewer can forge earlier entries.
+ */
 function clientIp(c: Context): string {
+  const viewer = c.req.header("cloudfront-viewer-address");
+  if (viewer) {
+    const ip = viewer.includes("]") ? viewer.slice(0, viewer.indexOf("]") + 1) : viewer.slice(0, viewer.lastIndexOf(":") > 0 ? viewer.lastIndexOf(":") : undefined);
+    if (ip) return ip;
+  }
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded === undefined) return "local";
-  const first = forwarded.split(",")[0]?.trim();
-  if (first) return first;
+  const last = forwarded.split(",").at(-1)?.trim();
+  if (last) return last;
   return "unknown";
 }
 

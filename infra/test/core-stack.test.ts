@@ -49,10 +49,13 @@ describe("CoreStack", () => {
     template.hasResourceProperties("AWS::KMS::Alias", { AliasName: "alias/sla-jwt" });
   });
 
-  test("creates the sla/bridge secret with a generated placeholder value", () => {
+  test("creates the sla/bridge and sla/origin-verify secrets with generated values", () => {
     template.hasResourceProperties("AWS::SecretsManager::Secret", {
       Name: "sla/bridge",
-      Description: Match.stringLikeRegexp("Phase 4"),
+      GenerateSecretString: { ExcludePunctuation: true, PasswordLength: 48 },
+    });
+    template.hasResourceProperties("AWS::SecretsManager::Secret", {
+      Name: "sla/origin-verify",
       GenerateSecretString: { ExcludePunctuation: true, PasswordLength: 48 },
     });
   });

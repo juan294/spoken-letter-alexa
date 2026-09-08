@@ -43,8 +43,37 @@ execFileSync("npm", ["install", "--no-save", "--no-package-lock", "--no-audit", 
   env: { ...process.env, npm_config_platform: "linux", npm_config_arch: "arm64" },
 });
 
+// Phase 9: the classic-skill Lambda (infra/lib/skill-stack.ts), a plain handler with no
+// binaries and no fixtures.
+const skillOutDir = path.resolve(here, "../dist/skill");
+const skillEntry = path.join(repoRoot, "packages/skill/src/lambda.ts");
+rmSync(skillOutDir, { recursive: true, force: true });
+mkdirSync(skillOutDir, { recursive: true });
+await esbuild.build({
+  entryPoints: [skillEntry],
+  outfile: path.join(skillOutDir, "index.mjs"),
+  bundle: true,
+  platform: "node",
+  target: "node24",
+  format: "esm",
+  mainFields: ["module", "main"],
+  sourcemap: true,
+  minify: false,
+  banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
+  logLevel: "warning",
+});
+writeFileSync(path.join(skillOutDir, "package.json"), JSON.stringify({ name: "sla-skill-lambda", private: true, type: "module" }, null, 2));
+
 const fixtures = path.join(repoRoot, "fixtures");
 mkdirSync(path.join(outDir, "fixtures"), { recursive: true });
 if (existsSync(path.join(fixtures, "stories.json"))) cpSync(path.join(fixtures, "stories.json"), path.join(outDir, "fixtures/stories.json"));
 
-console.log(JSON.stringify({ event: "lambda_bundled", outDir, entry: path.relative(repoRoot, entry), ffmpeg: existsSync(path.join(outDir, "node_modules/ffmpeg-static/ffmpeg")) }));
+console.log(
+  JSON.stringify({
+    event: "lambda_bundled",
+    outDir,
+    entry: path.relative(repoRoot, entry),
+    ffmpeg: existsSync(path.join(outDir, "node_modules/ffmpeg-static/ffmpeg")),
+    skill: { outDir: skillOutDir, entry: path.relative(repoRoot, skillEntry) },
+  }),
+);

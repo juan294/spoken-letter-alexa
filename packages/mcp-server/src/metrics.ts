@@ -27,7 +27,8 @@ function emfEnvelope(tool: string, ms: number): Record<string, unknown> {
     _aws: {
       Timestamp: Date.now(),
       CloudWatchMetrics: [
-        { Namespace: namespace, Dimensions: [["Tool"]], Metrics: [{ Name: "ToolLatencyMs", Unit: "Milliseconds" }] },
+        // By tool for the dashboard, and without dimensions for the p95 alarm.
+        { Namespace: namespace, Dimensions: [["Tool"], []], Metrics: [{ Name: "ToolLatencyMs", Unit: "Milliseconds" }] },
       ],
     },
     Tool: tool,

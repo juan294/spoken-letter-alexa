@@ -1,6 +1,17 @@
 import { describe, expect, test } from "vitest";
 
-import { rewriteForwardedAuthorization } from "./forwarded-auth.ts";
+import { originVerified, rewriteForwardedAuthorization } from "./forwarded-auth.ts";
+
+describe("originVerified", () => {
+  test("accepts only the exact shared value, case-insensitively on the header name", () => {
+    expect(originVerified({ headers: { "x-origin-verify": "shared-value-not-real" } }, "shared-value-not-real")).toBe(true);
+    expect(originVerified({ headers: { "X-Origin-Verify": "shared-value-not-real" } }, "shared-value-not-real")).toBe(true);
+    expect(originVerified({ headers: { "x-origin-verify": "shared-value-not-reaL" } }, "shared-value-not-real")).toBe(false);
+    expect(originVerified({ headers: { "x-origin-verify": "" } }, "shared-value-not-real")).toBe(false);
+    expect(originVerified({ headers: {} }, "shared-value-not-real")).toBe(false);
+    expect(originVerified({ headers: undefined }, "shared-value-not-real")).toBe(false);
+  });
+});
 
 describe("rewriteForwardedAuthorization", () => {
   test("restores the viewer bearer over the OAC signature and drops the carrier header", () => {

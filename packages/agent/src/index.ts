@@ -1,5 +1,6 @@
 export { createAgentApp, type AgentDeps } from "./routes.ts";
 export { createOfflineDeps, OFFLINE_UTTERANCE } from "./offline.ts";
+export { createSigV4Fetch } from "./sigv4-fetch.ts";
 export { runTurn, CLIENT_ERA, type TurnOptions, type TurnResult } from "./turn.ts";
 export { ScriptedModel } from "./scripted-model.ts";
 export { ALEXA_PERSONA } from "./persona.ts";

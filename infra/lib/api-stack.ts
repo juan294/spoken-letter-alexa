@@ -1,11 +1,10 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { Annotations, Duration, Stack, type StackProps } from "aws-cdk-lib";
+import { Duration, Stack, type StackProps } from "aws-cdk-lib";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
-import * as s3 from "aws-cdk-lib/aws-s3";
 import { type Construct } from "constructs";
 
 import { type CoreStack } from "./core-stack.ts";
@@ -18,7 +17,7 @@ export type ApiStackProps = StackProps & {
   bundle?: boolean;
   publicBaseUrl?: string;
   spokenLetterOrigin?: string;
-  /** Set by GatewayStack after the gateway exists; `${publicBaseUrl}/mcp` until then. */
+  /** The AgentCore Gateway MCP endpoint once it exists; `${publicBaseUrl}/mcp` until then. */
   mcpUrl?: string;
   bedrockModelId?: string;
 };
@@ -27,10 +26,13 @@ export const DEFAULT_PUBLIC_BASE_URL = "https://alexa.spokenletter.com";
 export const DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
 /**
- * One Lambda (Node 24, arm64, 1024 MB) bundled from `packages/app/src/lambda-entry.ts`, which
- * mounts the MCP server, the OAuth server and the agent on one Hono app, behind a
- * function URL in RESPONSE_STREAM mode with IAM auth (CloudFront signs with an OAC).
- * Secrets are read at cold start from Secrets Manager; the environment carries only ARNs.
+ * One Lambda (Node 24, arm64, 1024 MB) bundled from `packages/app/src/lambda-entry.ts`,
+ * which mounts the MCP server, the OAuth server and the agent on one Hono app, behind a
+ * function URL in RESPONSE_STREAM mode. The URL's auth type is NONE because an origin
+ * access control would make Lambda reject every POST without a payload hash (D18); the
+ * Lambda instead requires the `x-origin-verify` header CloudFront adds from
+ * `sla/origin-verify`. Secrets are read at cold start from Secrets Manager; the
+ * environment carries only ARNs.
  */
 export class ApiStack extends Stack {
   readonly fn: lambda.Function;
@@ -65,10 +67,19 @@ export class ApiStack extends Stack {
       EMF_NAMESPACE: "sla/mcp",
       SECRETS_BRIDGE_ARN: props.core.bridgeSecret.secretArn,
       SECRETS_OAUTH_CLIENTS_ARN: props.core.oauthClientsSecret.secretArn,
+      SECRETS_ORIGIN_VERIFY_ARN: props.core.originVerifySecret.secretArn,
       LOG_LEVEL: "info",
     };
 
-    const common = {
+    // Built by `pnpm -F infra build` (infra/scripts/bundle-lambda.mjs): index.mjs, the
+    // linux/arm64 ffmpeg-static binary and the fixture catalog. Tests use a marker
+    // function; a real synth without the bundle fails instead of deploying the marker.
+    const bundleDir = path.resolve(import.meta.dirname, "../dist/lambda");
+    const useBundle = props.bundle !== false;
+    if (useBundle && !existsSync(path.join(bundleDir, "index.mjs"))) {
+      throw new Error(`${bundleDir}/index.mjs is missing: run pnpm build before cdk synth or deploy`);
+    }
+    this.fn = new lambda.Function(this, "Api", {
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
       memorySize: 1024,
@@ -77,32 +88,29 @@ export class ApiStack extends Stack {
       tracing: lambda.Tracing.ACTIVE,
       logGroup: this.logGroup,
       environment,
-    };
-
-    // Built by `pnpm -F infra build` (infra/scripts/bundle-lambda.mjs): index.mjs, the
-    // linux/arm64 ffmpeg-static binary and the fixture catalog. Tests and a synth without
-    // a build use a marker function so the template still validates.
-    const bundleDir = path.resolve(import.meta.dirname, "../dist/lambda");
-    const useBundle = props.bundle !== false && existsSync(path.join(bundleDir, "index.mjs"));
-    if (props.bundle !== false && !useBundle) {
-      Annotations.of(this).addWarningV2("sla:lambda-bundle-missing", `${bundleDir} is missing; run pnpm build before deploying`);
-    }
-    this.fn = new lambda.Function(this, "Api", {
-      ...common,
       handler: "index.handler",
       code: useBundle ? lambda.Code.fromAsset(bundleDir) : lambda.Code.fromInline("export const handler = async () => ({ statusCode: 501 });"),
     });
 
-    this.url = this.fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM, invokeMode: lambda.InvokeMode.RESPONSE_STREAM });
+    this.url = this.fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE, invokeMode: lambda.InvokeMode.RESPONSE_STREAM });
 
-    // Least privilege: exactly what packages/app touches at runtime.
-    props.core.oauthTable.grantReadWriteData(this.fn);
-    props.core.agentSessionsTable.grantReadWriteData(this.fn);
-    props.core.bridgeSecret.grantRead(this.fn);
-    props.core.oauthClientsSecret.grantRead(this.fn);
-    props.core.jwtKey.grant(this.fn, "kms:Sign", "kms:GetPublicKey");
-    // By name, not by construct: a reference would cycle Api -> Simulator -> Edge -> Api.
-    s3.Bucket.fromBucketName(this, "Assets", props.assetsBucketName).grantPut(this.fn, "polly/*");
+    // Exactly the plan's list (phase-6 section 1), written out rather than through the
+    // grant helpers so nothing broader rides along.
+    const tables = [props.core.oauthTable, props.core.agentSessionsTable];
+    this.fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
+        resources: tables.flatMap((table) => [table.tableArn, `${table.tableArn}/index/*`]),
+      }),
+    );
+    this.fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [props.core.bridgeSecret.secretArn, props.core.oauthClientsSecret.secretArn, props.core.originVerifySecret.secretArn],
+      }),
+    );
+    this.fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["kms:Sign", "kms:GetPublicKey"], resources: [props.core.jwtKey.keyArn] }));
+    this.fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["s3:PutObject"], resources: [`arn:aws:s3:::${props.assetsBucketName}/polly/*`] }));
     this.fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],

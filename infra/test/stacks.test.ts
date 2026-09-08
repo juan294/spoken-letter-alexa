@@ -34,6 +34,7 @@ function synth(): Templates {
     env,
     api,
     assetsBucketName: ASSETS_BUCKET_NAME,
+    originVerifySecret: core.originVerifySecret,
     certificateArn: CERT_ARN,
     hostedZoneId: "Z066897727OCGC5BEA1V8",
     zoneName: "spokenletter.com",
@@ -71,7 +72,8 @@ describe("Phase 6 stacks", () => {
         TracingConfig: { Mode: "Active" },
         Environment: { Variables: Match.objectLike({ PROVIDER_MODE: "fixtures", EMF_NAMESPACE: "sla/mcp", DEV_ROUTES: "0", AGENT_OFFLINE: "0" }) },
       });
-      t.api.hasResourceProperties("AWS::Lambda::Url", { InvokeMode: "RESPONSE_STREAM", AuthType: "AWS_IAM" });
+      // AuthType NONE by design (D18): an OAC would make Lambda reject every unsigned POST.
+      t.api.hasResourceProperties("AWS::Lambda::Url", { InvokeMode: "RESPONSE_STREAM", AuthType: "NONE" });
     });
 
     test("the log group is explicit with 30-day retention", () => {
@@ -84,6 +86,7 @@ describe("Phase 6 stacks", () => {
       expect(JSON.stringify(variables)).not.toMatch(/ALEXA_BRIDGE_SECRET|OAUTH_M2M_SECRET/);
       expect(variables.SECRETS_BRIDGE_ARN).toBeDefined();
       expect(variables.SECRETS_OAUTH_CLIENTS_ARN).toBeDefined();
+      expect(variables.SECRETS_ORIGIN_VERIFY_ARN).toBeDefined();
     });
 
     test("IAM stays narrow: only Transcribe and Polly use Resource *", () => {
@@ -98,11 +101,15 @@ describe("Phase 6 stacks", () => {
         expect(actions.has(needed)).toBe(true);
       }
       expect([...actions].some((action) => action === "dynamodb:*")).toBe(false);
+      // Exactly the plan's list: no Scan, no batch, no legal-hold or tagging verbs.
+      for (const broad of ["dynamodb:Scan", "dynamodb:BatchWriteItem", "s3:PutObjectLegalHold", "s3:Abort*", "secretsmanager:DescribeSecret"]) {
+        expect(actions.has(broad)).toBe(false);
+      }
     });
   });
 
   describe("SimulatorStack", () => {
-    test("a private bucket with OAC access only, a 1-hour lifecycle on polly/, and the SPA plus fixtures deployed", () => {
+    test("a private bucket with OAC access only, a one-day lifecycle on polly/ (S3's minimum), and the SPA deployed", () => {
       t.simulator.hasResourceProperties("AWS::S3::Bucket", {
         PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
         LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ Prefix: "polly/", ExpirationInDays: 1, Status: "Enabled" })]) },
@@ -125,7 +132,15 @@ describe("Phase 6 stacks", () => {
       expect(config.Aliases).toEqual(["alexa.spokenletter.com"]);
       expect(config.DefaultCacheBehavior.AllowedMethods).toEqual(expect.arrayContaining(["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]));
       expect(config.DefaultCacheBehavior.ViewerProtocolPolicy).toBe("redirect-to-https");
-      expect(config.CacheBehaviors.map((b) => b.PathPattern).sort()).toEqual(["/demo/*", "/fixtures/*", "/polly/*"]);
+      expect(config.CacheBehaviors.map((b) => b.PathPattern).sort()).toEqual(["/demo", "/demo/*", "/fixtures/*", "/polly/*"]);
+      // No distribution-wide error rewrite: API 403s and missing objects keep their status.
+      expect((config as { CustomErrorResponses?: unknown[] }).CustomErrorResponses ?? []).toHaveLength(0);
+      // The function URL origin carries the shared secret header, resolved from Secrets Manager, and no OAC.
+      const origins = (config as unknown as { Origins: { OriginCustomHeaders?: { HeaderName: string; HeaderValue: unknown }[]; OriginAccessControlId?: unknown }[] }).Origins;
+      const apiOriginConfig = origins.find((origin) => origin.OriginCustomHeaders?.some((header) => header.HeaderName === "x-origin-verify"));
+      expect(apiOriginConfig).toBeDefined();
+      expect(JSON.stringify(apiOriginConfig?.OriginCustomHeaders)).toContain("resolve:secretsmanager");
+      expect(apiOriginConfig?.OriginAccessControlId).toBeUndefined();
       expect(config.ViewerCertificate.AcmCertificateArn).toBe(CERT_ARN);
       expect(config.ViewerCertificate.MinimumProtocolVersion).toBe("TLSv1.2_2021");
       expect(config.WebACLId).toBeDefined();
@@ -133,7 +148,7 @@ describe("Phase 6 stacks", () => {
       expect(policies).toHaveLength(1);
       const orp = policies[0]?.Properties.OriginRequestPolicyConfig as { HeadersConfig: { HeaderBehavior: string; Headers: string[] }; QueryStringsConfig: { QueryStringBehavior: string } };
       expect(orp.HeadersConfig.HeaderBehavior).toBe("whitelist");
-      for (const header of ["X-Forwarded-Authorization", "MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id", "Accept", "Content-Type"]) {
+      for (const header of ["X-Forwarded-Authorization", "CloudFront-Viewer-Address", "MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id", "Accept", "Content-Type"]) {
         expect(orp.HeadersConfig.Headers).toContain(header);
       }
       expect(orp.HeadersConfig.Headers).not.toContain("Authorization");
@@ -145,6 +160,10 @@ describe("Phase 6 stacks", () => {
       });
       const defaultBehavior = config.DefaultCacheBehavior as { FunctionAssociations?: { EventType: string }[] };
       expect(defaultBehavior.FunctionAssociations?.map((a) => a.EventType)).toEqual(["viewer-request"]);
+      // The SPA behaviours carry the routing function (deep links, /demo redirect).
+      t.edge.hasResourceProperties("AWS::CloudFront::Function", { FunctionCode: Match.stringLikeRegexp("/demo/index.html") });
+      const spa = (config.CacheBehaviors as { PathPattern: string; FunctionAssociations?: { EventType: string }[] }[]).filter((b) => b.PathPattern.startsWith("/demo"));
+      for (const behavior of spa) expect(behavior.FunctionAssociations?.map((a) => a.EventType)).toEqual(["viewer-request"]);
       t.edge.hasResourceProperties("AWS::CloudFront::ResponseHeadersPolicy", {
         ResponseHeadersPolicyConfig: Match.objectLike({
           SecurityHeadersConfig: Match.objectLike({
@@ -223,9 +242,17 @@ describe("Phase 6 stacks", () => {
       expect(JSON.stringify(provider?.Properties)).toContain("resolve:secretsmanager");
     });
 
-    test("the API Lambda may invoke the gateway", () => {
-      const actions = statements(t.api).flatMap((statement) => ([] as string[]).concat(statement.Action));
-      expect(actions.some((action) => action.startsWith("bedrock-agentcore:InvokeGateway"))).toBe(true);
+    test("the invoke grant, the listing mode, the sync custom resource and the URL output live in the gateway stack", () => {
+      const actions = statements(t.gateway).flatMap((statement) => ([] as string[]).concat(statement.Action));
+      expect(actions).toContain("bedrock-agentcore:InvokeGateway");
+      expect(actions).toContain("bedrock-agentcore:SynchronizeGatewayTargets");
+      t.gateway.hasResourceProperties("AWS::BedrockAgentCore::GatewayTarget", {
+        TargetConfiguration: { Mcp: { McpServer: { Endpoint: "https://alexa.spokenletter.com/mcp", ListingMode: "DEFAULT" } } },
+      });
+      expect(resources(t.gateway, "Custom::SlaSynchronizeGatewayTarget")).toHaveLength(1);
+      expect(Object.keys((t.gateway.toJSON() as { Outputs?: Record<string, unknown> }).Outputs ?? {})).toContain("GatewayUrl");
+      // The API stack no longer references the gateway, so it deploys first.
+      expect(JSON.stringify(t.api.toJSON())).not.toContain("SpokenLetterAlexaGateway");
     });
   });
 

@@ -9,6 +9,7 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import {
   createAgentApp,
   createOfflineDeps,
+  createSigV4Fetch,
   createTranscriber,
   DataUrlSpeechStore,
   DynamoSessionStore,
@@ -29,6 +30,7 @@ import {
   type StaticClient,
 } from "@spoken-letter-alexa/oauth";
 import { log, randomToken, sha256Hex } from "@spoken-letter-alexa/shared";
+import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import { BedrockModel } from "@strands-agents/sdk";
 import { type Hono } from "hono";
 
@@ -115,7 +117,12 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
     if (!holder.app) throw new Error("server app is not ready");
     return Promise.resolve(holder.app.request(input instanceof Request ? input : String(input), init));
   };
-  const mcpFetch = env.MCP_URL === `${issuer}/mcp` ? selfFetch : undefined;
+  // Our own /mcp is reached in-process; any other MCP_URL is the AgentCore Gateway, whose
+  // inbound auth is IAM, so its requests are SigV4-signed with the Lambda's credentials.
+  const mcpFetch =
+    env.MCP_URL === `${issuer}/mcp`
+      ? selfFetch
+      : createSigV4Fetch({ region: env.AWS_REGION, credentials: defaultProvider(), service: "bedrock-agentcore" });
   const m2m = m2mSecret;
   const demoToken = async (): Promise<string> => {
     const response = await selfFetch(`${issuer}/oauth/token`, {

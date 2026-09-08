@@ -41,8 +41,8 @@ export class ObservabilityStack extends Stack {
     const topic = new sns.Topic(this, "Alerts", { topicName: "sla-alexa-alerts" });
     topic.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
 
-    // The EMF metric has one dimension (Tool); the alarm uses a search expression across
-    // tools so a single slow tool trips it.
+    // `withLatencyMetric` publishes two dimension sets: by Tool (dashboard) and none (this
+    // roll-up), so the alarm reads the dimension-less series across all tools.
     this.alarm = new cloudwatch.Alarm(this, "ToolLatencyP95", {
       alarmName: "sla-alexa-tool-latency-p95",
       alarmDescription: "MCP tool latency p95 above 400 ms over 5 minutes (Amazon requires the round trip under 500 ms)",
@@ -66,7 +66,11 @@ export class ObservabilityStack extends Stack {
         title: "Lambda duration and errors",
         width: 12,
         left: [props.api.fn.metricDuration({ statistic: "p95", period: Duration.minutes(5) })],
-        right: [props.api.fn.metricErrors({ period: Duration.minutes(5) }), props.api.fn.metricThrottles({ period: Duration.minutes(5) })],
+        right: [
+          props.api.fn.metricErrors({ period: Duration.minutes(5) }),
+          props.api.fn.metricThrottles({ period: Duration.minutes(5) }),
+          props.api.fn.metric("Url5xxCount", { statistic: "Sum", period: Duration.minutes(5), label: "function URL 5xx" }),
+        ],
       }),
     );
     this.dashboard.addWidgets(

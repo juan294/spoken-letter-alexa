@@ -6,6 +6,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as route53 from "aws-cdk-lib/aws-route53";
 import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import { type Construct } from "constructs";
 
@@ -15,6 +16,8 @@ export type EdgeStackProps = StackProps & {
   api: ApiStack;
   /** The SimulatorStack bucket by its fixed name; a construct reference would cycle through the OAC bucket policy. */
   assetsBucketName: string;
+  /** `sla/origin-verify` (CoreStack): CloudFront presents it to the function URL, the Lambda checks it. */
+  originVerifySecret: secretsmanager.ISecret;
   /** Phase 0 certificate in us-east-1 (Owner-issued; stored in cdk.context.json). */
   certificateArn: string;
   hostedZoneId: string;
@@ -23,13 +26,16 @@ export type EdgeStackProps = StackProps & {
 };
 
 /**
- * Headers the MCP and OAuth surfaces need end to end. `Authorization` cannot be in an
- * origin request policy and, with an origin access control on the function URL,
- * CloudFront overwrites it with its own SigV4 signature. So a viewer-request function
- * copies the viewer's bearer into `X-Forwarded-Authorization`, which the Lambda entry
- * maps back (packages/app/src/forwarded-auth.ts).
+ * Headers the MCP and OAuth surfaces need end to end. `Authorization` cannot be listed in
+ * an origin request policy; CloudFront forwards it unchanged on POST, PUT, PATCH and
+ * DELETE, and the viewer-request function below also carries it as
+ * `X-Forwarded-Authorization` so a GET with a bearer survives too (the Lambda entry maps
+ * it back: packages/app/src/forwarded-auth.ts). `CloudFront-Viewer-Address` is the real
+ * client address for the OAuth rate limiter. CloudFront allow-lists exact names, not a
+ * prefix, so every `Mcp-*` header the server reads is listed.
  */
 export const FORWARDED_AUTHORIZATION_HEADER = "x-forwarded-authorization";
+export const ORIGIN_VERIFY_HEADER = "x-origin-verify";
 export const FORWARDED_HEADERS = [
   "Accept",
   "Content-Type",
@@ -40,22 +46,42 @@ export const FORWARDED_HEADERS = [
   "Last-Event-ID",
   "Origin",
   "X-Forwarded-Authorization",
+  "CloudFront-Viewer-Address",
 ];
 
-/** CloudFront Function (viewer request): preserve the viewer's Authorization header. */
+/** CloudFront Function (viewer request, API): the carrier header is always ours, never the viewer's. */
 export const COPY_AUTHORIZATION_FUNCTION = `function handler(event) {
   var headers = event.request.headers;
-  if (headers.authorization && !headers["${FORWARDED_AUTHORIZATION_HEADER}"]) {
+  if (headers.authorization) {
     headers["${FORWARDED_AUTHORIZATION_HEADER}"] = { value: headers.authorization.value };
+  } else {
+    delete headers["${FORWARDED_AUTHORIZATION_HEADER}"];
   }
   return event.request;
 }`;
 
+/** CloudFront Function (viewer request, SPA): deep links resolve to the app; `/demo` redirects to `/demo/`. */
+export const SPA_ROUTING_FUNCTION = `function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  if (uri === "/demo") {
+    return { statusCode: 301, statusDescription: "Moved Permanently", headers: { location: { value: "/demo/" } } };
+  }
+  if (uri === "/demo/" || (uri.indexOf("/demo/") === 0 && uri.split("/").pop().indexOf(".") === -1)) {
+    request.uri = "/demo/index.html";
+  }
+  return request;
+}`;
+
 /**
  * `alexa.spokenletter.com`: CloudFront in front of the streaming function URL (default
- * behaviour, no caching, MCP headers forwarded) and the S3 assets (`/demo/*`,
- * `/fixtures/*`, `/polly/*`), HSTS and nosniff, a WAF rate rule on `/oauth/`, and the
- * Route53 aliases.
+ * behaviour, no caching, MCP headers forwarded, a shared secret header the Lambda checks)
+ * and the S3 assets (`/demo/*`, `/fixtures/*`, `/polly/*`), HSTS and nosniff, a WAF rate
+ * rule on `/oauth/`, the single assets bucket policy, and the Route53 aliases.
+ *
+ * Not an origin access control on the function URL: with OAC, CloudFront signs the origin
+ * request and Lambda rejects any POST that lacks `x-amz-content-sha256`, which no MCP or
+ * OAuth client sends (D18).
  */
 export class EdgeStack extends Stack {
   readonly distribution: cloudfront.Distribution;
@@ -113,14 +139,22 @@ export class EdgeStack extends Stack {
 
     const copyAuthorization = new cloudfront.Function(this, "CopyAuthorization", {
       functionName: "sla-alexa-copy-authorization",
-      comment: "Preserve the viewer bearer next to the OAC SigV4 signature",
+      comment: "Carry the viewer bearer as X-Forwarded-Authorization",
       code: cloudfront.FunctionCode.fromInline(COPY_AUTHORIZATION_FUNCTION),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
+    const spaRouting = new cloudfront.Function(this, "SpaRouting", {
+      functionName: "sla-alexa-spa-routing",
+      comment: "Deep links to /demo/index.html; /demo redirects to /demo/",
+      code: cloudfront.FunctionCode.fromInline(SPA_ROUTING_FUNCTION),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
 
-    const apiOrigin = origins.FunctionUrlOrigin.withOriginAccessControl(props.api.url, {
+    // Public function URL (AuthType NONE) guarded by a secret header only CloudFront knows.
+    const apiOrigin = new origins.FunctionUrlOrigin(props.api.url, {
       readTimeout: Duration.seconds(60),
       keepaliveTimeout: Duration.seconds(60),
+      customHeaders: { [ORIGIN_VERIFY_HEADER]: props.originVerifySecret.secretValue.unsafeUnwrap() },
     });
     // Imported by name: the OAC bucket policy is written below, in this stack, so
     // SimulatorStack never has to reference the distribution.
@@ -131,6 +165,10 @@ export class EdgeStack extends Stack {
       cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       responseHeadersPolicy,
       compress: true,
+    };
+    const spaBehavior: cloudfront.AddBehaviorOptions = {
+      ...assetBehavior,
+      functionAssociations: [{ function: spaRouting, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
     };
 
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
@@ -151,12 +189,12 @@ export class EdgeStack extends Stack {
         functionAssociations: [{ function: copyAuthorization, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
       additionalBehaviors: {
-        "/demo/*": { origin: assetsOrigin, ...assetBehavior },
+        "/demo": { origin: assetsOrigin, ...spaBehavior },
+        "/demo/*": { origin: assetsOrigin, ...spaBehavior },
         "/fixtures/*": { origin: assetsOrigin, ...assetBehavior },
         "/polly/*": { origin: assetsOrigin, ...assetBehavior, cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED },
       },
-      // The SPA is a single page under /demo/; deep links and the OAuth callback resolve to it.
-      errorResponses: [{ httpStatus: 403, responseHttpStatus: 200, responsePagePath: "/demo/index.html", ttl: Duration.seconds(0) }],
+      // No custom error responses: an API 403 or a missing object must stay what it is.
     });
 
     // The one bucket policy for the assets bucket: CloudFront (this distribution) may read,

@@ -12,7 +12,7 @@
 // with --alexa-redirect <uri> --alexa-secret <secret> then.
 import { createHash, randomBytes } from "node:crypto";
 
-import { PutSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { GetSecretValueCommand, PutSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -20,6 +20,10 @@ const flag = (name) => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 const dryRun = args.includes("--dry-run");
+// Existing values are kept (the gateway's credential provider and Vercel hold copies);
+// pass the flags to rotate deliberately.
+const rotateBridge = args.includes("--rotate-bridge");
+const rotateM2m = args.includes("--rotate-m2m");
 const region = process.env.AWS_REGION ?? "us-east-1";
 const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? "https://alexa.spokenletter.com";
 const alexaRedirect = flag("--alexa-redirect");
@@ -28,8 +32,27 @@ const alexaSecret = flag("--alexa-secret");
 const token = (bytes) => randomBytes(bytes).toString("base64url");
 const sha256 = (value) => createHash("sha256").update(value, "utf8").digest("hex");
 
-const bridgeSecret = token(32);
-const m2mSecret = token(32);
+const client = new SecretsManagerClient({ region });
+async function existing(secretId) {
+  if (dryRun) return undefined;
+  try {
+    const value = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
+    return value.SecretString;
+  } catch {
+    return undefined;
+  }
+}
+const existingBridge = await existing("sla/bridge");
+const existingClients = await existing("sla/oauth-clients");
+let existingM2m;
+try {
+  existingM2m = existingClients ? JSON.parse(existingClients).m2mSecret : undefined;
+} catch {
+  existingM2m = undefined;
+}
+const bridgeSecret = !rotateBridge && existingBridge ? existingBridge : token(32);
+const m2mSecret = !rotateM2m && typeof existingM2m === "string" && existingM2m.length >= 16 ? existingM2m : token(32);
+const bridgeRotated = bridgeSecret !== existingBridge;
 const clients = [
   {
     clientId: "simulator",
@@ -60,10 +83,16 @@ if (dryRun) {
   process.exit(0);
 }
 
-const client = new SecretsManagerClient({ region });
-await client.send(new PutSecretValueCommand({ SecretId: "sla/bridge", SecretString: bridgeSecret }));
+if (bridgeRotated) await client.send(new PutSecretValueCommand({ SecretId: "sla/bridge", SecretString: bridgeSecret }));
 await client.send(new PutSecretValueCommand({ SecretId: "sla/oauth-clients", SecretString: document }));
-console.log(JSON.stringify({ event: "secrets_seeded", region, clients: clients.map((c) => c.clientId) }));
-console.log("Add to the private repository (Vercel, Phase 8), then never print again:");
-console.log(`ALEXA_BRIDGE_SECRET=${bridgeSecret}`);
-console.log(`ALEXA_BRIDGE_ORIGIN=${publicBaseUrl}`);
+console.log(
+  JSON.stringify({ event: "secrets_seeded", region, clients: clients.map((c) => c.clientId), bridgeRotated, m2mRotated: m2mSecret !== existingM2m }),
+);
+if (bridgeRotated) {
+  console.log("Add to the private repository (Vercel, Phase 8), then never print again:");
+  console.log(`ALEXA_BRIDGE_SECRET=${bridgeSecret}`);
+  console.log(`ALEXA_BRIDGE_ORIGIN=${publicBaseUrl}`);
+}
+if (m2mSecret !== existingM2m) {
+  console.log("The alexa-m2m secret changed: deploy the gateway again (-c sla:deployGateway=1) so its credential provider re-resolves it.");
+}
