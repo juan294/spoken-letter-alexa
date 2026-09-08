@@ -1,7 +1,7 @@
 # Plan: Alexa+ MCP add-on for the Amazon App Dev 2026 hackathon
 
 Date: 2026-09-03
-Status: Planned. No phase started.
+Status: Planned 2026-09-03; amended 2026-09-08 with Phase 9 (classic-skill front end for real-device footage). Implementation record: `2026-09-03-alexa-plus-mcp-add-on-notes.md`.
 Research inputs: `docs/research/2026-09-03-alexa-plus-hackathon-mcp-add-on.md` (hackathon rules, access, geography, MCP spec, audio contract, Owner decisions in section 12), `docs/research/2026-08-17-alexa-plus-device-playback-integration.md` (platform analysis), four Explore sweeps on 2026-09-03 (MCP route and claim-token flow, story catalog and audio, route and test conventions, design system), and direct inspection of `@modelcontextprotocol/server` 2.0.0 type definitions.
 
 ## Goal
@@ -13,6 +13,7 @@ Enter the Alexa+ track and the AWS Builder mini challenge with a new public repo
 3. A simulated Alexa+ experience, sanctioned by the rules as the fallback when partner tooling is unavailable, built on AWS: a Strands Agents plus Bedrock agent that calls the MCP server, Transcribe for voice input, Polly for spoken replies, and the untouched family MP3 for the story itself.
 4. The Amazon packaging path (`addon.json`, Add-on Agent Skill scaffold, deploy runbook, US account checklist) ready to run the day toolkit access is granted.
 5. Everything deployed on AWS through CDK at `alexa.spokenletter.com`, with the observability that proves the sub-500 ms tool latency Amazon requires.
+6. (Amendment, 2026-09-08.) A thin classic Alexa Skill in front of the same server, so a real Alexa device plays a delivered story through `AudioPlayer` without the invite-only toolkit; its interaction model is generated from the tool schemas with a catch-all intent and a recording mode. Source of the idea: Kay Lerch's `alexa-skill-mcp-bridge` (Apache-2.0); see `phase-9.md`.
 
 The private Spoken Letter repository gains a small bridge: three bearer-authenticated routes, a link-confirmation page reusing the ADR 0016 one-time-token pattern, a server-only `alexaLinks` collection, and a Connect Alexa settings card.
 
@@ -114,6 +115,7 @@ Names pass the vendored contract (snake_case, no denylisted fragments; `audio` a
 | CloudWatch (metrics, logs, dashboard, alarm) + X-Ray | sub-500 ms latency proof, error rates | 6 |
 | AWS CDK | one-command deploy | 0, 6 |
 | Kiro Crew | scaffolds the CDK stacks and the friction log, documented | 0, 8 |
+| Alexa Skills Kit (custom skill, `AudioPlayer` interface, ASK CLI) | real-device path without toolkit access; plays the family MP3 on an Echo | 9 |
 
 ## Phase overview
 
@@ -128,6 +130,7 @@ Names pass the vendored contract (snake_case, no denylisted fragments; `audio` a
 | 6 | AWS deployment: CDK stacks, domain, AgentCore Gateway, observability | public | no | 1, 2, 5 |
 | 7 | Amazon packaging path: `addon.json`, Add-on Agent Skill scaffold, runbook, Inspector check | public | `[batch-eligible]` | 1, 2 |
 | 8 | Submission: video, friction log, product feedback, README, Devpost, October production wiring | both | no | all |
+| 9 | Classic-skill front end: skill Lambda over `/agent/turn`, `AudioPlayer` playback, generated interaction model with catch-all and recording mode, `SkillStack` (added 2026-09-08) | public | no | 5, 6 |
 
 Phases 1, 2, 3, and 7 touch disjoint directories (and Phase 3 a different repository) and can run through `/batch`. Phase 7's Inspector and simulator checks execute only if access exists; its file deliverables do not depend on access.
 
@@ -136,6 +139,7 @@ Phases 1, 2, 3, and 7 touch disjoint directories (and Phase 3 a different reposi
 - Sept 3 to 6: Phase 0. Sept 6 to 14: Phases 1, 2, 3 in parallel. Sept 15 to 18: Phase 4 against local dev.
 - Sept 19 to 26: Phase 5. Sept 27 to Oct 3: Phase 6 (the first real deploy, before the freeze lifts, touches only AWS and the public repository).
 - Oct 1: freeze lifts. Phase 3 PR into `develop`, then `develop → main` release per `docs/testing/release-gate.md`. Oct 4 to 8: Phase 7.
+- Oct 4 to 8 (alongside Phase 7): Phase 9, so the real-device footage exists before the video is shot.
 - Oct 9 to 20: Phase 8: production wiring, video, friction log, forms. Oct 21 to 22: buffer. Oct 23 12:00 PT: deadline.
 
 ## Verification strategy
@@ -157,13 +161,14 @@ Manual, listed per phase: DNS and certificate issuance, the first public push, t
 | Bedrock model access not enabled in the account | `AccessDeniedException` on first invoke | Enable model access in the console (manual, Phase 5) or switch to a Nova model |
 | Freeze lift slips | Private PR not merged by Oct 10 | Submission uses the fixture provider end-to-end; the link flow is demonstrated against the Vercel preview of the Phase 3 branch |
 | Strands `McpClient` needs a v1 client transport | Type mismatch with `@modelcontextprotocol/client` 2.0.0 | Use `@modelcontextprotocol/sdk` 1.30.0's `StreamableHTTPClientTransport` for the agent's client only; the server stays on v2 |
+| An Alexa+ device does not route to a development-stage custom skill (Phase 9) | The simulator answers, the device says it does not know the skill | A classic Echo on the same account plays the story; the unknown is recorded in `amazon/us-account-checklist.md` |
 
 ## Files touched
 
-Public repository: everything under `juan294/spoken-letter-alexa`, laid out in Phase 0.
+Public repository: everything under `juan294/spoken-letter-alexa`, laid out in Phase 0; Phase 9 adds `packages/skill`, `skill-package/` and `infra/lib/skill-stack.ts`.
 
 Private repository (Phase 3 only): `src/app/api/alexa/{link/confirm,disconnect,bridge/stories,bridge/audio-url}/route.ts` and tests, `src/app/[locale]/link/alexa/[token]/page.tsx`, `src/components/settings/alexa-connect-card.tsx`, `src/components/alexa/link-confirm-client.tsx`, `src/lib/alexa/{bridge-auth,links,catalog,audio-url}.ts` and tests, `src/lib/audio/storage-stream.ts` (new exported signer), `src/lib/firestore/collections.ts` and test, `firestore.rules`, `tests/rules/firestore.rules.test.ts`, `src/lib/api-errors.ts`, `messages/{en,es,fr}/{app,errors}.json`, `docs/localization/logs/fr/app.md` and `errors.md`, `docs/localization/french-translation-log.md`, `src/app/[locale]/(app)/settings/page.tsx`, `src/app/api/health/route.ts`, `.env.example`, `docs/decisions/0018-alexa-plus-bridge.md`, `docs/decisions/0013-child-name-vendor-egress.md` (addendum row), `docs/partners/device-integration-partners.md`.
 
 ## Phase files
 
-- `2026-09-03-alexa-plus-mcp-add-on-phases/phase-0.md` through `phase-8.md`.
+- `2026-09-03-alexa-plus-mcp-add-on-phases/phase-0.md` through `phase-9.md` (`phase-9.md` added 2026-09-08).

@@ -41,7 +41,8 @@ Deployed with CDK at `alexa.spokenletter.com`.
 ## Plan and research
 
 - Main plan: `docs/plans/2026-09-03-alexa-plus-mcp-add-on.md`; phases in
-  `docs/plans/2026-09-03-alexa-plus-mcp-add-on-phases/phase-0.md` to `phase-8.md`.
+  `docs/plans/2026-09-03-alexa-plus-mcp-add-on-phases/phase-0.md` to `phase-9.md` (Phase 9
+  added 2026-09-08: classic-skill front end for real-device footage).
 - Research: `docs/research/2026-09-03-alexa-plus-hackathon-mcp-add-on.md` and
   `docs/research/2026-08-17-alexa-plus-device-playback-integration.md`.
 - These are copies. The originals are committed in the private repository on the local
@@ -56,7 +57,7 @@ Deployed with CDK at `alexa.spokenletter.com`.
   ESLint flat config (ESLint 10, same contract as 9), vitest, AWS CDK (`aws-cdk-lib` 2.x).
 - Packages: `packages/mcp-server` (Phase 1), `packages/oauth` (Phase 2),
   `packages/agent` and `packages/simulator` (Phase 5), `packages/app` (composed server and
-  entry points, D12), `packages/shared` (Phase 0),
+  entry points, D12), `packages/skill` and `skill-package/` (Phase 9), `packages/shared` (Phase 0),
   `infra/` CDK app (Phase 0 skeleton, Phase 6 stacks), `amazon/` packaging (Phase 7),
   `fixtures/audio/` (Phase 1).
 - Pinned: `@modelcontextprotocol/server`, `/hono`, `/node` 2.0.0; `hono` 4.x; `zod` 4.x;

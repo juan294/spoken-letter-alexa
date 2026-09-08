@@ -397,6 +397,18 @@ Owner checklist (in order):
 
 Post-submission notes (phase-8 section 5) are recorded there and not executed.
 
+## Plan amendment (2026-09-08): Phase 9
+
+Owner decision after reading Kay Lerch's LinkedIn post "Talk to an MCP server from an
+Alexa+ device today, through an Alexa Skill" (2026-09-08) and the README of
+`github.com/KayLerch/alexa-skill-mcp-bridge` (Apache-2.0). Two ideas were added to the
+plan as `phase-9.md`: a classic-skill front end over this repository's own agent, with
+`AudioPlayer` playback of the family MP3 on a real Echo, and the interaction-model tactics
+(schema-derived utterances, a catch-all intent, a recording mode). Elicitation is
+recorded in phase-9 section 6 and not implemented: the tools never elicit. The main
+plan's goal list, phase table, schedule, AWS table, risks and file list were amended;
+`AGENTS.md` points at `phase-9.md`.
+
 ## Deviations
 
 ### D1. Branch topology (session, before Phase 0)
