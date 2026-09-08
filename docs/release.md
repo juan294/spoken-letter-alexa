@@ -15,9 +15,9 @@ Values marked "Phase N" are fixed by the plan and become real when that phase la
 | Repository visibility | Public from the first push (Owner gate; not pushed yet) |
 | Primary product type | Monorepo: MCP server, OAuth 2.1 server, agent API, static simulator SPA, CDK |
 | Package/build system | pnpm workspaces, TypeScript 6, ESLint 9, vitest, AWS CDK (Phase 0) |
-| Integration branch | `main` |
-| Production branch | `main` (same branch; a deploy is an explicit `pnpm deploy`, not a merge) |
-| Merge strategy | Local integration on `main`; no PR flow in September |
+| Integration branch | `develop` (default local branch) |
+| Production branch | `main` (receives `develop` by local merge; a deploy is an explicit `pnpm deploy`) |
+| Merge strategy | Local integration on `develop`, local merge into `main` at release; no PR flow in September |
 | Release artifact | Git commit on `main` deployed by CDK (Lambda code plus S3 assets) |
 | Deployment provider | AWS CDK from the Owner's machine, profile `archy`, account `106403001709`, `us-east-1` |
 | Local test target | Local vitest and CDK synth; Hono handler driven with raw HTTP fixtures |
@@ -94,7 +94,7 @@ Before Phase 6 the probes run locally against the Hono handler (Phases 1 and 2 t
 
 ### A4. Release ordering
 
-1. Identify the candidate: `git rev-parse main`, clean tree.
+1. Identify the candidate: merge `develop` into `main` locally, then `git rev-parse main`, clean tree.
 2. Run the local gate: `python3 .rpi/scripts/rpi-verify.py`.
 3. Deploy that candidate: `pnpm deploy` (Owner authorization).
 4. Verify deployed identity (`/health`).

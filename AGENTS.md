@@ -79,9 +79,12 @@ these commands do not exist and the runner reports failure; that is the truthful
 
 ## Git and deployment topology
 
-- One branch, `main`. Integration branch and production branch are both `main`.
-  No branch protection in September (solo, fast iteration); Phase 8 adds one required
-  check, `verify`, before submission.
+- Two branches. `develop` is the default local branch and the integration branch:
+  all implementation lands there first. `main` is the production branch; a release is a
+  local fast-forward or merge `develop -> main` followed by `pnpm deploy`. No branch
+  protection in September (solo, fast iteration); Phase 8 adds one required check,
+  `verify`, on `main` before submission. (Owner decision 2026-09-08; the plan's
+  single-branch text is superseded.)
 - No remote until the Owner says "push". After that: `origin` is
   `github.com/juan294/spoken-letter-alexa`, public from the first push.
 - Conventional commits: `feat|fix|test|refactor|chore|docs(scope): description`.
