@@ -47,9 +47,8 @@ Deployed with CDK at `alexa.spokenletter.com`.
 - These are copies. The originals are committed in the private repository on the local
   branch `docs/alexa-plus-plan`. Edit the copies here; sync back after the freeze.
 - Adoption record: `docs/plans/2026-09-08-rpi-adoption.md`.
-- Next step: `rpi-implement` on the main plan, Phase 0. Phase 0 creates the monorepo,
-  CI, CDK skeleton, LICENSE and README content. Nothing in this repository is product
-  code until Phase 0 lands.
+- Implementation notes and deviations:
+  `docs/plans/2026-09-03-alexa-plus-mcp-add-on-notes.md` (per-phase handoffs).
 
 ## Stack (fixed by the plan, created in Phase 0)
 
@@ -74,8 +73,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm -F infra synth
 ```
 
 Run checks sequentially, never as parallel Bash calls. The same four commands are the
-single CI job `verify` in `.github/workflows/verify.yml` (Phase 0). Until Phase 0 lands
-these commands do not exist and the runner reports failure; that is the truthful state.
+single CI job `verify` in `.github/workflows/verify.yml`.
 
 ## Git and deployment topology
 

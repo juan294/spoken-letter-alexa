@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["eslint.config.mjs", "vitest.config.ts", "scripts/**/*.mjs"]
+}
