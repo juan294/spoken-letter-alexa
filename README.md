@@ -77,6 +77,17 @@ curl -s -X POST http://localhost:4310/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_family_stories","arguments":{}}}'
 ```
 
+The whole link flow can be driven locally without the private repository:
+
+```bash
+DEV_ROUTES=1 PROVIDER_MODE=auto pnpm dev                       # prints ALEXA_BRIDGE_SECRET once
+ALEXA_BRIDGE_SECRET=<printed> node scripts/mock-spoken-letter.mjs   # :3007, stands in for Spoken Letter
+node scripts/e2e-link.mjs                                       # authorize → confirm → code → JWT → tools
+```
+
+Open `http://localhost:4310/dev/start` in a browser for the same flow by hand. Copy
+`.env.example` to `.env` to pin the generated values.
+
 Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.md`.
 
 ## Repository layout
@@ -86,10 +97,12 @@ packages/shared      env parsing, JSON logger, vendored agent-tool contract
 packages/mcp-server  dual-era MCP server, fixture provider, three read-only tools (Phase 1)
 fixtures/            the Owner's recorded stories for the demo subject (see fixtures/README.md)
 packages/oauth       OAuth 2.1 authorization server: PKCE, client_credentials, RFC 8414/9728, JWT verifier (Phase 2)
+                     app.ts composes OAuth + JWT-gated /mcp + dev routes; HttpProvider talks to the bridge (Phase 4)
 packages/agent       Phase 5: Strands + Bedrock agent, Polly, Transcribe
 packages/simulator   Phase 5: simulated Alexa+ SPA
 infra/               CDK app (CoreStack now; Phase 6 adds the rest)
-amazon/              Phase 7: addon.json, runbook, US account checklist
+amazon/              addon.json, agent-skill placeholder, runbook, US account checklist, Inspector guide (Phase 7)
+scripts/             mock-spoken-letter.mjs (stand-in for the private bridge), e2e-link.mjs, add-fixture-story.mjs
 docs/                research, plans, decisions, friction log, product feedback, release
 ```
 

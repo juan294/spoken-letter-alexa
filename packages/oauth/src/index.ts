@@ -1,4 +1,5 @@
 export { createOAuthApp, type OAuthDeps } from "./routes.ts";
+export { createDevAuthRoutes, type DevAuthOptions } from "./dev/callback.ts";
 export { authorizationServerMetadata, MCP_SCOPES, SERVICE_SCOPE } from "./metadata.ts";
 export { authenticateClient, findClient, parseClients, GRANTS, type Grant, type StaticClient } from "./clients.ts";
 export { isValidChallenge, pkceChallenge, verifyPkce } from "./pkce.ts";

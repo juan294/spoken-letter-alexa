@@ -1,5 +1,4 @@
-// Local development server on :4310. `pnpm -F @spoken-letter-alexa/mcp-server dev`.
-import { randomBytes } from "node:crypto";
+// Local development server on :4310. `pnpm dev` (root) or `pnpm -F @spoken-letter-alexa/mcp-server dev`.
 import path from "node:path";
 
 import { serve } from "@hono/node-server";
@@ -7,37 +6,41 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { log } from "@spoken-letter-alexa/shared";
 import { Hono } from "hono";
 
+import { bootstrap } from "./bootstrap.ts";
 import { readServerEnv } from "./env.ts";
-import { createApp } from "./http.ts";
-import { FixtureProvider, loadFixtureCatalog } from "./provider/fixtures.ts";
 
 const env = readServerEnv();
-const devToken = env.MCP_DEV_TOKEN ?? randomBytes(24).toString("base64url");
+const { app: server, generated, stories } = await bootstrap(env, { allowGenerated: true });
 
-const stories = await loadFixtureCatalog(env.FIXTURES_PATH).catch((error: unknown) => {
-  log.warn("fixtures_missing", {
-    path: env.FIXTURES_PATH,
-    message: error instanceof Error ? error.message : String(error),
-  });
-  return [];
-});
-
-const fixtures = new FixtureProvider({ stories, publicBaseUrl: env.PUBLIC_BASE_URL });
 const app = new Hono();
 // `fixtures/audio/<file>` next to the catalog; Phase 6 serves the same files from S3.
 const fixturesDir = path.dirname(path.resolve(env.FIXTURES_PATH));
-app.use("/fixtures/audio/*", serveStatic({ root: path.dirname(fixturesDir), rewriteRequestPath: (p) => p.replace(/^\/fixtures/, `/${path.basename(fixturesDir)}`) }));
-app.route("/", createApp({ publicBaseUrl: env.PUBLIC_BASE_URL, devToken, providerFor: () => fixtures }));
+app.use(
+  "/fixtures/audio/*",
+  serveStatic({
+    root: path.dirname(fixturesDir),
+    rewriteRequestPath: (p) => p.replace(/^\/fixtures/, `/${path.basename(fixturesDir)}`),
+  }),
+);
+app.route("/", server);
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  log.info("mcp_ready", {
+  log.info("server_ready", {
     port: info.port,
-    publicBaseUrl: env.PUBLIC_BASE_URL,
-    stories: stories.length,
-    devTokenSource: env.MCP_DEV_TOKEN ? "env" : "generated",
+    issuer: env.PUBLIC_BASE_URL,
+    spokenLetterOrigin: env.SPOKEN_LETTER_ORIGIN,
+    providerMode: env.PROVIDER_MODE,
+    stories,
+    devRoutes: env.DEV_ROUTES === "1",
+    generated: Object.keys(generated),
   });
-  if (!env.MCP_DEV_TOKEN) {
-    // The generated token is printed once so `curl` can use it. Set MCP_DEV_TOKEN to pin it.
-    process.stdout.write(`MCP_DEV_TOKEN=${devToken}\n`);
+  // Generated secrets are printed once so curl and the mock bridge can use them. Set the
+  // variables to pin them across restarts.
+  for (const [name, value] of Object.entries({
+    MCP_DEV_TOKEN: generated.devToken,
+    ALEXA_BRIDGE_SECRET: generated.bridgeSecret,
+    OAUTH_M2M_SECRET: generated.m2mSecret,
+  })) {
+    if (value) process.stdout.write(`${name}=${value}\n`);
   }
 });

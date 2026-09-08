@@ -155,6 +155,82 @@ unknown scope is `invalid_scope`; client authentication precedes grant validatio
 Not wired yet (Phase 4 by plan): the JWT verifier into the MCP bearer gate, and the
 OAuth app mounted on the same Hono app as `/mcp`.
 
+## Phase 2 review
+
+Independent reviewer (fresh context, read-only) on commit `62ef1f0`: APPROVED, no
+blocker or major findings; F2-1 to F2-13. Applied in the Phase 4 commit: F2-1 (malformed
+Basic header is 401, not 500), F2-2 (`app.onError` answers `server_error` in RFC 6749
+shape), F2-3 and F2-4 (`issueCode` is conditional on `linked`, extends the authorization's
+TTL past the code's, and the tombstone carries the code's expiry), F2-6 (RFC 7009 only
+revokes a token issued to the authenticating client), F2-7 (missing
+`code_challenge_method` case), F2-8 (`tokens.test.ts`), F2-9 (DynamoStore coverage:
+`issueCode`, `bindSubject`, `putRefreshToken`, `peekRefreshToken`, `revokeRefreshToken`,
+expired-code branch, post-condition branches). All eight regression tests were confirmed
+red against the stashed pre-fix implementation. Deferred with the reviewer's agreement:
+F2-5 (rate-limit key behind CloudFront, Phase 6), F2-10 (narrowed refresh scope
+persists), F2-11 (`unsupported_response_type` wording), F2-12 (`revokeWhere` pagination
+and the AUTH items on the `bySubject` GSI), F2-13 (`no-store` on the 302s).
+
+## Phase 4 handoff
+
+Objective: `HttpProvider`, JWT verifier wired into the bearer gate, composed app,
+end-to-end link flow (phase-4.md). Phase 3 is out of scope (D4), so the bridge is a mock.
+
+Delivered:
+
+- `packages/mcp-server/src/provider/http.ts`: bridge client with bearer secret, 1.5 s
+  timeout, 30-second per-subject list cache, uncached audio URLs, zod parsing that drops
+  every non-boundary field, `audio_unavailable` on a 404. `provider/registry.ts`:
+  `fixtures` vs `auto` resolution (`demo` and `svc:*` always fixtures).
+- `src/auth.ts`: `jwtGate` (`requireBearerAuth` + any-of scope check, D9), `firstGate`.
+  `src/app.ts`: `createServerApp` mounts the OAuth server, the JWT-gated `/mcp` (PRM
+  `authorization_servers` = issuer) and, when enabled, the dev routes. `src/bootstrap.ts`
+  builds it from the environment (memory or DynamoDB store, local or KMS signer, generated
+  local secrets printed once). `src/local.ts` and `src/lambda.ts` use it; Lambda refuses
+  `DEV_ROUTES=1` and never generates secrets. `.env.example` documents every variable.
+- `packages/oauth/src/dev/callback.ts`: `/dev/start` and `/dev/callback`.
+- `src/test-bridge.ts` (Hono mock of the private bridge for tests),
+  `scripts/mock-spoken-letter.mjs` (the same as a local server on :3007),
+  `scripts/e2e-link.mjs` (steps 1 to 6 by hand against `pnpm dev`).
+- Tests: `provider/http.test.ts` (200, 401/403/500/503, malformed JSON, wrong shape,
+  timeout, cache, audio URL never cached, 404), `provider/registry.test.ts`,
+  `app.test.ts` (discovery, 401 PRM challenge, service token, 403 insufficient_scope,
+  wrong audience, dev token, the full link flow with real-uid stories and no recipient
+  fields, disconnect then refresh `invalid_grant` with the stale access token still
+  valid, dev routes on and off).
+
+Checks on the Phase 4/7 commit: `pnpm typecheck` pass (5 packages); `pnpm lint` pass;
+`pnpm test` pass, 24 files, 189 tests; `pnpm -F infra synth` pass. TDD: the three new
+suites ran red (module missing) before implementation.
+
+Manual criterion: `node scripts/e2e-link.mjs` against `pnpm dev` and the mock passes
+the same steps the automated test does; the run against the real private dev server
+and the Settings card screenshots wait for Phase 3 (after 2026-10-01).
+
+## Phase 7 handoff
+
+Objective: Amazon packaging path and the session-id contingency (phase-7.md). Delivered
+by a bounded implementer assignment (owned files: `amazon/**`,
+`packages/mcp-server/src/legacy-sessions.ts` and test, `infra/lib/legacy-stack.ts` and
+test); integrated by the parent (workspace and vitest projects, `MCP_LEGACY_SESSIONS`
+env, `createServerFactory` split in `server.ts`, `legacySessions` option in `http.ts`).
+
+- `amazon/addon.json` validated by `amazon/addon.test.ts` (required fields, `en-US`,
+  US only, endpoints, PKCE S256, client_credentials tier, child-targeting denylist with a
+  self-check); `amazon/addon-fields.md` lists every field name Amazon must confirm.
+- `amazon/AGENT_SKILL.md` (gated content, not invented), `amazon/runbook.md` (steps with
+  explicit gaps), `amazon/us-account-checklist.md`, `amazon/inspector.md` (decision tree).
+- `legacy-sessions.ts`: `isLegacyRequest` routing to per-session
+  `WebStandardStreamableHTTPServerTransport`s in front of a `legacy: 'reject'` modern
+  handler; tests: legacy initialize at 2025-06-18 returns `Mcp-Session-Id`, follow-up
+  `tools/list` with the header succeeds, without it 400, modern `server/discover` still
+  works, `authInfo` reaches the tools. Opt-in only; single instance; never on Lambda.
+- `infra/lib/legacy-stack.ts`: one Fargate task behind an ALB with the flag, written and
+  tested, not added to `bin/app.ts` and not deployed.
+
+Verification if access exists (phase-7 section 3) is an Owner gate; `amazon/inspector.md`
+says what to record.
+
 ## Deviations
 
 ### D1. Branch topology (session, before Phase 0)
@@ -226,3 +302,24 @@ OAuth app mounted on the same Hono app as `/mcp`.
   file tools and can style the page then.
 - Why: no inlined colours is the invariant; unstyled text satisfies it until the tokens
   exist.
+
+### D9. `/mcp` accepts either `mcp:tools` or `mcp:service` (Phase 4)
+
+- Plan said: `requireBearerAuth({ requiredScopes: ["mcp:tools"] })`.
+- Found: the SDK requires every listed scope, and the AgentCore Gateway's
+  client_credentials token carries only `mcp:service` (plan, Phase 6).
+- Chose: verify with `requireBearerAuth`, then accept any of `mcp:tools`, `mcp:service`;
+  otherwise `403 insufficient_scope` with the PRM challenge.
+- Why: both callers the plan names must reach the tools; service subjects are served
+  from fixtures by `providerFor`.
+
+### D10. Phase 4's end-to-end proof uses a mock of the private bridge
+
+- Plan said: prove the link flow against `pnpm run dev` of the private repository.
+- Found: Phase 3 is out of scope until 2026-10-01 (D4).
+- Chose: a test-side Hono mock and a local script implementing exactly the three bridge
+  routes and the confirm step from phase-3.md; the automated flow runs in `app.test.ts`
+  and by hand with `scripts/e2e-link.mjs`. The signed-URL `HEAD` check is skipped
+  against the mock and runs when `SL_SESSION_COOKIE` is set.
+- Why: keeps the public repository's contract with the bridge executable now; the real
+  run is a Phase 8 step.

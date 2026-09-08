@@ -1,0 +1,37 @@
+{
+  "name": "Spoken Letter",
+  "type": "mcp",
+  "distributionCountries": ["US"],
+  "locales": {
+    "en-US": {
+      "name": "Spoken Letter",
+      "summary": "Play the family stories relatives recorded and a parent has already delivered.",
+      "description": "Spoken Letter for Alexa+ is the parent's tool for the family audio library they curate in Spoken Letter. Grandparents, aunts, uncles and friends record a story in their own voice; the parent reviews it and decides when it is delivered. Once a parent links their Spoken Letter account, Alexa can list the stories that parent has delivered, play one on request in the relative's original recording, and suggest which family story to hear next. The add-on is read-only: it never records, never edits a story, and only ever sees recordings the parent chose to deliver. It is operated by the account holder, an adult, and holds no information about anyone else in the household.",
+      "examplePhrases": [
+        "Alexa, ask Spoken Letter to play the story Grandma sent",
+        "Alexa, what family stories are new in Spoken Letter",
+        "Alexa, play the next family story"
+      ],
+      "keywords": ["family stories", "family audio", "voice recordings", "grandparents", "storytelling", "audio letters", "spoken letter"],
+      "privacyPolicyUrl": "https://spokenletter.com/privacy",
+      "termsOfUseUrl": "https://spokenletter.com/terms"
+    }
+  },
+  "mcp": {
+    "endpoint": "https://alexa.spokenletter.com/mcp",
+    "transport": "streamable-http",
+    "protocolVersion": "2025-11-25"
+  },
+  "auth": {
+    "type": "oauth2",
+    "authorizationEndpoint": "https://alexa.spokenletter.com/oauth/authorize",
+    "tokenEndpoint": "https://alexa.spokenletter.com/oauth/token",
+    "scopes": "mcp:tools mcp:resources",
+    "pkce": { "required": true, "codeChallengeMethod": "S256" },
+    "clientCredentials": {
+      "tokenEndpoint": "https://alexa.spokenletter.com/oauth/token",
+      "tokenEndpointAuthMethod": "client_secret_basic",
+      "scope": "mcp:service"
+    }
+  }
+}

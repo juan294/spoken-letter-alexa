@@ -102,6 +102,46 @@ entries by tool.
   two plain-text error pages** (unknown client, unregistered redirect). They are
   `text/plain` until the brand tokens are vendored in Phase 5 (D8).
 
+## 2026-09-08: Phase 4 (HTTP provider, JWT gate, end-to-end link flow)
+
+- **`requireBearerAuth`'s `requiredScopes` demands every listed scope.** Severity low.
+  The plan's gate (`requiredScopes: ["mcp:tools"]`) would have locked out the
+  client_credentials tier (`mcp:service`) that the AgentCore Gateway uses. The gate now
+  verifies with the SDK helper and checks "any of `mcp:tools`, `mcp:service`" itself,
+  answering `403 insufficient_scope` through `bearerAuthChallengeResponse` (D9). Fix: an
+  `anyOfScopes` option on the helper.
+- **The private bridge does not exist yet, so Phase 4's end-to-end proof runs against a
+  mock.** `packages/mcp-server/src/test-bridge.ts` and `scripts/mock-spoken-letter.mjs`
+  implement the three bridge routes and the Owner's confirm step exactly as phase-3.md
+  specifies them; the automated `app.test.ts` drives authorize, confirm, continue,
+  exchange, legacy initialize, both tools and disconnect through them (D10). The real
+  run with a Spoken Letter session cookie is the Phase 8 step after the freeze.
+- **Hono's `app.request` returns `Response | Promise<Response>`.** Severity low, not
+  Amazon. Wrapping it in `Promise.resolve` is needed to use it as a `fetch` stand-in.
+
+## 2026-09-08: Phase 7 (Amazon packaging path, session-id contingency)
+
+- **`addon.json` field names are unrecorded.** Severity medium. The research captured
+  only `distributionCountries` and the existence of one `en-US` block; every other key
+  in `amazon/addon.json` is a conventional guess listed in `amazon/addon-fields.md` for
+  Amazon to confirm. Fix: publish the manifest schema outside the gated toolkit.
+- **`isLegacyRequest` is the entry's own classifier.** Severity low, pleasant. It clones a
+  POST body internally so the request stays readable for whichever leg it is routed to,
+  and routing anything it classifies as modern anywhere but the modern handler is wrong by
+  contract. This made the per-session contingency (`legacy-sessions.ts`) a small module.
+- **A stateful `WebStandardStreamableHTTPServerTransport` answers its own protocol
+  errors.** A non-initialize request on a fresh session answers `400 -32000 "Server not
+  initialized"`; a session mismatch `404 -32001`. The contingency relies on the first and
+  answers the second itself because the session map, not one transport, owns the set.
+- **`aws-cdk-lib` 2.268.0 under `exactOptionalPropertyTypes`.** Severity low. `IVpc` and
+  `ICluster` optional members lack `| undefined`, so `new Vpc(...)` / `new Cluster(...)`
+  fail assignability; `infra/lib/legacy-stack.ts` casts at the two sites with a comment.
+  Fix: add `| undefined` to the optional members in the generated typings.
+- **Toolkit gaps carried truthfully.** `amazon/runbook.md` names every step whose exact
+  command the research did not record (role assumption snippet, CodeArtifact domain,
+  CLI install, deploy flags, simulator URL) instead of inventing one;
+  `amazon/AGENT_SKILL.md` records that the skill text is gated.
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.

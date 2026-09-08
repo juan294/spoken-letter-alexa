@@ -1,4 +1,11 @@
-import { type AuthInfo, bearerAuthChallengeResponse, OAuthError, OAuthErrorCode } from "@modelcontextprotocol/server";
+import {
+  type AuthInfo,
+  bearerAuthChallengeResponse,
+  OAuthError,
+  OAuthErrorCode,
+  type OAuthTokenVerifier,
+  requireBearerAuth,
+} from "@modelcontextprotocol/server";
 import { constantTimeEqual } from "@spoken-letter-alexa/shared";
 
 export const MCP_SCOPES = ["mcp:tools", "mcp:resources"] as const;
@@ -32,6 +39,43 @@ export function devTokenGate(options: { devToken: string; publicBaseUrl: string 
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
       extra: { subject: "demo" },
     });
+  };
+}
+
+/** Scopes that open `/mcp`: the parent's link (`mcp:tools`) or the AgentCore Gateway's service tier. */
+export const MCP_ACCESS_SCOPES = ["mcp:tools", "mcp:service"] as const;
+
+/**
+ * Phase 4 gate: `requireBearerAuth` over the JWT verifier. Any of `MCP_ACCESS_SCOPES`
+ * is enough (the SDK's `requiredScopes` demands all of them, which would lock out the
+ * client_credentials tier, so the scope check is explicit here).
+ */
+export function jwtGate(options: { verifier: OAuthTokenVerifier; publicBaseUrl: string }): BearerGate {
+  const challenge = { resourceMetadataUrl: resourceMetadataUrl(options.publicBaseUrl) };
+  const gate = requireBearerAuth({ verifier: options.verifier, ...challenge });
+  return async (request) => {
+    const auth = await gate(request);
+    if (auth instanceof Response) return auth;
+    if (!auth.scopes.some((scope) => (MCP_ACCESS_SCOPES as readonly string[]).includes(scope))) {
+      return bearerAuthChallengeResponse(
+        new OAuthError(OAuthErrorCode.InsufficientScope, `Token needs one of ${MCP_ACCESS_SCOPES.join(", ")}`),
+        { ...challenge, requiredScopes: [...MCP_ACCESS_SCOPES] },
+      );
+    }
+    return auth;
+  };
+}
+
+/** Tries each gate in order; the first non-challenge wins, otherwise the last challenge is returned. */
+export function firstGate(gates: BearerGate[]): BearerGate {
+  return async (request) => {
+    let last: Response | undefined;
+    for (const gate of gates) {
+      const result = await gate(request);
+      if (!(result instanceof Response)) return result;
+      last = result;
+    }
+    return last ?? new Response("Unauthorized", { status: 401 });
   };
 }
 

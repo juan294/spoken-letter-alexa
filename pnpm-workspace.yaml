@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - infra
+  - amazon
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:

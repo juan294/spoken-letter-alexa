@@ -9,7 +9,12 @@ is the truthful state until then. The dated detail lives in `docs/friction-log.m
 ## Alexa+ MCP Toolkit (`alexa-ai` CLI, Local Inspector, web simulator)
 
 Not yet exercised: access is partner-gated (friction log, 2026-09-03). The packaging path
-in `amazon/` is prepared so the remaining steps are CLI commands.
+in `amazon/` is prepared so the remaining steps are CLI commands: `addon.json` with every
+uncertain field name listed in `addon-fields.md`, the runbook, the US account checklist,
+the Inspector guide and the session-id contingency (`MCP_LEGACY_SESSIONS=1`, tested).
+Feedback so far is about documentation: the manifest schema, the Inspector's exact
+session expectations and the audio playback contract are the three pages we could not
+read without access.
 
 ## Model Context Protocol TypeScript SDK v2 (`@modelcontextprotocol/server`)
 

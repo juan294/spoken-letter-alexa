@@ -48,10 +48,16 @@ export interface OAuthStore {
   /** Conditional `pending` to `linked`; null when missing, used or expired. */
   leaseLinkToken(tokenHash: string): Promise<PendingAuth | null>;
   bindSubject(authId: string, subject: string): Promise<void>;
-  /** Returns the raw code (5-minute TTL, single use) and marks the authorization `issued`. */
-  issueCode(authId: string): Promise<string>;
+  /**
+   * Conditionally flips `linked` to `issued` and returns the raw code (5-minute TTL,
+   * single use); null when the authorization is not `linked` (already used). Keeps the
+   * authorization alive for at least the code's lifetime.
+   */
+  issueCode(authId: string): Promise<string | null>;
   consumeCode(codeHash: string): Promise<ConsumeCodeResult>;
   putRefreshToken(record: RefreshRecord): Promise<void>;
+  /** Reads a refresh record regardless of rotation or revocation state (RFC 7009 client check). */
+  peekRefreshToken(hash: string): Promise<RefreshRecord | null>;
   /** Conditional rotation; a second rotation of the same token reports `reused`. */
   rotateRefreshToken(hash: string): Promise<RotateResult>;
   revokeRefreshToken(hash: string): Promise<void>;

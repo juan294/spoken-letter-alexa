@@ -27,6 +27,19 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@types/node@26.5.0)(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.2)(tsx@4.23.13))
 
+  amazon:
+    dependencies:
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@types/node@26.5.0)(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.2)(tsx@4.23.13))
+
   infra:
     dependencies:
       aws-cdk-lib:
@@ -51,12 +64,24 @@ importers:
 
   packages/mcp-server:
     dependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: 3.1127.0
+        version: 3.1127.0
+      '@aws-sdk/client-kms':
+        specifier: 3.1127.0
+        version: 3.1127.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: 3.1127.0
+        version: 3.1127.0(@aws-sdk/client-dynamodb@3.1127.0)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.7)
       '@modelcontextprotocol/server':
         specifier: 2.0.0
         version: 2.0.0
+      '@spoken-letter-alexa/oauth':
+        specifier: workspace:*
+        version: link:../oauth
       '@spoken-letter-alexa/shared':
         specifier: workspace:*
         version: link:../shared

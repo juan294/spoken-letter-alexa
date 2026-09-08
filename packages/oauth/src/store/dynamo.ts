@@ -91,21 +91,28 @@ export class DynamoStore implements OAuthStore {
     );
   }
 
-  async issueCode(authId: string): Promise<string> {
+  async issueCode(authId: string): Promise<string | null> {
+    const codeExpiresAt = this.now() + CODE_TTL_SECONDS;
+    try {
+      await this.client.send(
+        new UpdateCommand({
+          TableName: this.table,
+          Key: { pk: `AUTH#${authId}`, sk: "AUTH" },
+          ConditionExpression: "#status = :linked AND expiresAt > :now",
+          UpdateExpression: "SET #status = :issued, expiresAt = :exp",
+          ExpressionAttributeNames: { "#status": "status" },
+          ExpressionAttributeValues: { ":linked": "linked", ":issued": "issued", ":now": this.now(), ":exp": codeExpiresAt + 60 },
+        }),
+      );
+    } catch (error) {
+      if (error instanceof ConditionalCheckFailedException) return null;
+      throw error;
+    }
     const code = randomToken(32);
     await this.client.send(
       new PutCommand({
         TableName: this.table,
-        Item: { pk: `CODE#${sha256Hex(code)}`, sk: "CODE", authId, expiresAt: this.now() + CODE_TTL_SECONDS },
-      }),
-    );
-    await this.client.send(
-      new UpdateCommand({
-        TableName: this.table,
-        Key: { pk: `AUTH#${authId}`, sk: "AUTH" },
-        UpdateExpression: "SET #status = :issued",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":issued": "issued" },
+        Item: { pk: `CODE#${sha256Hex(code)}`, sk: "CODE", authId, expiresAt: codeExpiresAt },
       }),
     );
     return code;
@@ -123,7 +130,7 @@ export class DynamoStore implements OAuthStore {
       await this.client.send(
         new PutCommand({
           TableName: this.table,
-          Item: { pk: `USEDCODE#${codeHash}`, sk: "CODE", authId: old.authId, expiresAt: auth.expiresAt },
+          Item: { pk: `USEDCODE#${codeHash}`, sk: "CODE", authId: old.authId, expiresAt: old.expiresAt },
         }),
       );
       return { status: "ok", auth };
@@ -137,6 +144,11 @@ export class DynamoStore implements OAuthStore {
 
   async putRefreshToken(record: RefreshRecord): Promise<void> {
     await this.client.send(new PutCommand({ TableName: this.table, Item: { pk: `RT#${record.hash}`, sk: "RT", ...record } }));
+  }
+
+  async peekRefreshToken(hash: string): Promise<RefreshRecord | null> {
+    const result = await this.client.send(new GetCommand({ TableName: this.table, Key: { pk: `RT#${hash}`, sk: "RT" } }));
+    return result.Item ? toRefreshRecord(result.Item) : null;
   }
 
   async rotateRefreshToken(hash: string): Promise<RotateResult> {

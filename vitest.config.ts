@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 // and `pnpm -F <pkg> test` inside a package run the same suites.
 export default defineConfig({
   test: {
-    projects: ["packages/*", "infra"],
+    projects: ["packages/*", "infra", "amazon"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],

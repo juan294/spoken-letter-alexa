@@ -3,7 +3,8 @@ import { Hono } from "hono";
 
 import { type BearerGate, devTokenGate, MCP_SCOPES } from "./auth.ts";
 import { type ProviderResolver } from "./provider/types.ts";
-import { createHandler, SERVER_VERSION } from "./server.ts";
+import { createLegacySessionHandler } from "./legacy-sessions.ts";
+import { createHandler, createServerFactory, reportMcpError, SERVER_VERSION } from "./server.ts";
 import { type SuggestionMemory } from "./tools/suggest.ts";
 
 export type AppDeps = {
@@ -14,6 +15,8 @@ export type AppDeps = {
   devToken?: string | undefined;
   bearerGate?: BearerGate | undefined;
   suggestions?: SuggestionMemory | undefined;
+  /** Inspector contingency: per-session transports for 2025-era clients (single instance only). */
+  legacySessions?: boolean | undefined;
 };
 
 /** RFC 9728 Protected Resource Metadata. Phase 1: the issuer is this host (Phase 2 mounts it). */
@@ -40,7 +43,10 @@ export function createApp(deps: AppDeps): Hono {
       if (!deps.devToken) throw new Error("createApp needs a bearerGate or a devToken");
       return devTokenGate({ devToken: deps.devToken, publicBaseUrl: deps.publicBaseUrl });
     })();
-  const mcp = createHandler({ providerFor: deps.providerFor, ...(deps.suggestions && { suggestions: deps.suggestions }) });
+  const factoryOptions = { providerFor: deps.providerFor, ...(deps.suggestions && { suggestions: deps.suggestions }) };
+  const mcp = deps.legacySessions
+    ? createLegacySessionHandler(createServerFactory(factoryOptions), { onerror: reportMcpError })
+    : createHandler(factoryOptions);
   const prm = protectedResourceMetadata(deps.publicBaseUrl);
 
   app.get("/healthz", (c) => c.json({ ok: true, name: "spoken-letter", version: SERVER_VERSION }));

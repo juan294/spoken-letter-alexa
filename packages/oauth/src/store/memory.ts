@@ -49,12 +49,14 @@ export class MemoryStore implements OAuthStore {
     return Promise.resolve();
   }
 
-  issueCode(authId: string): Promise<string> {
+  issueCode(authId: string): Promise<string | null> {
     const auth = this.auths.get(authId);
-    if (!auth) throw new Error("unknown authorization");
+    if (auth?.status !== "linked") return Promise.resolve(null);
     const code = randomToken(32);
-    this.codes.set(sha256Hex(code), { authId, expiresAt: this.now() + CODE_TTL_SECONDS });
+    const codeExpiresAt = this.now() + CODE_TTL_SECONDS;
+    this.codes.set(sha256Hex(code), { authId, expiresAt: codeExpiresAt });
     auth.status = "issued";
+    auth.expiresAt = Math.max(auth.expiresAt, codeExpiresAt + 60);
     return Promise.resolve(code);
   }
 
@@ -71,6 +73,13 @@ export class MemoryStore implements OAuthStore {
   putRefreshToken(record: RefreshRecord): Promise<void> {
     this.refresh.set(record.hash, { ...record });
     return Promise.resolve();
+  }
+
+  peekRefreshToken(hash: string): Promise<RefreshRecord | null> {
+    const record = this.refresh.get(hash);
+    if (!record) return Promise.resolve(null);
+    const { rotatedAt: _rotatedAt, revokedAt: _revokedAt, ...plain } = record;
+    return Promise.resolve(plain);
   }
 
   rotateRefreshToken(hash: string): Promise<RotateResult> {

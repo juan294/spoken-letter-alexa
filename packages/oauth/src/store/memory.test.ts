@@ -53,7 +53,7 @@ describe("MemoryStore", () => {
   test("issues a single-use code and reports reuse with the family id", async () => {
     const store = new MemoryStore({ now: () => 1_100 });
     await store.putPendingAuth(pending({ status: "linked", subject: "uid_1" }));
-    const code = await store.issueCode("auth_1");
+    const code = (await store.issueCode("auth_1"))!;
     expect(code).toMatch(/^[A-Za-z0-9_-]{32,}$/);
     await expect(store.getPendingAuth("auth_1")).resolves.toMatchObject({ status: "issued" });
     const first = await store.consumeCode(sha256Hex(code));
@@ -63,11 +63,32 @@ describe("MemoryStore", () => {
     await expect(store.consumeCode("never-issued")).resolves.toEqual({ status: "missing" });
   });
 
+  test("issueCode is conditional on the linked status and keeps the authorization alive for the code", async () => {
+    const store = new MemoryStore({ now: () => 1_890 });
+    await store.putPendingAuth(pending({ status: "pending" }));
+    await expect(store.issueCode("auth_1")).resolves.toBeNull();
+    await store.putPendingAuth(pending({ status: "linked", subject: "uid_1" }));
+    const code = await store.issueCode("auth_1");
+    expect(code).not.toBeNull();
+    await expect(store.issueCode("auth_1")).resolves.toBeNull();
+    await expect(store.getPendingAuth("auth_1")).resolves.toMatchObject({ status: "issued", expiresAt: 1_890 + 300 + 60 });
+    await expect(store.issueCode("unknown")).resolves.toBeNull();
+  });
+
+  test("peekRefreshToken reads rotated and revoked records without changing them", async () => {
+    const store = new MemoryStore({ now: () => 1_100 });
+    await expect(store.peekRefreshToken("nope")).resolves.toBeNull();
+    await store.putRefreshToken(refresh({ hash: "a" }));
+    await store.rotateRefreshToken("a");
+    await store.revokeRefreshToken("a");
+    await expect(store.peekRefreshToken("a")).resolves.toEqual(refresh({ hash: "a" }));
+  });
+
   test("expired codes are missing", async () => {
     let now = 1_100;
     const store = new MemoryStore({ now: () => now });
     await store.putPendingAuth(pending({ status: "linked", subject: "uid_1" }));
-    const code = await store.issueCode("auth_1");
+    const code = (await store.issueCode("auth_1"))!;
     now += 301;
     await expect(store.consumeCode(sha256Hex(code))).resolves.toEqual({ status: "missing" });
   });

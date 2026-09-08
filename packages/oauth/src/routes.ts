@@ -59,11 +59,15 @@ function clientCredentials(c: Context, body: URLSearchParams): { clientId: strin
     const decoded = Buffer.from(basic[1], "base64").toString("utf8");
     const separator = decoded.indexOf(":");
     if (separator < 0) return null;
-    return {
-      clientId: decodeURIComponent(decoded.slice(0, separator)),
-      secret: decodeURIComponent(decoded.slice(separator + 1)),
-      viaBasic: true,
-    };
+    try {
+      return {
+        clientId: decodeURIComponent(decoded.slice(0, separator)),
+        secret: decodeURIComponent(decoded.slice(separator + 1)),
+        viaBasic: true,
+      };
+    } catch {
+      return null; // malformed percent-encoding (RFC 6749 section 2.3.1 requires it)
+    }
   }
   const clientId = body.get("client_id");
   if (!clientId) return null;
@@ -82,6 +86,10 @@ const bridgeRevokeSchema = z.object({ subject: z.string().min(1).max(200) });
 
 export function createOAuthApp(deps: OAuthDeps): Hono {
   const app = new Hono();
+  app.onError((error, c) => {
+    log.error("oauth_unhandled", { path: c.req.path, message: error.message });
+    return c.json({ error: "server_error", error_description: "The authorization server hit an internal error" }, 500, NO_STORE);
+  });
   const now = deps.now ?? (() => Math.floor(Date.now() / 1000));
   const bucket = deps.rateLimit ?? new TokenBucket({ limit: 60, windowMs: 60_000 });
   const audience = `${deps.issuer}/mcp`;
@@ -198,6 +206,9 @@ export function createOAuthApp(deps: OAuthDeps): Hono {
       return c.text("Spoken Letter for Alexa+: this link has already been used. Start again from Alexa.", 400, NO_STORE);
     }
     const code = await deps.store.issueCode(auth.id);
+    if (!code) {
+      return c.text("Spoken Letter for Alexa+: this link has already been used. Start again from Alexa.", 400, NO_STORE);
+    }
     const target = new URL(auth.redirectUri);
     target.searchParams.set("code", code);
     target.searchParams.set("state", auth.state);
@@ -285,8 +296,11 @@ export function createOAuthApp(deps: OAuthDeps): Hono {
     }
     const token = body.get("token");
     if (!token) return oauthError(c, 400, "invalid_request", "token is required");
-    // RFC 7009: unknown tokens and access tokens (which are not revocable here) still answer 200.
-    await deps.store.revokeRefreshToken(sha256Hex(token));
+    // RFC 7009 section 2.1: only a token issued to the authenticating client is revoked.
+    // Unknown tokens, other clients' tokens and access tokens (not revocable) still answer 200.
+    const hash = sha256Hex(token);
+    const record = await deps.store.peekRefreshToken(hash);
+    if (record?.clientId === client.clientId) await deps.store.revokeRefreshToken(hash);
     return c.body(null, 200, NO_STORE);
   });
 

@@ -1,22 +1,15 @@
-// Lambda entry point (Phase 6 wires the function URL with RESPONSE_STREAM). Phase 1
-// exports the streaming handler over the same app the local server uses; Phase 6 mounts
-// oauth and agent on this app and reads secrets at cold start.
-import { log } from "@spoken-letter-alexa/shared";
+// Lambda entry point (Phase 6 wires the function URL with RESPONSE_STREAM). Secrets and
+// clients come from the environment that CDK fills from Secrets Manager at deploy time;
+// nothing is generated here, and the dev routes are never mounted.
 import { streamHandle } from "hono/aws-lambda";
 
+import { bootstrap } from "./bootstrap.ts";
 import { readServerEnv } from "./env.ts";
-import { createApp } from "./http.ts";
-import { FixtureProvider, loadFixtureCatalog } from "./provider/fixtures.ts";
 
 const env = readServerEnv();
-const stories = await loadFixtureCatalog(env.FIXTURES_PATH).catch((error: unknown) => {
-  log.warn("fixtures_missing", { path: env.FIXTURES_PATH, message: error instanceof Error ? error.message : String(error) });
-  return [];
-});
-const fixtures = new FixtureProvider({ stories, publicBaseUrl: env.PUBLIC_BASE_URL });
+if (env.DEV_ROUTES === "1") throw new Error("DEV_ROUTES must not be enabled on Lambda");
 
-if (!env.MCP_DEV_TOKEN) throw new Error("MCP_DEV_TOKEN is required until Phase 2 wires the JWT verifier");
+const { app } = await bootstrap(env, { allowGenerated: false });
 
-export const app = createApp({ publicBaseUrl: env.PUBLIC_BASE_URL, devToken: env.MCP_DEV_TOKEN, providerFor: () => fixtures });
-
+export { app };
 export const handler = streamHandle(app);

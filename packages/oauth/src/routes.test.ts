@@ -21,6 +21,7 @@ import {
   type Harness,
   type TokenResponse,
 } from "./test-support.ts";
+import { MemoryStore } from "./store/memory.ts";
 import { createJwtVerifier } from "./verify.ts";
 
 describe("RFC 8414 metadata and JWKS", () => {
@@ -189,6 +190,7 @@ describe("authorize request validation", () => {
   test.each([
     { name: "missing code_challenge", params: { code_challenge: "" }, error: "invalid_request" },
     { name: "plain code_challenge_method", params: { code_challenge_method: "plain" }, error: "invalid_request" },
+    { name: "missing code_challenge_method", params: { code_challenge_method: "" }, error: "invalid_request" },
     { name: "missing state", params: { state: "" }, error: "invalid_request" },
     { name: "unsupported response_type", params: { response_type: "token" }, error: "invalid_request" },
     { name: "unknown scope", params: { scope: "mcp:admin" }, error: "invalid_scope" },
@@ -407,6 +409,56 @@ describe("rate limiting", () => {
     expect(other.status).toBe(400);
     const wellKnown = await h.app.request("/.well-known/oauth-authorization-server", { headers });
     expect(wellKnown.status).toBe(200);
+  });
+});
+
+describe("robustness", () => {
+  test("a malformed percent-encoded Basic header is 401 invalid_client, not a 500", async () => {
+    const h = await harness();
+    const response = await h.app.request("/oauth/token", {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from("alexa:%zz-secret", "utf8").toString("base64")}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "invalid_client" });
+  });
+
+  test("a store failure is a server_error in RFC 6749 shape", async () => {
+    class BrokenStore extends MemoryStore {
+      override putPendingAuth(): Promise<void> {
+        return Promise.reject(new Error("dynamo down"));
+      }
+    }
+    const h = await harness({ store: new BrokenStore() });
+    const response = await h.app.request(authorizeUrl({}));
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ error: "server_error", error_description: expect.any(String) as string });
+    expect(JSON.stringify(body)).not.toContain("dynamo down");
+  });
+
+  test("RFC 7009 revoke ignores a token issued to another client", async () => {
+    const h = await harness();
+    const code = await obtainCode(h, "uid_2", { client_id: "alexa", redirect_uri: ALEXA_REDIRECT });
+    const issued = await h.app.request("/oauth/token", {
+      method: "POST",
+      headers: { authorization: basicAuth("alexa", ALEXA_SECRET), "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: VERIFIER, redirect_uri: ALEXA_REDIRECT }).toString(),
+    });
+    const tokens = (await issued.json()) as TokenResponse;
+    const revoke = await h.app.request("/oauth/revoke", { method: "POST", ...form({ token: tokens.refresh_token!, client_id: "simulator" }) });
+    expect(revoke.status).toBe(200);
+    const refresh = await h.app.request("/oauth/token", {
+      method: "POST",
+      headers: { authorization: basicAuth("alexa", ALEXA_SECRET), "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: tokens.refresh_token! }).toString(),
+    });
+    expect(refresh.status).toBe(200);
   });
 });
 
