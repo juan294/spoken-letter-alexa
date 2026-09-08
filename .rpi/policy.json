@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "integration_branch": "main",
+  "remote": "origin",
+  "verification_command": ["python3", ".rpi/scripts/rpi-verify.py"],
+  "verification_checks": [
+    {"name": "typecheck", "argv": ["pnpm", "typecheck"]},
+    {"name": "lint", "argv": ["pnpm", "lint"]},
+    {"name": "test", "argv": ["pnpm", "test"]},
+    {"name": "cdk-synth", "argv": ["pnpm", "-F", "infra", "synth"]}
+  ]
+}
