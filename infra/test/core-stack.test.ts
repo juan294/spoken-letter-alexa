@@ -24,6 +24,10 @@ describe("CoreStack", () => {
         { AttributeName: "sk", KeyType: "RANGE" },
       ],
       TimeToLiveSpecification: { AttributeName: "expiresAt", Enabled: true },
+      GlobalSecondaryIndexes: [
+        Match.objectLike({ IndexName: "byFamily", KeySchema: [{ AttributeName: "familyId", KeyType: "HASH" }] }),
+        Match.objectLike({ IndexName: "bySubject", KeySchema: [{ AttributeName: "subject", KeyType: "HASH" }] }),
+      ],
     });
   });
 

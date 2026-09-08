@@ -17,7 +17,9 @@ the hackathon; everything else follows "latest stable at pin time".
 | `@strands-agents/sdk` | 1.16.0 | Version named in the plan; verified present on npm. Phase 5. |
 | `aws-cdk-lib` / `aws-cdk` | 2.268.0 / 2.1140.0 | Latest 2.x library and CLI at pin time. |
 | `constructs` | 10.8.1 | Peer of `aws-cdk-lib`. |
-| `@aws-sdk/client-*` | 3.1127.0 | One version across every AWS SDK v3 client so `aws-sdk-client-mock` mocks line up. |
+| `@aws-sdk/client-*`, `@aws-sdk/lib-dynamodb` | 3.1127.0 | One version across every AWS SDK v3 client so `aws-sdk-client-mock` mocks line up. |
+| `aws-sdk-client-mock` | 4.1.0 | Mocks the DynamoDB document client and KMS in the store and signer tests. |
+| `jose` | 6.2.12 | JWT verification (`jwtVerify`, local and remote JWKS) and JWK export/thumbprints. Signing is done by hand over the `Signer` interface so KMS and the local key share one path. |
 | `typescript` | 6.0.3 | The plan says TypeScript 6. TypeScript 7 (the native compiler) is published but `typescript-eslint` 8.70 and `tsx` are validated against 6.x; strict, `noUncheckedIndexedAccess`, NodeNext. |
 | `typescript-eslint` / `eslint` / `@eslint/js` | 8.70.0 / 10.10.0 / 10.0.1 | ESLint 9-style flat config (ESLint 10 keeps the same flat-config contract) with the strict type-checked preset. |
 | `vitest` | 5.0.0 | Root runner with `test.projects` (the `vitest.workspace.ts` file named in the plan was removed in vitest 4; the projects array is the replacement). |

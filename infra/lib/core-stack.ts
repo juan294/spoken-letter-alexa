@@ -26,6 +26,17 @@ export class CoreStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
     });
+    // Refresh-token items carry `familyId` and `subject`; revocation queries them.
+    this.oauthTable.addGlobalSecondaryIndex({
+      indexName: "byFamily",
+      partitionKey: { name: "familyId", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
+    this.oauthTable.addGlobalSecondaryIndex({
+      indexName: "bySubject",
+      partitionKey: { name: "subject", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
 
     this.jwtKey = new kms.Key(this, "JwtSigningKey", {
       description: "sla-jwt-signing: RSA key that signs Spoken Letter for Alexa+ JWT access tokens",

@@ -98,6 +98,63 @@ challenge and the MP3 with `content-type: audio/mpeg` (session evidence, 2026-09
 Next phase entry condition: none for Phase 2 (independent). Phase 4 needs Phase 2's
 verifier and the Phase 3 bridge (out of scope here).
 
+## Phase 1 review
+
+Independent reviewer (fresh context, read-only) on commit `e680c9c`: CHANGES REQUIRED,
+findings F1-1 to F1-13. Fixed in commit `e21cc59` (F1-1 unknown errors leaked their
+message through the SDK, F1-2 fixtures path relative to cwd, F1-3 rotation cap, F1-4
+mid-word clipping, F1-5, F1-7, F1-8, F1-9, F1-11, F1-12; F1-6 folded into F1-1); each
+regression test was confirmed red against the stashed pre-fix implementation.
+Re-verification on `e21cc59`: APPROVED, with F1-14 (a fencepost in `clipSummary` that
+could yield exactly 300 characters) fixed in the Phase 2 commit with a space-less test.
+F1-10 is informational (vitest's minimal reporter hides the latency print in agent
+terminals; `--reporter=verbose` shows it). F1-13 is the Owner gate for the recordings.
+Residual noted by the reviewer: rotation covers the newest 100 delivered stories.
+
+## Phase 2 handoff
+
+Objective: `packages/oauth`, OAuth 2.1 authorization server (phase-2.md).
+
+Delivered:
+
+- `src/store/{types,memory,dynamo}.ts`: the store interface with lease-once link
+  tokens, single-use codes whose reuse reports the family, refresh rotation whose reuse
+  reports the family, subject and family revocation. Every secret is stored as sha256.
+  `DynamoStore` uses one table with `pk`/`sk`, TTL `expiresAt`, conditional updates and
+  the two GSIs added to `CoreStack` (`byFamily`, `bySubject`); tests with
+  `aws-sdk-client-mock` pin the command shapes and the conditional-failure branches.
+- `src/clients.ts` (static clients from `OAUTH_CLIENTS`, sha256 secrets, public clients
+  without a secret), `src/pkce.ts` (S256 only, RFC 7636 alphabet and length),
+  `src/tokens.ts` (RS256 `at+jwt` over the `Signer` interface, refresh and link tokens),
+  `src/signer/{types,local,kms}.ts`, `src/verify.ts` (`createJwtVerifier` returning an
+  `OAuthTokenVerifier` for `requireBearerAuth`), `src/rate-limit.ts` (token bucket per
+  IP, bounded), `src/metadata.ts`, `src/routes.ts` (`createOAuthApp`).
+- Endpoints: RFC 8414 metadata (snapshot-pinned), `jwks.json`, `/oauth/authorize`
+  (never redirects on an untrusted client or redirect_uri; redirects RFC 6749 errors
+  otherwise; 302 to `${SPOKEN_LETTER_ORIGIN}/link/alexa/<sla_ token>`),
+  `/bridge/link/complete` (bridge bearer, 404 on unknown/used/expired, signed
+  `continueUrl` with a 5-minute HMAC window), `/oauth/continue` (single use),
+  `/oauth/token` (authorization_code with exact redirect_uri and PKCE, refresh rotation,
+  client_credentials with Basic or post body), `/oauth/revoke` (RFC 7009),
+  `/bridge/link/revoke`, `/oauth/register` 404, 60 requests per minute per IP on
+  `/oauth/*`.
+- Tests: `pkce`, `clients`, `store/memory`, `store/dynamo`, `signer/kms` (also covers
+  `LocalSigner`), `verify` (five failure classes plus remote JWKS), `rate-limit`,
+  `routes` (round trip, wrong verifier, code reuse revokes the family, redirect_uri
+  mismatch, Basic auth, authorize validation, client_credentials, refresh rotation and
+  reuse, cross-client refresh, RFC 7009, bridge auth, rate limit, error shapes).
+- Shared: `crypto.ts` (`constantTimeEqual`, digests, `randomToken`) with a timing-safe
+  unit test; `CoreStack` GSIs with template assertions.
+
+Checks on the Phase 2 commit: `pnpm typecheck` pass (4 packages); `pnpm lint` pass;
+`pnpm test` pass, 17 files, 134 tests; `pnpm -F infra synth` pass.
+TDD: every oauth suite was written before its implementation and ran red (module
+missing); three assertions were corrected after the first green run (RFC 6749 says an
+unknown scope is `invalid_scope`; client authentication precedes grant validation).
+
+Not wired yet (Phase 4 by plan): the JWT verifier into the MCP bearer gate, and the
+OAuth app mounted on the same Hono app as `/mcp`.
+
 ## Deviations
 
 ### D1. Branch topology (session, before Phase 0)
@@ -158,3 +215,14 @@ verifier and the Phase 3 bridge (out of scope here).
   stored by the gate in `authInfo.extra.subject`.
 - Chose: `subjectFromAuth` reads that path; Phase 2's JWT gate writes the same key.
 - Why: routine API correction.
+
+### D8. OAuth error page is plain text (Phase 2)
+
+- Plan said: the bad-`authorize` error page is plain text on cream, the colour read from
+  the vendored token file (Phase 5), never inlined.
+- Found: the harness classifier blocked copying `design/tokens.json` from the private
+  checkout during Phase 2, so no token file exists yet.
+- Chose: `text/plain` responses with no styling; Phase 5 vendors the tokens through the
+  file tools and can style the page then.
+- Why: no inlined colours is the invariant; unstyled text satisfies it until the tokens
+  exist.

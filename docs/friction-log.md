@@ -86,6 +86,22 @@ entries by tool.
   `scripts/add-fixture-story.mjs` measures the duration with `ffprobe` and appends the
   entry. The local server and the tests run without them.
 
+## 2026-09-08: Phase 2 (OAuth 2.1 authorization server)
+
+- **No AWS tool friction to report yet**: DynamoDB and KMS were exercised through
+  `aws-sdk-client-mock` only. Two design notes for the Phase 6 deploy: the single-table
+  layout needs two GSIs (`byFamily`, `bySubject`) so refresh-token families and subjects
+  can be revoked without a scan (added to `CoreStack`), and KMS `Sign` with `MessageType:
+  RAW` accepts the JWT signing input directly, so no local digest step is needed.
+- **Amazon's checklist and RFC 6749 disagree on nothing, but the order of checks
+  matters.** Severity low. Client authentication runs before grant validation, so a
+  request with an unknown grant and no client credentials is `401 invalid_client`, not
+  `400 unsupported_grant_type`. Documented in the conformance tests so a future reader
+  does not "fix" it.
+- **The consent page lives in Spoken Letter (Phase 3), so this server renders exactly
+  two plain-text error pages** (unknown client, unregistered redirect). They are
+  `text/plain` until the brand tokens are vendored in Phase 5 (D8).
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.

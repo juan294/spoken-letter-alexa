@@ -42,8 +42,8 @@ Filled in per phase. Every entry does real work in code and has a friction-log e
 | AWS CDK | One-command deploy; `CoreStack` (DynamoDB, KMS, Secrets Manager) | Phase 0: synthesized and tested |
 | MCP TypeScript SDK v2 (`@modelcontextprotocol/server`) | Dual-era `/mcp` handler: 2026-07-28 plus the 2025-era `initialize` Alexa+ sends | Phase 1: protocol and latency tests green |
 | Lambda function URL (RESPONSE_STREAM), CloudFront, ACM, Route53 | Serves `alexa.spokenletter.com` | Phase 6 |
-| DynamoDB | OAuth state, links, agent sessions | Phase 2 (memory store), Phase 6 |
-| KMS (asymmetric RSA) | JWT signing and JWKS | Phase 2 (local signer), Phase 6 |
+| DynamoDB | OAuth state (`sla-oauth`: pending authorizations, link tokens, codes, refresh tokens) | Phase 2: `DynamoStore` with mocked-client tests; deployed in Phase 6 |
+| KMS (asymmetric RSA) | JWT signing (`RSASSA_PKCS1_V1_5_SHA_256`) and the JWKS document | Phase 2: `KmsSigner` with mocked-client tests; deployed in Phase 6 |
 | Secrets Manager | Bridge secret, static client secrets | Phase 6 |
 | S3 | Simulator assets, fixture audio | Phase 5, 6 |
 | Amazon Bedrock + Strands Agents | The simulated Alexa+ agent | Phase 5 |
@@ -85,7 +85,7 @@ Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.
 packages/shared      env parsing, JSON logger, vendored agent-tool contract
 packages/mcp-server  dual-era MCP server, fixture provider, three read-only tools (Phase 1)
 fixtures/            the Owner's recorded stories for the demo subject (see fixtures/README.md)
-packages/oauth       Phase 2: OAuth 2.1 authorization server
+packages/oauth       OAuth 2.1 authorization server: PKCE, client_credentials, RFC 8414/9728, JWT verifier (Phase 2)
 packages/agent       Phase 5: Strands + Bedrock agent, Polly, Transcribe
 packages/simulator   Phase 5: simulated Alexa+ SPA
 infra/               CDK app (CoreStack now; Phase 6 adds the rest)

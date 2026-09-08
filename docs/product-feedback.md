@@ -55,6 +55,19 @@ Phase 5.
 
 Phase 6.
 
-## AWS Lambda function URLs (response streaming), CloudFront, DynamoDB, KMS, Secrets Manager, S3, CloudWatch, X-Ray
+## AWS KMS (asymmetric signing) and DynamoDB (single table)
+
+- What worked: the SDK v3 clients plus `aws-sdk-client-mock` let the whole OAuth
+  server be tested without an account: conditional writes (`ConditionExpression`) and
+  `ReturnValues: ALL_OLD` express "lease once", "consume once" and "rotate once"
+  directly. KMS `GetPublicKey` returns SPKI DER that `node:crypto` turns into a JWK in
+  two lines.
+- Needs improvement: nothing blocking yet; the live behaviour of conditional updates
+  under TTL expiry is verified only by the mocked tests until Phase 6.
+- Onboarding: SDK v3 typings are precise; `ConditionalCheckFailedException` being a
+  class made the "reuse" branch straightforward.
+- Would use again: yes.
+
+## AWS Lambda function URLs (response streaming), CloudFront, Secrets Manager, S3, CloudWatch, X-Ray
 
 Phase 6.

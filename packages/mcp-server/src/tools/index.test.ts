@@ -6,6 +6,7 @@ import { TEST_BASE_URL, TEST_STORIES } from "../test-support.ts";
 import { runGetFamilyStory } from "./get.ts";
 import { TOOL_METADATA } from "./index.ts";
 import { runListFamilyStories } from "./list.ts";
+import { clipSummary, SUMMARY_MAX } from "./schemas.ts";
 import { runSuggestNextStory, SuggestionMemory } from "./suggest.ts";
 
 const provider = new FixtureProvider({ stories: TEST_STORIES, publicBaseUrl: TEST_BASE_URL });
@@ -39,6 +40,14 @@ describe("TOOL_METADATA", () => {
       expect(assertAgentToolMetadata({ ...tool, safetyClass: "read" }, tool.name)).toEqual([]);
     },
   );
+});
+
+describe("clipSummary", () => {
+  test("never exceeds the maximum, even without a word boundary", () => {
+    expect(clipSummary("x".repeat(400)).length).toBeLessThanOrEqual(SUMMARY_MAX);
+    expect(clipSummary(`${"a".repeat(298)} b`).length).toBeLessThanOrEqual(SUMMARY_MAX);
+    expect(clipSummary("short")).toBe("short");
+  });
 });
 
 describe("tool runners", () => {
