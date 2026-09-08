@@ -137,6 +137,7 @@ export function App({
         <NowPlaying
           status={state.status}
           play={state.play}
+          playKey={state.playKey}
           speechUrl={state.status === "replying" ? state.speechUrl : null}
           sampleUtterance={SAMPLE_UTTERANCE}
           onReplyEnded={() => { dispatch({ type: "reply-ended" }); }}

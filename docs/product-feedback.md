@@ -79,7 +79,13 @@ the Claude Haiku 4.5 and Nova inference profiles in `us-east-1`.
 
 ## Amazon Bedrock AgentCore Gateway
 
-Phase 6.
+- What worked: the CDK L2 (`aws-cdk-lib/aws-bedrockagentcore`) models the gateway, the
+  MCP server target and the OAuth2 credential provider directly; the target's outbound
+  client_credentials binding is one call.
+- Needs improvement: the L2's `MCPProtocolVersion` stops at 2025-06-18 while the server
+  serves 2025-11-25 and 2026-07-28; the identity grant falls back to a wildcard secret
+  ARN when the secret is a token.
+- Not exercised live: creating the gateway is an Owner step (deploy).
 
 ## AWS KMS (asymmetric signing) and DynamoDB (single table)
 
@@ -96,4 +102,12 @@ Phase 6.
 
 ## AWS Lambda function URLs (response streaming), CloudFront, Secrets Manager, S3, CloudWatch, X-Ray
 
-Phase 6.
+- What worked: `InvokeMode.RESPONSE_STREAM` plus Hono's `streamHandle` needed no code
+  specific to Lambda; `FunctionUrlOrigin.withOriginAccessControl` and
+  `S3BucketOrigin.withOriginAccessControl` wire the OACs; EMF from a single log line
+  becomes the `ToolLatencyMs` metric behind the dashboard and alarm.
+- Needs improvement: the OAC overwrites the viewer's `Authorization` header (friction
+  log), which every OAuth-protected origin behind a function URL has to work around; the
+  S3 OAC bucket policy cycles across stacks unless the bucket is imported by name.
+- Not exercised live yet: deploy is an Owner step; `scripts/verify-deploy.mjs` runs the
+  first checks.

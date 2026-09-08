@@ -40,11 +40,8 @@ const ERROR_TEXT: Record<ToolErrorCode, string> = {
 };
 
 function toolError(code: ToolErrorCode, message = ERROR_TEXT[code]) {
-  return {
-    isError: true as const,
-    content: [{ type: "text", text: message } satisfies TextBlock],
-    structuredContent: { error: code, message },
-  };
+  const structured = { error: code, message };
+  return { isError: true as const, content: [text(message), jsonBlock(structured)], structuredContent: structured };
 }
 
 /**

@@ -41,16 +41,16 @@ Filled in per phase. Every entry does real work in code and has a friction-log e
 | --- | --- | --- |
 | AWS CDK | One-command deploy; `CoreStack` (DynamoDB, KMS, Secrets Manager) | Phase 0: synthesized and tested |
 | MCP TypeScript SDK v2 (`@modelcontextprotocol/server`) | Dual-era `/mcp` handler: 2026-07-28 plus the 2025-era `initialize` Alexa+ sends | Phase 1: protocol and latency tests green |
-| Lambda function URL (RESPONSE_STREAM), CloudFront, ACM, Route53 | Serves `alexa.spokenletter.com` | Phase 6 |
+| Lambda function URL (RESPONSE_STREAM), CloudFront, ACM, Route53 | `ApiStack` (one arm64 Lambda from `packages/app`, streaming URL behind an OAC) and `EdgeStack` (distribution, WAF rate rule, HSTS, DNS aliases) | Phase 6: synthesized and tested; deploy is an Owner step |
 | DynamoDB | OAuth state (`sla-oauth`: pending authorizations, link tokens, codes, refresh tokens) | Phase 2: `DynamoStore` with mocked-client tests; deployed in Phase 6 |
 | KMS (asymmetric RSA) | JWT signing (`RSASSA_PKCS1_V1_5_SHA_256`) and the JWKS document | Phase 2: `KmsSigner` with mocked-client tests; deployed in Phase 6 |
-| Secrets Manager | Bridge secret, static client secrets | Phase 6 |
-| S3 | Simulator assets, fixture audio | Phase 5, 6 |
+| Secrets Manager | `sla/bridge` and `sla/oauth-clients`, read once per cold start | Phase 6: `CoreStack`, `seed:secrets`, `loadSecretsIntoEnv` tested |
+| S3 | Simulator SPA, fixture audio, Polly replies (1-day lifecycle) | Phase 6: `SimulatorStack`, OAC policy in `EdgeStack` |
 | Amazon Bedrock + Strands Agents | The simulated Alexa+ agent: `BedrockModel` (Claude Haiku 4.5 by default, Nova as fallback), `McpClient` over the same `/mcp` | Phase 5: agent loop and structured output tested with a scripted model; live Bedrock is an Owner step (model access) |
-| Bedrock AgentCore Gateway | MCP server target for the agent | Phase 6 |
+| Bedrock AgentCore Gateway | `GatewayStack`: gateway with IAM inbound auth, MCP server target on `/mcp`, outbound client_credentials via an AgentCore Identity OAuth2 provider | Phase 6: synthesized and tested; deploy is an Owner step |
 | Amazon Transcribe (streaming) | Voice input: WebM/Opus from the browser, converted to 16 kHz PCM, streamed | Phase 5: mocked-client test plus a real `ffmpeg` conversion test |
 | Amazon Polly | Spoken replies in the simulator, neural `Joanna` `en-US` (never story narration) | Phase 5: mocked-client test; S3 store for the deployed reply audio |
-| CloudWatch + X-Ray | Sub-500 ms tool latency proof | Phase 6 |
+| CloudWatch + X-Ray | `ObservabilityStack`: EMF `ToolLatencyMs` dashboard, p95 > 400 ms alarm to SNS email, active tracing, 30-day logs | Phase 6: synthesized and tested |
 | Kiro Crew | CDK scaffold draft | Not available on the build machine (friction log) |
 
 ## Quick start
@@ -63,7 +63,8 @@ pnpm install
 pnpm typecheck && pnpm lint && pnpm test && pnpm -F infra synth
 ```
 
-The same four commands are the single `verify` job in `.github/workflows/verify.yml`.
+The same four commands, plus the simulator's Playwright smoke (`pnpm test:e2e`), are the
+single `verify` job in `.github/workflows/verify.yml`.
 The complete local gate is declared in `.rpi/policy.json` and run by
 `python3 .rpi/scripts/rpi-verify.py`.
 
@@ -106,9 +107,9 @@ packages/oauth       OAuth 2.1 authorization server: PKCE, client_credentials, R
 packages/agent       Strands + Bedrock agent loop, scripted offline model, Polly, Transcribe, sessions (Phase 5)
 packages/simulator   simulated Alexa+ SPA: Vite + React, brand tokens, Playwright smoke (Phase 5)
 packages/app         the composed server: OAuth + MCP + agent on one Hono app; local and Lambda entry points
-infra/               CDK app (CoreStack now; Phase 6 adds the rest)
+infra/               CDK app: Core, Simulator, Api, Edge, Gateway, Observability stacks; bundle and seed scripts
 amazon/              addon.json, agent-skill placeholder, runbook, US account checklist, Inspector guide (Phase 7)
-scripts/             mock-spoken-letter.mjs (stand-in for the private bridge), e2e-link.mjs, add-fixture-story.mjs
+scripts/             mock-spoken-letter.mjs (stand-in for the private bridge), e2e-link.mjs, verify-deploy.mjs, add-fixture-story.mjs
 docs/                research, plans, decisions, friction log, product feedback, release
 ```
 

@@ -14,6 +14,7 @@ export class CoreStack extends Stack {
   readonly agentSessionsTable: dynamodb.Table;
   readonly jwtKey: kms.Key;
   readonly bridgeSecret: secretsmanager.Secret;
+  readonly oauthClientsSecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
@@ -54,6 +55,12 @@ export class CoreStack extends Stack {
       alias: "alias/sla-jwt",
       removalPolicy: RemovalPolicy.RETAIN,
       pendingWindow: Duration.days(30),
+    });
+
+    this.oauthClientsSecret = new secretsmanager.Secret(this, "OAuthClientsSecret", {
+      secretName: "sla/oauth-clients",
+      description: "Static OAuth clients and the alexa-m2m secret as JSON; written by pnpm -F infra seed:secrets.",
+      generateSecretString: { secretStringTemplate: JSON.stringify({ clients: [] }), generateStringKey: "m2mSecret", excludePunctuation: true, passwordLength: 48 },
     });
 
     this.bridgeSecret = new secretsmanager.Secret(this, "BridgeSecret", {

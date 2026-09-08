@@ -8,14 +8,18 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "synth": "cdk synth --quiet",
-    "deploy": "cdk deploy --all --require-approval broadening --profile archy"
+    "deploy": "cdk deploy --all --require-approval broadening --profile archy",
+    "seed:secrets": "node scripts/seed-secrets.mjs",
+    "build": "node scripts/bundle-lambda.mjs"
   },
   "dependencies": {
     "aws-cdk-lib": "2.268.0",
-    "constructs": "10.8.1"
+    "constructs": "10.8.1",
+    "@aws-sdk/client-secrets-manager": "3.1127.0"
   },
   "devDependencies": {
     "aws-cdk": "2.1140.0",
+    "esbuild": "0.28.2",
     "tsx": "4.23.13",
     "typescript": "6.0.3",
     "vitest": "5.0.0"

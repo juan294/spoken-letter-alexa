@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.tsx";
 import { createHttpTransport } from "./agent/http.ts";
@@ -8,11 +9,11 @@ import { demoSession, FIXTURE_TURN, routedFetch, type Route } from "./test/agent
 
 const ORIGIN = "http://localhost:5173";
 
-function renderApp(routes: Record<string, Route>, options: { path?: string; search?: string } = {}) {
+function renderApp(routes: Record<string, Route>, options: { path?: string; search?: string; strict?: boolean } = {}) {
   const fetchImpl = routedFetch({ "POST /agent/session": demoSession, ...routes });
   const navigate = vi.fn();
   const transport = createHttpTransport({ fetchImpl, origin: ORIGIN });
-  const utils = render(
+  const app = (
     <App
       transport={transport}
       origin={ORIGIN}
@@ -20,9 +21,19 @@ function renderApp(routes: Record<string, Route>, options: { path?: string; sear
       search={options.search ?? ""}
       navigate={navigate}
       fetchImpl={fetchImpl}
-    />,
+    />
   );
+  const utils = render(options.strict ? <StrictMode>{app}</StrictMode> : app);
   return { ...utils, fetchImpl, navigate };
+}
+
+/** Number of requests the stub saw for `METHOD /path`. */
+function calls(fetchImpl: ReturnType<typeof routedFetch>, method: string, path: string): number {
+  return fetchImpl.mock.calls.filter(([input, init]) => {
+    const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+    const m = input instanceof Request ? input.method : (init?.method ?? "GET");
+    return m === method && new URL(url, ORIGIN).pathname === path;
+  }).length;
 }
 
 async function ask(text: string) {
@@ -187,5 +198,58 @@ describe("simulated Alexa+ client", () => {
       expect(sessions.at(-1)).toEqual({ mode: "demo" });
     });
     expect(await screen.findByTestId("mode-chip")).toHaveTextContent("Demo mode");
+  });
+
+  it("pauses the playing story when a new turn starts", async () => {
+    let resolveTurn: (response: Response) => void = () => undefined;
+    let turns = 0;
+    renderApp({
+      "POST /agent/turn": () => {
+        turns += 1;
+        if (turns === 1) return Response.json(FIXTURE_TURN);
+        return new Promise<Response>((resolve) => {
+          resolveTurn = resolve;
+        });
+      },
+    });
+    await ask("play the story");
+    expect(await screen.findByText("The owl who forgot how to hoot")).toBeInTheDocument();
+    expect(chip()).toHaveTextContent("Playing");
+    const audio = screen.getByTestId<HTMLMediaElement>("story-audio");
+    const pause = vi.spyOn(audio, "pause");
+
+    await ask("play another one");
+    expect(chip()).toHaveTextContent("Thinking");
+    expect(pause).toHaveBeenCalled();
+
+    resolveTurn(Response.json({ say: "Bedtime.", play: null, speechUrl: null, toolCalls: [] }));
+    expect(await screen.findByText("Bedtime.")).toBeInTheDocument();
+    expect(chip()).toHaveTextContent("Idle");
+    expect(screen.queryByTestId("story-audio")).not.toBeInTheDocument();
+  });
+
+  it("creates exactly one session per page load under StrictMode", async () => {
+    const { fetchImpl } = renderApp({}, { strict: true });
+    expect(await screen.findByTestId("mode-chip")).toHaveTextContent("Demo mode");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls(fetchImpl, "POST", "/agent/session")).toBe(1);
+  });
+
+  it("exchanges the authorization code exactly once under StrictMode and ends Connected", async () => {
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ verifier: "v".repeat(43), state: "st" }));
+    const { fetchImpl } = renderApp(
+      {
+        "POST /oauth/token": () => Response.json({ access_token: "jwt-1", token_type: "Bearer", expires_in: 900, scope: "mcp:tools" }),
+        "POST /agent/session": ({ body }) => {
+          const mode = (body as { mode: string }).mode;
+          return Response.json({ sessionId: `s-${mode}`, mode, subject: mode === "linked" ? "uid-1" : "demo", offline: true });
+        },
+      },
+      { path: "/demo/callback", search: "?code=c0de&state=st", strict: true },
+    );
+    expect(await screen.findByTestId("mode-chip")).toHaveTextContent("Connected");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls(fetchImpl, "POST", "/oauth/token")).toBe(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

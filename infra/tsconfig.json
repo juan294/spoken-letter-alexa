@@ -1,4 +1,7 @@
 {
   "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false
+  },
   "include": ["bin/**/*.ts", "lib/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }

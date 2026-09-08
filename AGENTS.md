@@ -73,8 +73,9 @@ The complete local gate, declared in `.rpi/policy.json` and run by
 pnpm typecheck && pnpm lint && pnpm test && pnpm -F infra synth
 ```
 
-Run checks sequentially, never as parallel Bash calls. The same four commands are the
-single CI job `verify` in `.github/workflows/verify.yml`.
+Run checks sequentially, never as parallel Bash calls. The same four commands, plus the
+simulator's Playwright smoke (`pnpm test:e2e`, offline, in-app mock), are the single CI
+job `verify` in `.github/workflows/verify.yml`.
 
 ## Git and deployment topology
 

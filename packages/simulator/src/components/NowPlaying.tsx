@@ -10,6 +10,8 @@ import { StatusChip } from "./StatusChip.tsx";
 type Props = {
   status: Status;
   play: Play | null;
+  /** Remounts the audio element for every story reply. */
+  playKey: number;
   speechUrl: string | null;
   sampleUtterance: string;
   onReplyEnded: () => void;
@@ -23,7 +25,7 @@ type Props = {
  * glow, serif cream title, storyteller, progress bar, pause and resume. The idle screen
  * shows the pixel moon and the sample utterance.
  */
-export function NowPlaying({ status, play, speechUrl, sampleUtterance, onReplyEnded, onPause, onResume, onStoryEnded }: Props) {
+export function NowPlaying({ status, play, playKey, speechUrl, sampleUtterance, onReplyEnded, onPause, onResume, onStoryEnded }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [position, setPosition] = useState(0);
   const [mediaDuration, setMediaDuration] = useState<number | null>(null);
@@ -31,18 +33,19 @@ export function NowPlaying({ status, play, speechUrl, sampleUtterance, onReplyEn
   const active = status === "playing" || status === "paused";
   const duration = play?.durationSeconds ?? mediaDuration;
 
-  // Drive the element from the state machine, never the other way round.
+  // Drive the element from the state machine, never the other way round: it plays only
+  // while the status is "playing", so a new turn (listening, thinking, replying) pauses it.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     if (status === "playing") void audio.play().catch(() => undefined);
-    else if (status === "paused") audio.pause();
-  }, [status, play?.url]);
+    else audio.pause();
+  }, [status, playKey]);
 
   useEffect(() => {
     setPosition(0);
     setMediaDuration(null);
-  }, [play?.url]);
+  }, [playKey]);
 
   const progress = duration && duration > 0 ? Math.min(100, Math.round((position / duration) * 100)) : 0;
 
@@ -79,6 +82,7 @@ export function NowPlaying({ status, play, speechUrl, sampleUtterance, onReplyEn
             </p>
             <p className="panel-sub">read by {play.storyteller}</p>
             <audio
+              key={playKey}
               ref={audioRef}
               data-testid="story-audio"
               src={play.url}

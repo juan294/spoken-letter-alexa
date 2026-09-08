@@ -42,6 +42,9 @@ importers:
 
   infra:
     dependencies:
+      '@aws-sdk/client-secrets-manager':
+        specifier: 3.1127.0
+        version: 3.1127.0
       aws-cdk-lib:
         specifier: 2.268.0
         version: 2.268.0(constructs@10.8.1)
@@ -52,6 +55,9 @@ importers:
       aws-cdk:
         specifier: 2.1140.0
         version: 2.1140.0
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       tsx:
         specifier: 4.23.13
         version: 4.23.13
@@ -128,6 +134,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: 3.1127.0
         version: 3.1127.0
+      '@aws-sdk/client-secrets-manager':
+        specifier: 3.1127.0
+        version: 3.1127.0
       '@aws-sdk/client-transcribe-streaming':
         specifier: 3.1127.0
         version: 3.1127.0
@@ -159,6 +168,9 @@ importers:
         specifier: 4.5.4
         version: 4.5.4
     devDependencies:
+      aws-sdk-client-mock:
+        specifier: 4.1.0
+        version: 4.1.0
       tsx:
         specifier: 4.23.13
         version: 4.23.13
@@ -347,6 +359,10 @@ packages:
 
   '@aws-sdk/client-s3@3.1127.0':
     resolution: {integrity: sha512-0ZSAgmEda33xPqVPt+bx2KzrXV1cUCKRRVPGliLu+V7DzHPa04CqPSi1maGEM4O0LDP0iI6HRSW5ULloNwayNw==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-secrets-manager@3.1127.0':
+    resolution: {integrity: sha512-sgTX/mZ0kYrFukwm238T5OyRKT3QxUS9VdSl4iD8pu9vyZxS+PpZgASCdTJoRvdv99NPOvEaXcQ1ecsCjnqNug==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-transcribe-streaming@3.1127.0':
@@ -3076,6 +3092,17 @@ snapshots:
       '@aws-sdk/credential-provider-node': 3.972.82
       '@aws-sdk/middleware-sdk-s3': 3.972.75
       '@aws-sdk/signature-v4-multi-region': 3.996.46
+      '@aws-sdk/types': 3.974.5
+      '@smithy/core': 3.33.3
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.18.0
+      tslib: 2.8.1
+
+  '@aws-sdk/client-secrets-manager@3.1127.0':
+    dependencies:
+      '@aws-sdk/core': 3.977.9
+      '@aws-sdk/credential-provider-node': 3.972.82
       '@aws-sdk/types': 3.974.5
       '@smithy/core': 3.33.3
       '@smithy/fetch-http-handler': 5.8.0

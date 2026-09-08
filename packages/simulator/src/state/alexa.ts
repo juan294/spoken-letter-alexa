@@ -22,12 +22,13 @@ export type AlexaState = {
   speechUrl: string | null;
   toolCalls: ToolCall[];
   error: string | null;
+  /** Changes with every story reply so the audio element remounts and starts from the top. */
+  playKey: number;
 };
 
 export type AlexaEvent =
   | { type: "session"; session: SessionResponse | null }
   | { type: "listen" }
-  | { type: "listen-cancel" }
   | { type: "turn-start" }
   | { type: "turn-ok"; you: string; response: TurnResponse }
   | { type: "turn-fail"; message: string }
@@ -44,6 +45,7 @@ export const initialState: AlexaState = {
   speechUrl: null,
   toolCalls: [],
   error: null,
+  playKey: 0,
 };
 
 export function reduce(state: AlexaState, event: AlexaEvent): AlexaState {
@@ -51,10 +53,10 @@ export function reduce(state: AlexaState, event: AlexaEvent): AlexaState {
     case "session":
       // A new session (demo or linked) starts a fresh conversation.
       return { ...initialState, session: event.session };
+    // `listen` and `turn-start` leave "playing", which pauses the story (NowPlaying only
+    // plays while the status is "playing"), so a Polly reply never overlaps the recording.
     case "listen":
       return { ...state, status: "listening", error: null };
-    case "listen-cancel":
-      return { ...state, status: "idle" };
     case "turn-start":
       return { ...state, status: "thinking", error: null, speechUrl: null };
     case "turn-ok": {
@@ -68,6 +70,7 @@ export function reduce(state: AlexaState, event: AlexaEvent): AlexaState {
         speechUrl: response.speechUrl,
         toolCalls: [...state.toolCalls, ...response.toolCalls],
         error: null,
+        playKey: response.play ? state.playKey + 1 : state.playKey,
       };
     }
     case "turn-fail":

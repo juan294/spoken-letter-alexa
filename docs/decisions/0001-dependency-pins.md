@@ -19,6 +19,7 @@ the hackathon; everything else follows "latest stable at pin time".
 | `ffmpeg-static` | 5.3.0 | Converts the browser's WebM/Opus utterance to 16 kHz PCM for Transcribe streaming; the only dependency allowed to run a postinstall besides esbuild. |
 | `react` / `react-dom` / `@vitejs/plugin-react` / `vite` | 19.2.8 / 19.2.8 / 6.1.1 / 8.2.2 | The simulator SPA. |
 | `@testing-library/react` / `jest-dom` / `user-event` / `jsdom` | 16.3.3 / 7.0.1 / 14.6.7 / 30.0.1 | Simulator state-transition tests. |
+| `esbuild` (infra) | 0.28.2 | Bundles `packages/app/src/lambda-entry.ts` through the JS API in `infra/scripts/bundle-lambda.mjs` (pnpm's bin shim cannot run esbuild's native binary, so `NodejsFunction` is not used). |
 | `@playwright/test` | 1.63.0 | Simulator smoke at 390 and 1280 px against the in-app mock transport. |
 | `aws-cdk-lib` / `aws-cdk` | 2.268.0 / 2.1140.0 | Latest 2.x library and CLI at pin time. |
 | `constructs` | 10.8.1 | Peer of `aws-cdk-lib`. |

@@ -175,6 +175,48 @@ entries by tool.
   `pnpm dev:offline` as phase-5 says (D13): the CI job has no agent server and no AWS,
   and the mock keeps the smoke deterministic. `pnpm dev:offline` is the manual path.
 
+## 2026-09-08: Phase 6 (CDK stacks, written and synthesized, not deployed)
+
+- **CloudFront's origin access control replaces the viewer's `Authorization` header.**
+  Severity high for any OAuth-protected MCP server behind a Lambda function URL with
+  IAM auth: the SigV4 signature CloudFront adds overwrites the bearer token, and
+  `Authorization` cannot be forwarded through an origin request policy either. The fix
+  is a CloudFront Function on viewer-request that copies the header into
+  `X-Forwarded-Authorization`, forwarded by policy, and a two-line rewrite on the Lambda
+  event (`packages/app/src/forwarded-auth.ts`) before Hono sees it (D14). Fix for Amazon:
+  document this on the "Lambda function URL with OAC" page, or let the OAC use a
+  different header.
+- **S3 OAC bucket policies cycle across stacks.** Severity low. The bucket in
+  SimulatorStack, the distribution in EdgeStack and the Lambda grant in ApiStack made a
+  three-stack cycle. Resolved by a fixed bucket name (`ASSETS_BUCKET_NAME`) so ApiStack
+  and EdgeStack import it by name, and by EdgeStack owning the single bucket policy (OAC
+  read plus a secure-transport deny; `enforceSSL` is off in SimulatorStack so it does not
+  create a second policy) (D15).
+- **pnpm's bin shim cannot run esbuild's native binary.** Severity medium.
+  `NodejsFunction` shells out to `pnpm exec -- esbuild`; esbuild's postinstall replaces
+  `bin/esbuild` with the Mach-O binary, and pnpm runs it through Node
+  (`SyntaxError: Invalid or unexpected token`). The bundle is now produced by
+  `infra/scripts/bundle-lambda.mjs` through the esbuild JS API, which also installs
+  `ffmpeg-static` for linux/arm64 with `npm_config_platform`/`npm_config_arch` and copies
+  the fixture catalog (D16). Verified: `pnpm -F infra build` produces a 5 MB `index.mjs`
+  and an `ELF 64-bit ARM aarch64` ffmpeg.
+- **`aws-cdk-lib` under `exactOptionalPropertyTypes`, again.** L2 interfaces such as
+  `IBucket` and `IOAuth2CredentialProvider` declare optional members without
+  `| undefined`; `infra/tsconfig.json` turns the flag off for the CDK app only.
+- **AgentCore Gateway L2 constructs exist and are pleasant.** `Gateway`,
+  `GatewayTarget.forMcpServer`, `GatewayAuthorizer.usingAwsIam`,
+  `OAuth2CredentialProvider.usingCustom` with RFC 8414-style metadata and
+  `GatewayCredentialProvider.fromOauthIdentity` covered the plan's design without L1s.
+  Two notes: `MCPProtocolVersion` enumerates 2025-03-26 and 2025-06-18 only, so the
+  protocol versions are left at the service default (D17); and the identity grant warns
+  that a token-derived secret ARN gets a wildcard `bedrock-agentcore-identity!*` grant.
+- **Cross-stack references default to strong references.** CDK warns that
+  `SpokenLetterAlexaApi` imports values from Core and Gateway; expected for this
+  topology, acknowledged in the deploy notes.
+- **AWS mutations are Owner gates.** Nothing was deployed: `cdk bootstrap`, the first
+  `cdk deploy`, `seed:secrets`, the ACM certificate and the AgentCore Gateway creation
+  all wait for the Owner. `scripts/verify-deploy.mjs` is ready for the first run.
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.

@@ -10,8 +10,11 @@
 //   2. no-literal-font-family - literal Newsreader / Mulish / mono stack names.
 //   3. no-micro-font-size     - numeric or px/rem/em string fontSize under 11px.
 //
-// The MoonPixels illustration palette is the one sanctioned exception; it carries an
-// explicit eslint-disable-next-line comment with the reason.
+// The MoonPixels illustration palette (MOON_PALETTE and FALLBACK_PIXEL_COLOR in
+// src/brand/MoonPixels.tsx) is the one sanctioned literal-colour exception. It needs no
+// disable comment: these rules inspect style-shaped objects, style props and <style>
+// tags only, and the palette is a plain lookup table whose values reach the DOM through
+// a variable (`background: color`), never as a literal in a style object.
 
 export const COLOR_VALUED_PROPERTIES = new Set([
   "color",

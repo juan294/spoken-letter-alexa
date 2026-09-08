@@ -291,6 +291,73 @@ Manual criteria (Owner, AWS credentials): live Bedrock, Transcribe and Polly thr
 `pnpm dev`, and Bedrock model access in the console, remain open; `pnpm dev:offline`
 exercises the same loop without AWS.
 
+## Phase 5 review
+
+Independent reviewer (fresh context, read-only) on commit `c7323e0`: CHANGES REQUIRED,
+F5-1 to F5-11. The reviewer ran `pnpm dev:offline`, the curl contract, both viewports in
+headless Chromium and judged the five brand signatures and the Now Playing composition
+present. Fixed in the Phase 6 commit: F5-1 (major: the callback exchanged the code twice
+under React StrictMode; the pending flow is now consumed synchronously and a
+StrictMode test asserts one token POST; the double demo session is guarded the same
+way), F5-2 (error results also carry the JSON text block; get and suggest pinned), F5-3
+(sl-design comment), F5-4 (docs wording, `.env.example`, `speechUrl` recorded below),
+F5-5 (honest test title with an empty-trace assertion), F5-7 (a new turn pauses the
+playing story; `listen-cancel` removed). Deferred: F5-6 (Lambda refusal tests; the
+`packages/app` bootstrap test covers the production posture), F5-8 (transcribe buffers
+before the byte check; Lambda's payload cap bounds it), F5-9 (a fixture title contains a
+name, permitted by the plan), F5-10 (session history is uncapped), F5-11 (two literals
+from the export with no token). The `ssmlAudioUrl` field in phase-5 is named `speechUrl`
+in the contract (no SSML is used).
+
+## Phase 6 handoff
+
+Objective: CDK stacks, domain, AgentCore Gateway, observability (phase-6.md). Everything
+is written, synthesized and tested; no AWS mutation happened (Owner gate).
+
+Delivered:
+
+- `infra/lib/api-stack.ts`: one Lambda (Node 24, arm64, 1024 MB, 60 s, reserved
+  concurrency 20, X-Ray) from `infra/dist/lambda`, function URL `RESPONSE_STREAM` with
+  IAM auth, environment of ARNs and flags (never secrets), least-privilege grants
+  (DynamoDB on the two tables, the two secrets, `kms:Sign`/`GetPublicKey`, `s3:PutObject`
+  on `polly/*`, Bedrock on the chosen model, Transcribe and Polly on `*` because they
+  have no resource-level permissions), explicit log group with 30-day retention.
+- `infra/lib/simulator-stack.ts`: private bucket with a fixed name, 1-day lifecycle on
+  `polly/`, SPA and fixture deployments.
+- `infra/lib/edge-stack.ts`: CloudFront with the function URL origin (all methods, no
+  caching, no compression so SSE passes through), the MCP headers forwarded, the
+  viewer-request function that preserves the bearer (D14), S3 behaviours for `/demo/*`,
+  `/fixtures/*`, `/polly/*`, HSTS and nosniff, WAF rate rule 300 per 5 minutes on
+  `/oauth/`, the single bucket policy (D15), Route53 A and AAAA aliases, TLS 1.2 2021.
+- `infra/lib/gateway-stack.ts`: AgentCore Gateway (IAM inbound), MCP server target on
+  `/mcp`, custom OAuth2 credential provider for `alexa-m2m` with the secret resolved from
+  `sla/oauth-clients`, `grantInvoke` to the Lambda.
+- `infra/lib/observability-stack.ts`: dashboard `sla-alexa` (p50/p95/p99 per tool from
+  the EMF metric, Lambda duration and errors, OAuth error and tool failure log queries),
+  alarm `ToolLatencyMs p95 > 400` over 5 minutes to an SNS email subscription.
+- `CoreStack` gains `sla/oauth-clients`; `packages/app`: `secrets.ts` (cold-start
+  loader, tested), `lambda-entry.ts` (dynamic import after the secrets),
+  `forwarded-auth.ts` (tested); `infra/scripts/bundle-lambda.mjs` and `seed-secrets.mjs`;
+  `scripts/verify-deploy.mjs`; `docs/release.md` deploy procedure.
+- Tests: `infra/test/stacks.test.ts` (every stack synthesizes; `RESPONSE_STREAM`;
+  secrets not in the environment; IAM wildcard only for Transcribe, Polly and X-Ray;
+  bucket, lifecycle and deployments; distribution behaviours, headers, function, WAF,
+  DNS; single bucket policy; gateway, target and provider; invoke grant; dashboard,
+  alarm, subscription; the clients secret).
+
+Checks on the Phase 6 commit: `pnpm typecheck` pass (9 packages); `pnpm lint` pass;
+`pnpm test` pass, 42 files, 282 tests; `pnpm -F infra synth` pass (5 stacks, 6 with
+`-c sla:certificateArn=...`); `pnpm -F infra build` pass (bundle with a linux/arm64
+ffmpeg); simulator build and `pnpm test:e2e` pass. TDD: `stacks.test.ts`,
+`secrets.test.ts` and `forwarded-auth.test.ts` ran red (module missing) first; the
+simulator review fixes ran red first per their implementer's report.
+
+Owner gates (phase-6 manual criteria and section 2): ACM certificate, `cdk bootstrap`,
+`pnpm deploy`, `seed:secrets`, the second deploy with `sla:gatewayUrl`, the
+`verify-deploy` run from the `us-east-1` runner and from Spain, the dashboard and alarm
+in `OK`, the gateway target `READY`, the demo page playing a fixture story. The
+`workflow_dispatch` runner job for the latency check is a Phase 8 item.
+
 ## Deviations
 
 ### D1. Branch topology (session, before Phase 0)
@@ -414,3 +481,40 @@ exercises the same loop without AWS.
 - Chose: `VITE_AGENT_MOCK=1` for Playwright; `pnpm dev:offline` for the manual run.
 - Why: the success criterion is "green in CI"; the offline server path is covered by
   `packages/app/src/bootstrap.test.ts` and the agent route tests.
+
+### D14. The viewer bearer travels as `X-Forwarded-Authorization` (Phase 6)
+
+- Plan said: CloudFront forwards `Authorization` to the function URL.
+- Found: an origin access control signs the origin request and overwrites
+  `Authorization`; the header also cannot be listed in an origin request policy.
+- Chose: a CloudFront viewer-request function copies it to `X-Forwarded-Authorization`;
+  `packages/app/src/forwarded-auth.ts` restores it on the Lambda event.
+- Why: keeps IAM auth on the function URL (only CloudFront can invoke it) and the bearer
+  intact for `/mcp` and `/oauth`.
+
+### D15. Fixed assets bucket name and one bucket policy in EdgeStack (Phase 6)
+
+- Plan said: SimulatorStack holds the bucket; EdgeStack points CloudFront at it.
+- Found: the OAC bucket policy and the Lambda grant created a three-stack cycle.
+- Chose: `ASSETS_BUCKET_NAME` imported by name in ApiStack and EdgeStack; EdgeStack
+  writes the single bucket policy; `enforceSSL` off in SimulatorStack.
+- Why: acyclic stacks, same access rules.
+
+### D16. Lambda bundle built by `infra/scripts/bundle-lambda.mjs` (Phase 6)
+
+- Plan said: bundled with esbuild through `NodejsFunction`.
+- Found: `NodejsFunction` runs `pnpm exec -- esbuild`, which pnpm executes through Node
+  after esbuild's postinstall swapped its bin for the native binary.
+- Chose: the esbuild JS API with the same options (ESM, node24, source maps), a
+  linux/arm64 `ffmpeg-static` install and the fixture catalog, shipped as
+  `Code.fromAsset`; tests and unbuilt synths use a marker function.
+- Why: deterministic, no Docker, still esbuild.
+
+### D17. Gateway protocol versions left at the service default (Phase 6)
+
+- Plan said: default set that includes 2026-07-28.
+- Found: the CDK L2 enumerates 2025-03-26 and 2025-06-18; the service default is not
+  visible from the construct.
+- Chose: omit `supportedVersions`; record what the deployed gateway reports in the
+  friction log.
+- Why: the server negotiates whatever the gateway's client sends.

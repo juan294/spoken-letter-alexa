@@ -70,6 +70,9 @@ describe("legacy era (Alexa+ live client and Local Inspector)", () => {
       name: "The owl who forgot how to hoot",
       mimeType: "audio/mpeg",
     });
+    const last = result.content.at(-1) as { type: string; text?: string } | undefined;
+    expect(last?.type).toBe("text");
+    expect(JSON.parse(last?.text ?? "")).toEqual(result.structuredContent);
   });
 
   test("tools/call suggest_next_story returns a story and a reason", async () => {
@@ -77,6 +80,8 @@ describe("legacy era (Alexa+ live client and Local Inspector)", () => {
     const result = message.result as { structuredContent: unknown };
     const parsed = z.object({ story: storySummarySchema.nullable(), reason: z.string() }).parse(result.structuredContent);
     expect(parsed.story?.id).toBe("st_bread");
+    const blocks = (message.result as { content: { type: string; text?: string }[] }).content;
+    expect(JSON.parse(blocks.at(-1)?.text ?? "")).toEqual(result.structuredContent);
   });
 
   test("unknown story id is a tool error with the story_not_found class", async () => {
@@ -85,6 +90,7 @@ describe("legacy era (Alexa+ live client and Local Inspector)", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/couldn't find/i);
     expect(result.structuredContent).toMatchObject({ error: "story_not_found" });
+    expect(JSON.parse(result.content.at(-1)?.text ?? "")).toEqual(result.structuredContent);
   });
 
   test("a provider outage is a provider_unavailable tool error, not a protocol error", async () => {

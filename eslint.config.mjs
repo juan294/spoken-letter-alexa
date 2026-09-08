@@ -27,7 +27,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["eslint.config.mjs", "scripts/*.mjs"],
+          allowDefaultProject: ["eslint.config.mjs", "scripts/*.mjs", "infra/scripts/*.mjs"],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -64,11 +64,13 @@ export default tseslint.config(
         URLSearchParams: "readonly",
         fetch: "readonly",
         Buffer: "readonly",
+        performance: "readonly",
+        AbortController: "readonly",
       },
     },
   },
   {
-    files: ["**/*.test.ts", "**/*.test.tsx", "scripts/**"],
+    files: ["**/*.test.ts", "**/*.test.tsx", "scripts/**", "infra/scripts/**"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
       "no-console": "off",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { AgentError, type AgentTransport, type SessionRequest } from "../agent/types.ts";
+import { AgentError, type AgentTransport, type SessionRequest, type SessionResponse } from "../agent/types.ts";
 import { initialState, reduce } from "./alexa.ts";
 
 function describe(error: unknown): string {
@@ -15,14 +15,21 @@ function describe(error: unknown): string {
 export function useAlexa(transport: AgentTransport, accessToken: string | null) {
   const [state, dispatch] = useReducer(reduce, initialState);
   const sessionRef = useRef<string | null>(null);
+  // One session request per (transport, token) pair. StrictMode runs the effect twice
+  // in development; the second run re-attaches to the request in flight instead of
+  // minting a second session.
+  const inflight = useRef<{ key: string; transport: AgentTransport; promise: Promise<SessionResponse> } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    sessionRef.current = null;
-    dispatch({ type: "session", session: null });
-    const request: SessionRequest = accessToken ? { mode: "linked", accessToken } : { mode: "demo" };
-    transport
-      .createSession(request)
+    const key = accessToken ?? "demo";
+    if (inflight.current?.key !== key || inflight.current.transport !== transport) {
+      sessionRef.current = null;
+      dispatch({ type: "session", session: null });
+      const request: SessionRequest = accessToken ? { mode: "linked", accessToken } : { mode: "demo" };
+      inflight.current = { key, transport, promise: transport.createSession(request) };
+    }
+    inflight.current.promise
       .then((session) => {
         if (cancelled) return;
         sessionRef.current = session.sessionId;

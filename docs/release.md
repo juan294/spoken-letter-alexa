@@ -92,6 +92,29 @@ fixture provider, which lets every tool be exercised without the private reposit
 
 Before Phase 6 the probes run locally against the Hono handler (Phases 1 and 2 tests).
 
+### A3a. Deploy procedure (Owner's machine, profile `archy`, account `106403001709`)
+
+```bash
+aws sso login --profile archy                     # or the profile's credential flow
+pnpm build                                        # simulator dist + infra/dist/lambda (esbuild, linux/arm64 ffmpeg)
+pnpm -F infra exec cdk bootstrap --profile archy  # once per account/region
+pnpm deploy                                       # cdk deploy --all --require-approval broadening --profile archy
+pnpm -F infra seed:secrets                        # writes sla/bridge and sla/oauth-clients; prints the bridge secret ONCE
+```
+
+Context the app reads (`-c key=value` or `infra/cdk.context.json`): `sla:certificateArn`
+(the ACM certificate for `alexa.spokenletter.com` in `us-east-1`; without it EdgeStack is
+skipped and the function URL is reachable only through CloudFront once EdgeStack
+exists), `sla:alertEmail` (defaults to the Owner's address), `sla:gatewayUrl` (the
+AgentCore Gateway MCP endpoint printed by GatewayStack; pass it on the second deploy so the
+agent's `MCP_URL` becomes the gateway). The first deploy runs with `PROVIDER_MODE=fixtures`
+for every subject; Phase 8 switches to `auto` after the private bridge lands.
+
+After every deploy: `node scripts/verify-deploy.mjs` (discovery, legacy `initialize`,
+modern `server/discover`, tool latency, SSE pass-through); with `M2M_SECRET` from the
+seeded `sla/oauth-clients` document the authenticated checks run too. From Spain set
+`ASSERT_P95=0` and record the numbers; the p95 assertion is for the `us-east-1` runner.
+
 ### A4. Release ordering
 
 1. Identify the candidate: merge `develop` into `main` locally, then `git rev-parse main`, clean tree.

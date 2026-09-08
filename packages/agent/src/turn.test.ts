@@ -52,10 +52,11 @@ describe("runTurn with the scripted model against the real MCP server", () => {
     expect(result.say).toMatch(/lighthouse/i);
   });
 
-  test("a rejected token surfaces as a failed tool trace and a spoken apology", async () => {
+  test("a rejected token fails at connect time: no tool trace, a spoken apology, nothing thrown", async () => {
     const h = await mcpHarness();
     const result = await runTurn({ model: new ScriptedModel(), mcpUrl: MCP_URL, accessToken: "not-a-token", fetch: h.fetch }, "play a story");
     expect(result.play).toBeNull();
+    expect(result.toolCalls).toEqual([]);
     expect(result.say).toMatch(/reconnect|not reachable|try again/i);
   });
 });
