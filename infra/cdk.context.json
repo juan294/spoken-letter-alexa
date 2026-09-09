@@ -2,5 +2,6 @@
   "sla:certificateArn": "arn:aws:acm:us-east-1:106403001709:certificate/f3f3e45f-a99a-4259-9421-477cb1a2ab82",
   "sla:deployGateway": "1",
   "sla:gatewayUrl": "https://sla-alexa-usrtpg2rea.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp",
-  "sla:alertEmail": "juan@thecreativetoken.com"
+  "sla:alertEmail": "juan@thecreativetoken.com",
+  "sla:skillId": "amzn1.ask.skill.0598e354-ee92-413f-940a-61e4a6a0a2a7"
 }
