@@ -103,6 +103,10 @@ pnpm -F infra exec cdk bootstrap                  # once per account/region
 # Deploy 1: Core, Simulator, Api, Edge, Observability, Skill (no gateway yet)
 pnpm deploy -c sla:certificateArn=arn:aws:acm:us-east-1:106403001709:certificate/<id>
 pnpm -F infra seed:secrets                        # keeps existing values; --rotate-bridge / --rotate-m2m to rotate
+# The latency workflow's repository secret is the alexa-m2m value just seeded; pipe it, never paste it:
+aws secretsmanager get-secret-value --secret-id sla/oauth-clients --query SecretString --output text \
+  | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0,"utf8")).m2mSecret)' \
+  | gh secret set SLA_M2M_SECRET --repo juan294/spoken-letter-alexa
 node scripts/verify-deploy.mjs                    # DNS, TLS and the server answer before the gateway exists
 
 # Deploy 2: the AgentCore Gateway (needs the public endpoint to resolve)
