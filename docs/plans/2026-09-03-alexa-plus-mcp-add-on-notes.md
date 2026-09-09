@@ -421,7 +421,8 @@ Owner checklist (in order):
 1. Say "push": `gh repo create juan294/spoken-letter-alexa --public --license mit`, push
    `develop` and `main`, add the topics `alexa-plus`, `mcp`, `aws`, `hackathon`, add the
    `verify` required check on `main` (phase-8 section 3), the repository secret
-   `SLA_M2M_SECRET` for the latency workflow.
+   `SLA_M2M_SECRET` for the latency workflow (its value exists only after step 2's
+   `seed:secrets`; `docs/release.md` A3a has the pipe that sets it without pasting).
 2. Request the ACM certificate for `alexa.spokenletter.com` (phase-0 section 7), record
    the ARN as `sla:certificateArn`, then `docs/release.md` A3a: build, bootstrap,
    deploy, seed, second deploy with `sla:gatewayUrl`, `verify-deploy` from Spain
