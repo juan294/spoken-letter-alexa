@@ -60,7 +60,7 @@ if (dryRun) {
 // alexa-appkit.amazon.com, and that permission only exists once sla:skillId is set. The
 // skill id is recorded either way so the next `pnpm deploy` adds the permission and a
 // second `pnpm -F skill deploy` completes the manifest.
-const deploy = spawnSync("ask", ["deploy", "--ignore-hook"], { cwd: pkgRoot, stdio: "inherit" });
+const deploy = spawnSync("ask", ["deploy", "--target", "skill-metadata", "--profile", "default"], { cwd: pkgRoot, stdio: "inherit" });
 
 const statesPath = path.join(pkgRoot, ".ask/ask-states.json");
 if (!existsSync(statesPath)) fail("ask deploy left no .ask/ask-states.json; read the skill id from the developer console and pass -c sla:skillId=<id> to pnpm deploy");
