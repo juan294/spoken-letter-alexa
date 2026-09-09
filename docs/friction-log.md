@@ -307,6 +307,13 @@ entries by tool.
   connection each (`aws s3 cp` with `multipart_threshold` above the file size), after
   which CDK finds the keys present and skips its own upload. A router restart later
   restored the link to about 100 Mbps.
+- **Node.js 24 on Lambda rejects callback-style handlers.** Severity high (every
+  request failed with `Runtime.CallbackHandlerDeprecated` on the first live probe). The
+  origin-verify wrapper declared three parameters around Hono's streamified handler; the
+  runtime treats any plain three-parameter export as callback-based and refuses it. The
+  gate is now itself `awslambda.streamifyResponse`-wrapped and writes its 403 to the
+  response stream (`gateStreamingHandler`, unit-tested with a fake runtime). Found only
+  on the deployed function: the local gate cannot see the runtime's handler check.
 - **`cdk deploy --require-approval broadening` prompts.** Severity low. An agent-driven
   deploy uses `--require-approval never` after the Owner's explicit authorization; the
   documented command keeps the prompt for hand runs.

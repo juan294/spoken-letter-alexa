@@ -1,6 +1,54 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import { originVerified, rewriteForwardedAuthorization } from "./forwarded-auth.ts";
+import { gateStreamingHandler, originVerified, rewriteForwardedAuthorization, type StreamingRuntime } from "./forwarded-auth.ts";
+
+describe("gateStreamingHandler", () => {
+  function fakeRuntime() {
+    const written: { metadata?: { statusCode: number; headers: Record<string, string> }; chunks: string[]; ended: boolean } = { chunks: [], ended: false };
+    const stream = { write: (chunk: string) => written.chunks.push(chunk), end: () => (written.ended = true) };
+    let streamified = 0;
+    const runtime: StreamingRuntime = {
+      streamifyResponse: (handler) => {
+        streamified += 1;
+        return handler;
+      },
+      HttpResponseStream: {
+        from: (target, metadata) => {
+          written.metadata = metadata;
+          return target;
+        },
+      },
+    };
+    return { runtime, stream, written, streamified: () => streamified };
+  }
+
+  test("a request without the shared header gets a 403 on the stream and never reaches the app", async () => {
+    const { runtime, stream, written, streamified } = fakeRuntime();
+    const inner = vi.fn(() => Promise.resolve());
+    const handler = gateStreamingHandler(runtime, inner, "shared-value-not-real");
+    await handler({ headers: { "x-origin-verify": "wrong" } }, stream, {});
+    expect(streamified()).toBe(1);
+    expect(written.metadata?.statusCode).toBe(403);
+    expect(JSON.parse(written.chunks.join(""))).toMatchObject({ error: "forbidden" });
+    expect(written.ended).toBe(true);
+    expect(inner).not.toHaveBeenCalled();
+  });
+
+  test("a verified request reaches the app on the raw stream with the forwarded bearer restored", async () => {
+    const { runtime, stream, written } = fakeRuntime();
+    const inner = vi.fn(() => Promise.resolve());
+    const handler = gateStreamingHandler(runtime, inner, "shared-value-not-real");
+    const context = { awsRequestId: "r1" };
+    await handler({ headers: { "x-origin-verify": "shared-value-not-real", "x-forwarded-authorization": "Bearer token-not-real" } }, stream, context);
+    expect(written.metadata).toBeUndefined();
+    expect(inner).toHaveBeenCalledTimes(1);
+    const [event, passedStream, passedContext] = inner.mock.calls[0] as unknown as [{ headers: Record<string, string> }, unknown, unknown];
+    expect(event.headers.authorization).toBe("Bearer token-not-real");
+    expect(event.headers["x-forwarded-authorization"]).toBeUndefined();
+    expect(passedStream).toBe(stream);
+    expect(passedContext).toBe(context);
+  });
+});
 
 describe("originVerified", () => {
   test("accepts only the exact shared value, case-insensitively on the header name", () => {

@@ -41,3 +41,35 @@ export function rewriteForwardedAuthorization<T extends HeaderedEvent>(event: T)
   rewritten.authorization = value;
   return { ...event, headers: rewritten };
 }
+
+export type ResponseStreamLike = { write(chunk: string): unknown; end(): unknown };
+export type StreamingHandler<E> = (event: E, responseStream: ResponseStreamLike, context: unknown) => Promise<void>;
+/** The `awslambda` global of the Node.js Lambda runtime (response streaming). */
+export type StreamingRuntime = {
+  streamifyResponse<E>(handler: StreamingHandler<E>): StreamingHandler<E>;
+  HttpResponseStream: {
+    from(stream: ResponseStreamLike, metadata: { statusCode: number; headers: Record<string, string> }): ResponseStreamLike;
+  };
+};
+
+/**
+ * Wraps Hono's streaming handler for the function URL. Node.js 24 on Lambda rejects any
+ * plain three-parameter (callback-style) handler, and a streamified handler receives
+ * `(event, responseStream, context)`, so the origin gate must itself be streamified: a
+ * request without CloudFront's `x-origin-verify` value gets a 403 written to the stream;
+ * every other request reaches Hono with the forwarded bearer restored.
+ */
+export function gateStreamingHandler<E extends HeaderedEvent>(runtime: StreamingRuntime, inner: StreamingHandler<E>, expected: string): StreamingHandler<E> {
+  return runtime.streamifyResponse<E>(async (event, responseStream, context) => {
+    if (!originVerified(event, expected)) {
+      const out = runtime.HttpResponseStream.from(responseStream, {
+        statusCode: 403,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+      out.write(JSON.stringify({ error: "forbidden", message: "Requests must come through alexa.spokenletter.com" }));
+      out.end();
+      return;
+    }
+    await inner(rewriteForwardedAuthorization(event), responseStream, context);
+  });
+}

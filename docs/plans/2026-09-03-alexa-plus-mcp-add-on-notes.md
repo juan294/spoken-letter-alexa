@@ -706,7 +706,9 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
   request would fail with 403.
 - Chose: auth type NONE; CloudFront adds `x-origin-verify` from `sla/origin-verify`
   (Secrets Manager dynamic reference) and the Lambda refuses requests without it in
-  constant time before the app runs.
+  constant time before the app runs. The gate is a streamified handler
+  (`gateStreamingHandler`): Node.js 24 on Lambda rejects a plain three-parameter
+  wrapper as callback-style (first deploy, 2026-09-09).
 - Why: the only reliable way to keep the URL private to CloudFront while streaming POSTs.
 
 ### D19. SigV4-signed fetch for the gateway path (Phase 6 review)
