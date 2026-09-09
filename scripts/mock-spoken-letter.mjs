@@ -93,7 +93,8 @@ const server = createServer(async (req, res) => {
     }
     return json(res, 404, { error: "not_found" });
   } catch (error) {
-    return json(res, 500, { error: "mock_failure", message: String(error) });
+    console.error(JSON.stringify({ event: "mock_spoken_letter_error", message: String(error) }));
+    return json(res, 500, { error: "mock_failure" });
   }
 });
 

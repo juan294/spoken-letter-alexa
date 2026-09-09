@@ -5,6 +5,9 @@ on:
     branches: [main, develop]
   pull_request:
 
+permissions:
+  contents: read
+
 # One job, the four commands from AGENTS.md "Verification". No deploy from CI.
 jobs:
   verify:
