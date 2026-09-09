@@ -757,3 +757,16 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
   (F9-1); `docs/release.md` and the script say so.
 - Why: same behaviour with less state; the icon work is deferred until a store listing
   is in scope.
+
+### D23. No reserved concurrency on the API Lambda (first deploy, 2026-09-09)
+
+- Plan said: reserved concurrency 20 on the API Lambda (phase-6 section 1).
+- Found: the account's Lambda quota is 10 concurrent executions in total and Lambda
+  requires 10 to stay unreserved, so the first `cdk deploy` failed with "Specified
+  ReservedConcurrentExecutions ... decreases account's UnreservedConcurrentExecution
+  below its minimum value of [10]" and `SpokenLetterAlexaApi` rolled back.
+- Chose: drop the reservation; the API and skill Lambdas share the account pool. A
+  quota increase (Service Quotas, `L-B99A9384`) is an Owner request; if granted, the
+  reservation can return with the value the plan intended.
+- Why: the demo load is one parent and one Echo; the reservation protected against a
+  noisy neighbour that does not exist in this account.

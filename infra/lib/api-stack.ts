@@ -26,7 +26,7 @@ export const DEFAULT_PUBLIC_BASE_URL = "https://alexa.spokenletter.com";
 export const DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
 /**
- * One Lambda (Node 24, arm64, 1024 MB) bundled from `packages/app/src/lambda-entry.ts`,
+ * One Lambda (Node 24, arm64, 1024 MB, no reserved concurrency) bundled from `packages/app/src/lambda-entry.ts`,
  * which mounts the MCP server, the OAuth server and the agent on one Hono app, behind a
  * function URL in RESPONSE_STREAM mode. The URL's auth type is NONE because an origin
  * access control would make Lambda reject every POST without a payload hash (D18); the
@@ -82,7 +82,8 @@ export class ApiStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       memorySize: 1024,
       timeout: Duration.seconds(60),
-      reservedConcurrentExecutions: 20,
+      // No reserved concurrency: the account's Lambda quota is 10 concurrent executions
+      // and a reservation must leave 10 unreserved, so any value fails to deploy (D23).
       tracing: lambda.Tracing.ACTIVE,
       logGroup: this.logGroup,
       environment,

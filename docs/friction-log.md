@@ -294,6 +294,23 @@ entries by tool.
   Alexa+ device in Spain routes to a development-stage `en-US` skill is still the open
   question from `amazon/us-account-checklist.md`; the first device test answers it.
 
+## 2026-09-09: first deploy (Owner-authorized), account and network findings
+
+- **Lambda concurrency quota of 10 blocks any reserved concurrency.** Severity medium.
+  A fresh account's quota is 10 concurrent executions and Lambda keeps 10 unreserved, so
+  `reservedConcurrentExecutions: 20` (or 1) fails the stack. Removed (D23); a quota
+  increase is a Service Quotas request the Owner can file.
+- **`cdk deploy` cannot survive a weak uplink.** Severity medium. With the Owner's link
+  at about 33 KB/s the SDK's parallel multipart uploads of the 27 MB API asset and the
+  21 MB CLI layer stalled on idle timeouts and the deploy died twice. Workaround that
+  worked: zip the staged asset directory and upload the two keys with a single
+  connection each (`aws s3 cp` with `multipart_threshold` above the file size), after
+  which CDK finds the keys present and skips its own upload. A router restart later
+  restored the link to about 100 Mbps.
+- **`cdk deploy --require-approval broadening` prompts.** Severity low. An agent-driven
+  deploy uses `--require-approval never` after the Owner's explicit authorization; the
+  documented command keeps the prompt for hand runs.
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.

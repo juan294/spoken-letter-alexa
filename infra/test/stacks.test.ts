@@ -69,12 +69,12 @@ describe("Phase 6 stacks", () => {
   });
 
   describe("ApiStack", () => {
-    test("one arm64 Node 24 Lambda with 1024 MB, tracing, reserved concurrency and the function URL in RESPONSE_STREAM mode", () => {
+    test("one arm64 Node 24 Lambda with 1024 MB, tracing, no reserved concurrency (D23) and the function URL in RESPONSE_STREAM mode", () => {
       t.api.hasResourceProperties("AWS::Lambda::Function", {
         Architectures: ["arm64"],
         Runtime: "nodejs24.x",
         MemorySize: 1024,
-        ReservedConcurrentExecutions: 20,
+        ReservedConcurrentExecutions: Match.absent(),
         TracingConfig: { Mode: "Active" },
         Environment: { Variables: Match.objectLike({ PROVIDER_MODE: "fixtures", EMF_NAMESPACE: "sla/mcp", DEV_ROUTES: "0", AGENT_OFFLINE: "0" }) },
       });
