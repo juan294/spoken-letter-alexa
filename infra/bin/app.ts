@@ -22,6 +22,7 @@ const app = new App();
 //   sla:m2mSecretVersion the sla/oauth-clients version printed by seed:secrets --rotate-m2m
 //   sla:skillId         the Alexa skill id once `pnpm -F skill deploy` has run (Phase 9)
 //   sla:recordUtterances "1" for one recording session (phase-9 section 3), then unset
+//   sla:skillPermissionOpen "1" for the first `pnpm -F skill deploy` only (see SkillStack)
 const context = (key: string) => app.node.tryGetContext(key) as string | undefined;
 const certificateArn = context("sla:certificateArn");
 const alertEmail = context("sla:alertEmail") ?? "juan294@gmail.com";
@@ -30,6 +31,7 @@ const deployGateway = context("sla:deployGateway") === "1";
 const m2mSecretVersionId = context("sla:m2mSecretVersion");
 const skillId = context("sla:skillId");
 const recordUtterances = context("sla:recordUtterances") === "1";
+const skillPermissionOpen = context("sla:skillPermissionOpen") === "1";
 
 const core = new CoreStack(app, "SpokenLetterAlexaCore", { env });
 const simulator = new SimulatorStack(app, "SpokenLetterAlexaSimulator", { env });
@@ -67,5 +69,5 @@ if (deployGateway) {
   if (edge) gateway.addStackDependency(edge);
 }
 new ObservabilityStack(app, "SpokenLetterAlexaObservability", { env, api, alertEmail });
-new SkillStack(app, "SpokenLetterAlexaSkill", { env, publicBaseUrl: PUBLIC_BASE_URL, recordUtterances, ...(skillId && { skillId }) });
+new SkillStack(app, "SpokenLetterAlexaSkill", { env, publicBaseUrl: PUBLIC_BASE_URL, recordUtterances, skillPermissionOpen, ...(skillId && { skillId }) });
 // The Phase 7 LegacyStack (infra/lib/legacy-stack.ts) is intentionally not instantiated.

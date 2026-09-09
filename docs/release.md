@@ -117,10 +117,10 @@ pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1
 # Deploy 3: the agent targets the gateway (SigV4-signed, D19)
 pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
 
-# Skill (Phase 9): create the development-stage skill, lock the Lambda to its id, finish the manifest
-pnpm -F skill deploy                              # creates the skill; records sla:skillId (manifest validation fails until the permission exists)
-pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=...
-pnpm -F skill deploy                              # manifest and interaction model now deploy
+# Skill (Phase 9): open trigger, create the development-stage skill, lock the trigger to its id
+pnpm deploy -c sla:skillPermissionOpen=1          # first registration only: any Alexa skill may invoke the Lambda for a minute
+pnpm -F skill deploy                              # ask deploy creates the skill and records sla:skillId
+pnpm deploy                                      # replaces the open trigger with one locked to the skill id
 ```
 
 Pass `-c` directly after `pnpm deploy` (a `--` separator makes pnpm swallow the flags

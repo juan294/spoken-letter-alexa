@@ -488,7 +488,7 @@ Independent reviewer (fresh context, `review-phase-9`) against `0ecdff9`. Seven 
 
 | Id | Finding | Disposition |
 | --- | --- | --- |
-| F9-1 | `ask deploy` fails manifest validation until the Lambda trigger permission exists, and the script then lost the skill id | Fixed: `spawnSync`, the id is recorded either way, the script explains the second run (D22) |
+| F9-1 | `ask deploy` fails manifest validation until the Lambda trigger permission exists, and the script then lost the skill id | Fixed after the first live registration: an open trigger permission for the first run (`sla:skillPermissionOpen`), then the id is recorded and the next deploy locks the trigger (D22) |
 | F9-2 | Device sessions (2 h) outlive the service token (1 h); a warm container's turns failed silently | Fixed: demo and device turns use a per-process service token cached until 5 minutes before `exp` and never the token stored with the session; tested with a lapsed stored token |
 | F9-3 | Verb-carrying catch-all carriers stripped the verb from the text | Fixed: intent-neutral carriers only; verb phrasings moved into `PlayStoryIntent` (D21) |
 | F9-4 | `"play {storyteller}'s story"` puts punctuation against a slot | Fixed: "play the story of {storyteller}" |
@@ -753,10 +753,13 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Found: icons are not needed for development-stage testing (only for certification,
   which the plan excludes); the stack has its own `infra/test/skill-stack.test.ts`; the
   `AudioPlayer` stream token can carry the whole `play`, so resume needs no store.
-- Chose: no icons and no store; the tests live in the dedicated file. Registration runs
-  `pnpm -F skill deploy` twice around a `pnpm deploy` because the Skill Management API
-  validates the Lambda trigger permission, which exists only once the skill id is known
-  (F9-1); `docs/release.md` and the script say so.
+- Chose: no icons and no store; the tests live in the dedicated file. Registration needs
+  an open trigger permission first (`pnpm deploy -c sla:skillPermissionOpen=1`): the
+  Skill Management API refuses to create a skill whose Lambda does not already allow
+  `alexa-appkit.amazon.com`, and it creates no skill at all on that failure, so the
+  "record the id either way" idea from F9-1 could not work (first registration,
+  2026-09-09). `pnpm -F skill deploy` then creates the skill and `pnpm deploy` locks the
+  trigger to its id; `docs/release.md` and the script say so.
 - Why: same behaviour with less state; the icon work is deferred until a store listing
   is in scope.
 

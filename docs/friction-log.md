@@ -285,12 +285,14 @@ entries by tool.
 - **No store is needed for pause and resume.** The stream token Alexa echoes back
   carries the whole `play` object (URL, title, storyteller, duration), so
   `AMAZON.ResumeIntent` rebuilds the directive from the token and the reported offset.
-- **ASK CLI is a separate toolchain, and registration is circular.** Severity low.
-  `ask configure` needs the developer console account (Owner gate); the Skill Management
-  API refuses a Lambda endpoint whose resource policy does not yet allow
-  `alexa-appkit.amazon.com`, while that permission should be restricted to a skill id
-  that does not exist before the first `ask deploy`. `pnpm -F skill deploy` therefore
-  records the id even when the manifest fails, and runs again after `pnpm deploy`. Whether an
+- **ASK CLI is a separate toolchain, and registration is circular.** Severity medium.
+  The Skill Management API refuses a Lambda endpoint whose resource policy does not yet
+  allow `alexa-appkit.amazon.com` ("The trigger setting for the Lambda ... is invalid")
+  and creates no skill at all, so no id exists to lock the permission to. The
+  registration is three steps: an open trigger permission
+  (`pnpm deploy -c sla:skillPermissionOpen=1`), `pnpm -F skill deploy`, then `pnpm
+  deploy` to lock the trigger to the new id. Also: ask-cli 2.30.7 has no `--ignore-hook`;
+  `--target skill-metadata` is the option that skips infrastructure. Whether an
   Alexa+ device in Spain routes to a development-stage `en-US` skill is still the open
   question from `amazon/us-account-checklist.md`; the first device test answers it.
 

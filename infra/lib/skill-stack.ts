@@ -19,6 +19,14 @@ export type SkillStackProps = StackProps & {
   bundle?: boolean;
   /** Recording mode (phase-9.md section 3): `-c sla:recordUtterances=1` for one session. */
   recordUtterances?: boolean;
+  /**
+   * First registration only (`-c sla:skillPermissionOpen=1`): the Skill Management API
+   * refuses to create a skill whose Lambda does not already allow
+   * `alexa-appkit.amazon.com`, and the id it would lock to does not exist yet. The open
+   * permission lets `ask deploy` create the skill; the next deploy with `sla:skillId`
+   * replaces it with the locked one.
+   */
+  skillPermissionOpen?: boolean;
 };
 
 /**
@@ -69,6 +77,11 @@ export class SkillStack extends Stack {
         principal: new iam.ServicePrincipal("alexa-appkit.amazon.com"),
         action: "lambda:InvokeFunction",
         eventSourceToken: props.skillId,
+      });
+    } else if (props.skillPermissionOpen) {
+      this.fn.addPermission("AlexaInvokeBootstrap", {
+        principal: new iam.ServicePrincipal("alexa-appkit.amazon.com"),
+        action: "lambda:InvokeFunction",
       });
     }
   }

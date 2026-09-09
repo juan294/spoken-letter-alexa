@@ -37,6 +37,9 @@ describe("SkillStack", () => {
     });
     // Before the skill exists there is no permission at all: nothing can invoke the function.
     expect(Object.keys(withoutId.findResources("AWS::Lambda::Permission"))).toHaveLength(0);
+    // The first registration needs an open trigger permission, replaced once the id is known.
+    const bootstrap = Template.fromStack(new SkillStack(new App(), "SkillBootstrap", { env, publicBaseUrl: "https://alexa.spokenletter.com", bundle: false, skillPermissionOpen: true }));
+    bootstrap.hasResourceProperties("AWS::Lambda::Permission", { Principal: "alexa-appkit.amazon.com", EventSourceToken: Match.absent() });
   });
 
   test("the role carries nothing beyond logs and X-Ray", () => {

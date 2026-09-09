@@ -7,8 +7,8 @@
 // 2. Runs `ask deploy` (skill manifest and the generated en-US interaction model; the
 //    Lambda is CDK-managed, so no skill infrastructure is deployed by ASK).
 // 3. Records the skill id in infra/cdk.context.json as `sla:skillId` and asks for one
-//    more `pnpm deploy`, which locks the invoke permission to that id; the first run's
-//    manifest validation fails until that permission exists, so run this script twice.
+//    more `pnpm deploy`, which locks the invoke permission to that id. The first run
+//    needs `pnpm deploy -c sla:skillPermissionOpen=1` beforehand (open trigger).
 //
 //   pnpm -F skill deploy            # real run
 //   pnpm -F skill deploy --dry-run  # checks only
@@ -55,15 +55,21 @@ if (dryRun) {
   process.exit(0);
 }
 
-// On the first run the skill is created but the manifest can fail validation: the Skill
-// Management API checks that the Lambda's resource policy already allows
-// alexa-appkit.amazon.com, and that permission only exists once sla:skillId is set. The
-// skill id is recorded either way so the next `pnpm deploy` adds the permission and a
-// second `pnpm -F skill deploy` completes the manifest.
+// The Skill Management API refuses to create a skill whose Lambda does not already allow
+// alexa-appkit.amazon.com, and the locked permission needs the id it is about to mint.
+// First run: `pnpm deploy -c sla:skillPermissionOpen=1` (open trigger), this script
+// creates the skill and records its id, then `pnpm deploy` locks the permission to it.
+const policy = spawnSync("aws", ["lambda", "get-policy", "--function-name", FUNCTION_NAME, "--region", region, "--profile", profile, "--query", "Policy", "--output", "text"], { encoding: "utf8" });
+if (policy.status !== 0 || !policy.stdout.includes("alexa-appkit.amazon.com")) {
+  fail("the skill Lambda has no Alexa trigger permission yet: run `pnpm deploy -c sla:skillPermissionOpen=1` once, then this script again");
+}
+console.log("ok: Alexa trigger permission present");
+
 const deploy = spawnSync("ask", ["deploy", "--target", "skill-metadata", "--profile", "default"], { cwd: pkgRoot, stdio: "inherit" });
+if (deploy.status !== 0) fail("ask deploy failed; see the output above");
 
 const statesPath = path.join(pkgRoot, ".ask/ask-states.json");
-if (!existsSync(statesPath)) fail("ask deploy left no .ask/ask-states.json; read the skill id from the developer console and pass -c sla:skillId=<id> to pnpm deploy");
+if (!existsSync(statesPath)) fail("ask deploy left no .ask/ask-states.json");
 const states = JSON.parse(readFileSync(statesPath, "utf8"));
 const skillId = states.profiles?.default?.skillId;
 if (typeof skillId !== "string" || !skillId.startsWith("amzn1.ask.skill.")) fail(`no skill id in ${statesPath}`);
@@ -72,10 +78,8 @@ const contextPath = path.join(repoRoot, "infra/cdk.context.json");
 const context = existsSync(contextPath) ? JSON.parse(readFileSync(contextPath, "utf8")) : {};
 const firstTime = context["sla:skillId"] !== skillId;
 context["sla:skillId"] = skillId;
+delete context["sla:skillPermissionOpen"];
 writeFileSync(contextPath, `${JSON.stringify(context, null, 2)}\n`);
-console.log(JSON.stringify({ event: "skill_deployed", skillId, askExit: deploy.status, context: path.relative(repoRoot, contextPath) }));
-if (deploy.status !== 0 || firstTime) {
-  console.log("Next: pnpm deploy (SkillStack locks lambda:InvokeFunction to this skill id and sets SKILL_ID), then pnpm -F skill deploy again to finish the manifest.");
-  process.exit(deploy.status === 0 ? 0 : 2);
-}
-console.log("Skill manifest and model deployed. Enable testing in the developer console (Test tab, Development) and use a device on the same account set to en-US.");
+console.log(JSON.stringify({ event: "skill_deployed", skillId, firstTime, context: path.relative(repoRoot, contextPath) }));
+if (firstTime) console.log("Next: pnpm deploy (SkillStack replaces the open trigger with one locked to this skill id and sets SKILL_ID).");
+console.log("Then enable testing in the developer console (Test tab, Development) and use a device on the same account set to en-US.");
