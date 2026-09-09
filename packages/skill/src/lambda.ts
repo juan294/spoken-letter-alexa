@@ -5,8 +5,12 @@ import { log } from "@spoken-letter-alexa/shared";
 import { createAgentClient } from "./agent-client.ts";
 import { type AlexaRequestEnvelope, type AlexaResponseEnvelope, createHandler } from "./handler.ts";
 
-/** Alexa waits about 8 s for the skill; the whole agent round trip gets 6. */
-const AGENT_BUDGET_MS = 6_000;
+/**
+ * Alexa waits about 8 s for the skill; the whole agent round trip gets 7. The first real
+ * device turn measured 5.7 s (two Bedrock calls plus one 39 ms tool call), so 6 s left
+ * no margin for a slower model call.
+ */
+const AGENT_BUDGET_MS = 7_000;
 
 const publicBaseUrl = process.env.PUBLIC_BASE_URL;
 const skillId = process.env.SKILL_ID;

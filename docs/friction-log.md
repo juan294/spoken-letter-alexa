@@ -332,6 +332,14 @@ entries by tool.
   called on `/mcp` directly, and the whole turn took 6.4 s against 4.2 s. The gateway path
   serves the demo subject as the plan intends; the latency figures go into the product
   feedback.
+- **First real-device playback (2026-09-09, phase-9 success criterion).** On the Owner's
+  smaller Echo Show in the office, Amazon account of the skill's vendor, device language
+  English (US): "Alexa, open spoken letter" answered the greeting; "play Ignacio" hit
+  `PlayStoryIntent`, the agent called `get_family_story` (39 ms) and the Echo played the
+  recording through `AudioPlayer.Play`; the lifecycle events followed. The turn took
+  5.7 s end to end, nearly all Bedrock, so the agent budget moves from 6 to 7 s inside
+  Alexa's 8. The Alexa+ Echo Show 11 (2025) test, the plan's open question about
+  development-stage skills on Alexa+ devices, is still to be run.
 - **The gateway path is too slow for a classic skill turn.** Severity high for Phase 9.
   The first simulated "ask spoken letter to play the story aunt whitney sent" reached
   the Lambda through `CatchAllIntent` correctly, then hit the 6-second agent budget

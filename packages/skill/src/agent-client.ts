@@ -13,7 +13,7 @@ export type AgentClientOptions = {
   /** `https://alexa.spokenletter.com`; the client calls `/agent/session` and `/agent/turn`. */
   baseUrl: string;
   fetch?: typeof fetch;
-  /** Whole-turn budget (session plus turn); Alexa waits about 8 s, the Lambda gives 6. */
+  /** Whole-turn budget (session plus turn); Alexa waits about 8 s, the Lambda gives 7. */
   timeoutMs: number;
 };
 

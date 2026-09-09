@@ -54,7 +54,7 @@ export class SkillStack extends Stack {
       runtime: lambda.Runtime.NODEJS_24_X,
       architecture: lambda.Architecture.ARM_64,
       memorySize: 256,
-      // Alexa waits 8 s for a skill response; the agent client gives up at 6 s and the
+      // Alexa waits 8 s for a skill response; the agent client gives up at 7 s and the
       // handler answers "still looking" (packages/skill/src/handler.ts).
       timeout: Duration.seconds(8),
       tracing: lambda.Tracing.ACTIVE,
