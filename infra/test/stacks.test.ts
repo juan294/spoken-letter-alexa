@@ -164,10 +164,12 @@ describe("Phase 6 stacks", () => {
         FunctionCode: Match.stringLikeRegexp("x-forwarded-authorization"),
         FunctionConfig: Match.objectLike({ Runtime: "cloudfront-js-2.0" }),
       });
-      const defaultBehavior = config.DefaultCacheBehavior as { FunctionAssociations?: { EventType: string }[] };
-      expect(defaultBehavior.FunctionAssociations?.map((a) => a.EventType).sort()).toEqual(["viewer-request", "viewer-response"]);
-      // The function URL renames WWW-Authenticate; the viewer-response function restores it (D24).
-      t.edge.hasResourceProperties("AWS::CloudFront::Function", { FunctionCode: Match.stringLikeRegexp("x-amzn-remapped-www-authenticate") });
+      const defaultBehavior = config.DefaultCacheBehavior as { FunctionAssociations?: { EventType: string }[]; LambdaFunctionAssociations?: { EventType: string }[] };
+      expect(defaultBehavior.FunctionAssociations?.map((a) => a.EventType)).toEqual(["viewer-request"]);
+      // The function URL renames WWW-Authenticate; an origin-response Lambda@Edge restores it,
+      // because viewer-response functions never run for origin status 400 and above (D24).
+      expect(defaultBehavior.LambdaFunctionAssociations?.map((a) => a.EventType)).toEqual(["origin-response"]);
+      t.edge.hasResourceProperties("AWS::Lambda::Function", { Code: { ZipFile: Match.stringLikeRegexp("x-amzn-remapped-www-authenticate") }, Runtime: "nodejs22.x" });
       // The SPA behaviours carry the routing function (deep links, /demo redirect).
       t.edge.hasResourceProperties("AWS::CloudFront::Function", { FunctionCode: Match.stringLikeRegexp("/demo/index.html") });
       const spa = (config.CacheBehaviors as { PathPattern: string; FunctionAssociations?: { EventType: string }[] }[]).filter((b) => b.PathPattern.startsWith("/demo"));

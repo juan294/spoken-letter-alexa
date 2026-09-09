@@ -42,6 +42,7 @@ Filled in per phase. Every entry does real work in code and has a friction-log e
 | AWS CDK | One-command deploy; `CoreStack` (DynamoDB, KMS, Secrets Manager) | Phase 0: synthesized and tested |
 | MCP TypeScript SDK v2 (`@modelcontextprotocol/server`) | Dual-era `/mcp` handler: 2026-07-28 plus the 2025-era `initialize` Alexa+ sends | Phase 1: protocol and latency tests green |
 | Lambda function URL (RESPONSE_STREAM), CloudFront, ACM, Route53 | `ApiStack` (one arm64 Lambda from `packages/app`, streaming URL behind an OAC) and `EdgeStack` (distribution, WAF rate rule, HSTS, DNS aliases) | Phase 6: synthesized and tested; deploy is an Owner step |
+| Lambda@Edge | Origin-response function that restores the `WWW-Authenticate` challenge the function URL renames (D24) | First deploy, 2026-09-09 |
 | DynamoDB | OAuth state (`sla-oauth`: pending authorizations, link tokens, codes, refresh tokens) | Phase 2: `DynamoStore` with mocked-client tests; deployed in Phase 6 |
 | KMS (asymmetric RSA) | JWT signing (`RSASSA_PKCS1_V1_5_SHA_256`) and the JWKS document | Phase 2: `KmsSigner` with mocked-client tests; deployed in Phase 6 |
 | Secrets Manager | `sla/bridge` and `sla/oauth-clients`, read once per cold start | Phase 6: `CoreStack`, `seed:secrets`, `loadSecretsIntoEnv` tested |

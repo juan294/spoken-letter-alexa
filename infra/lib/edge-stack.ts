@@ -3,6 +3,7 @@ import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as route53 from "aws-cdk-lib/aws-route53";
 import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -61,20 +62,22 @@ export const COPY_AUTHORIZATION_FUNCTION = `function handler(event) {
 }`;
 
 /**
- * CloudFront Function (viewer response, API): Lambda function URLs rename a few response
- * headers, `WWW-Authenticate` among them, to `x-amzn-remapped-*`. MCP clients discover the
+ * Lambda@Edge (origin response, API): Lambda function URLs rename a few response headers,
+ * `WWW-Authenticate` among them, to `x-amzn-remapped-*`. MCP clients discover the
  * authorization server from the RFC 9728 challenge in `WWW-Authenticate`, so the original
- * name is restored at the edge (first deploy finding, D24).
+ * name is restored at the edge. A CloudFront Function cannot do it: viewer-response
+ * functions never run for origin status 400 and above, while an origin-response
+ * Lambda@Edge runs for every origin response (first deploy finding, D24).
  */
-export const RESTORE_WWW_AUTHENTICATE_FUNCTION = `function handler(event) {
-  var headers = event.response.headers;
-  var remapped = headers["x-amzn-remapped-www-authenticate"];
-  if (remapped) {
-    headers["www-authenticate"] = { value: remapped.value };
-    delete headers["x-amzn-remapped-www-authenticate"];
+export const RESTORE_WWW_AUTHENTICATE_HANDLER = `exports.handler = async (event) => {
+  const response = event.Records[0].cf.response;
+  const remapped = response.headers["x-amzn-remapped-www-authenticate"];
+  if (remapped && remapped.length > 0) {
+    response.headers["www-authenticate"] = remapped.map((header) => ({ key: "WWW-Authenticate", value: header.value }));
+    delete response.headers["x-amzn-remapped-www-authenticate"];
   }
-  return event.response;
-}`;
+  return response;
+};`;
 
 /** CloudFront Function (viewer request, SPA): deep links resolve to the app; `/demo` redirects to `/demo/`. */
 export const SPA_ROUTING_FUNCTION = `function handler(event) {
@@ -159,10 +162,13 @@ export class EdgeStack extends Stack {
       code: cloudfront.FunctionCode.fromInline(COPY_AUTHORIZATION_FUNCTION),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
-    const restoreWwwAuthenticate = new cloudfront.Function(this, "RestoreWwwAuthenticate", {
-      runtime: cloudfront.FunctionRuntime.JS_2_0,
-      comment: "Restore WWW-Authenticate renamed by the function URL",
-      code: cloudfront.FunctionCode.fromInline(RESTORE_WWW_AUTHENTICATE_FUNCTION),
+    const restoreWwwAuthenticate = new cloudfront.experimental.EdgeFunction(this, "RestoreWwwAuthenticate", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: "index.handler",
+      code: lambda.Code.fromInline(RESTORE_WWW_AUTHENTICATE_HANDLER),
+      memorySize: 128,
+      timeout: Duration.seconds(5),
+      description: "Restore WWW-Authenticate renamed by the function URL (origin response)",
     });
     const spaRouting = new cloudfront.Function(this, "SpaRouting", {
       functionName: "sla-alexa-spa-routing",
@@ -207,10 +213,8 @@ export class EdgeStack extends Stack {
         responseHeadersPolicy,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         compress: false, // SSE frames must pass through untouched
-        functionAssociations: [
-          { function: copyAuthorization, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST },
-          { function: restoreWwwAuthenticate, eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE },
-        ],
+        functionAssociations: [{ function: copyAuthorization, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+        edgeLambdas: [{ functionVersion: restoreWwwAuthenticate, eventType: cloudfront.LambdaEdgeEventType.ORIGIN_RESPONSE }],
       },
       additionalBehaviors: {
         "/demo": { origin: assetsOrigin, ...spaBehavior },

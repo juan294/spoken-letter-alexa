@@ -316,9 +316,12 @@ entries by tool.
   on the deployed function: the local gate cannot see the runtime's handler check.
 - **Function URLs rename `WWW-Authenticate`.** Severity high for an MCP server. The
   function URL returns the challenge as `x-amzn-remapped-www-authenticate`, so the RFC
-  9728 discovery hint never reached clients through CloudFront; a viewer-response
-  CloudFront Function restores the header (D24). Amazon: this remapping is documented
-  for function URLs but easy to miss when the protocol depends on that exact header.
+  9728 discovery hint never reached clients through CloudFront. A viewer-response
+  CloudFront Function did not help: CloudFront skips viewer-response functions when the
+  origin answers 400 or above (documented under "Restrictions on all edge functions").
+  A Lambda@Edge origin-response function, which runs for every origin response, restores
+  the header (D24). Amazon: the remapping is documented for function URLs but easy to
+  miss when the protocol depends on that exact header on a 401.
 - **`cdk deploy --require-approval broadening` prompts.** Severity low. An agent-driven
   deploy uses `--require-approval never` after the Owner's explicit authorization; the
   documented command keeps the prompt for hand runs.

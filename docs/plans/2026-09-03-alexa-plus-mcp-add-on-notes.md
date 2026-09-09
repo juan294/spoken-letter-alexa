@@ -779,8 +779,11 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Found: Lambda function URLs rename `WWW-Authenticate` to
   `x-amzn-remapped-www-authenticate` on the way out; `scripts/verify-deploy.mjs` failed
   its RFC 9728 probe against the live host while the Lambda's own response was correct.
-- Chose: a CloudFront Function on the API behaviour's viewer response copies the value
+- Chose: a Lambda@Edge origin-response function on the API behaviour copies the value
   back under the original name and drops the remapped header; tested in
-  `infra/test/stacks.test.ts`.
+  `infra/test/stacks.test.ts`. A CloudFront Function was tried first and deployed, but
+  CloudFront never invokes viewer-response functions when the origin answers 400 or
+  above, so the 401 challenge passed it by; Lambda@Edge origin-response functions run
+  for every origin response.
 - Why: MCP clients (Alexa+, the Inspector, the agent) discover the authorization server
   from that header; nothing else in the stack can rename it.
