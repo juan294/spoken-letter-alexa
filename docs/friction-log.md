@@ -322,6 +322,21 @@ entries by tool.
   A Lambda@Edge origin-response function, which runs for every origin response, restores
   the header (D24). Amazon: the remapping is documented for function URLs but easy to
   miss when the protocol depends on that exact header on a 401.
+- **Deploys 2 and 3 (2026-09-09, Owner-authorized).** Gateway `sla-alexa`, target
+  `spoken-letter` `READY` after the manual sync, `GatewayUrl` recorded in
+  `infra/cdk.context.json`; the API now targets the gateway with SigV4 (D19). A live demo
+  turn through the gateway: `spoken-letter___list_family_stories` (the gateway prefixes
+  tool names with the target name) answered in 2.3 s against 15 ms for the same tool
+  called on `/mcp` directly, and the whole turn took 6.4 s against 4.2 s. The gateway path
+  serves the demo subject as the plan intends; the latency figures go into the product
+  feedback.
+- **`SynchronizeGatewayTargets` needs identity permissions on the caller.** Severity
+  medium. The first synchronization failed with "not authorized to perform
+  bedrock-agentcore:GetWorkloadAccessToken on workload-identity/<gateway>": the sync
+  fetches the target's outbound OAuth token under the caller's identity, not the
+  gateway's role, so the custom resource's policy now grants `GetWorkloadAccessToken` and
+  `GetResourceOauth2Token` on the gateway's workload identity and the `sla-alexa-m2m`
+  provider. A manual sync as the admin user confirmed the OAuth setup itself worked.
 - **`cdk deploy --require-approval broadening` prompts.** Severity low. An agent-driven
   deploy uses `--require-approval never` after the Owner's explicit authorization; the
   documented command keeps the prompt for hand runs.
@@ -349,15 +364,18 @@ answers 403 without `x-origin-verify`; `/demo/` serves the simulator; `/fixtures
 answers 403 until the Owner's recordings are exported (`fixtures/README.md`) and the
 catalog is bundled (`fixtures_missing` warning at cold start until then).
 
-- **Anthropic models on Bedrock need the use-case form even when access shows as
+- **Anthropic models on Bedrock need a Marketplace agreement even when access shows as
   authorized.** Severity medium (found on the first live agent turn). The inference
   profile is `ACTIVE`, `get-foundation-model-availability` reports `AUTHORIZED` and
-  `AVAILABLE`, yet the first `Converse` call answers "Model use case details have not
-  been submitted for this account"; the agent returned its spoken fallback with no tool
-  calls, and Polly, S3 and the session table all worked. The form is a console-only step
-  for the account holder (Bedrock, Model access, Anthropic); the API takes up to 15
-  minutes to honour it. Amazon: surfacing that state in `get-foundation-model-availability`
-  would save a deploy cycle.
+  `AVAILABLE`, the use-case form was already on file (`get-use-case-for-model-access`),
+  yet the first `Converse` call from the Lambda answered "Model use case details have
+  not been submitted for this account" and the same call from the admin IAM user answered
+  "not authorized to perform aws-marketplace:Subscribe". The real state was
+  `agreementAvailability: NOT_AVAILABLE`: no Marketplace agreement for Claude Haiku 4.5
+  yet. Accepting the offer (console, 12:06 UTC) fixed it within minutes; the next turn
+  called `list_family_stories` in 14.6 ms and answered in 4.2 s. Amazon: the two error
+  messages point at the wrong causes; `agreementAvailability` was the field that told the
+  truth.
 
 ## Kiro Crew
 

@@ -256,6 +256,8 @@ describe("Phase 6 stacks", () => {
       const actions = statements(t.gateway).flatMap((statement) => ([] as string[]).concat(statement.Action));
       expect(actions).toContain("bedrock-agentcore:InvokeGateway");
       expect(actions).toContain("bedrock-agentcore:SynchronizeGatewayTargets");
+      // The sync resolves the outbound OAuth token as the caller (first deploy finding).
+      expect(actions).toContain("bedrock-agentcore:GetWorkloadAccessToken");
       t.gateway.hasResourceProperties("AWS::BedrockAgentCore::GatewayTarget", {
         TargetConfiguration: { Mcp: { McpServer: { Endpoint: "https://alexa.spokenletter.com/mcp", ListingMode: "DEFAULT" } } },
       });

@@ -97,6 +97,18 @@ export class GatewayStack extends Stack {
       onUpdate: synchronize,
       policy: cr.AwsCustomResourcePolicy.fromStatements([
         new iam.PolicyStatement({ actions: ["bedrock-agentcore:SynchronizeGatewayTargets"], resources: [this.gateway.gatewayArn, `${this.gateway.gatewayArn}/*`] }),
+        // The synchronization fetches the outbound OAuth token under the caller's identity:
+        // the gateway's workload identity and the m2m provider in the token vault (first
+        // deploy finding: "not authorized to perform GetWorkloadAccessToken").
+        new iam.PolicyStatement({
+          actions: ["bedrock-agentcore:GetWorkloadAccessToken", "bedrock-agentcore:GetResourceOauth2Token"],
+          resources: [
+            `arn:aws:bedrock-agentcore:${this.region}:${this.account}:workload-identity-directory/default`,
+            `arn:aws:bedrock-agentcore:${this.region}:${this.account}:workload-identity-directory/default/workload-identity/${this.gateway.gatewayId}`,
+            `arn:aws:bedrock-agentcore:${this.region}:${this.account}:token-vault/default`,
+            `arn:aws:bedrock-agentcore:${this.region}:${this.account}:token-vault/default/oauth2credentialprovider/sla-alexa-m2m`,
+          ],
+        }),
       ]),
     });
     sync.node.addDependency(this.target);
