@@ -326,6 +326,39 @@ entries by tool.
   deploy uses `--require-approval never` after the Owner's explicit authorization; the
   documented command keeps the prompt for hand runs.
 
+## 2026-09-09: deploy 1 verified (release evidence, `docs/release.md` A3 and A4 step 6)
+
+Candidate `cc79965` on `develop` (gate PASS: typecheck, lint, 319 tests, synth, e2e),
+deployed with `AWS_PROFILE=archy` to account `106403001709`, `us-east-1`. Six stacks:
+Core, Simulator, Api, Edge, Observability, Skill; the AgentCore Gateway waits for the
+Owner's go (deploys 2 and 3). `scripts/verify-deploy.mjs` from Madrid, `ASSERT_P95=0`,
+with the seeded `alexa-m2m` secret: every check passed. Discovery documents, the 401
+challenge with `resource_metadata` (after D24), `client_credentials` token, legacy
+`initialize` at `2025-03-26` echoed, modern `server/discover` at `2026-07-28`, 20 of 20
+`tools/call`, SSE pass-through with the first frame after 361 ms.
+
+| Measure from Madrid (n=20) | Value |
+| --- | --- |
+| tools/call p50 | 340 ms |
+| tools/call p95 | 377 ms |
+| tools/call p99 | 382 ms |
+
+The plan's p95 < 500 ms target is met even from Europe; the `us-east-1` runner number
+(`.github/workflows/latency.yml`) still needs `SLA_M2M_SECRET`. Direct function URL
+answers 403 without `x-origin-verify`; `/demo/` serves the simulator; `/fixtures/audio/*`
+answers 403 until the Owner's recordings are exported (`fixtures/README.md`) and the
+catalog is bundled (`fixtures_missing` warning at cold start until then).
+
+- **Anthropic models on Bedrock need the use-case form even when access shows as
+  authorized.** Severity medium (found on the first live agent turn). The inference
+  profile is `ACTIVE`, `get-foundation-model-availability` reports `AUTHORIZED` and
+  `AVAILABLE`, yet the first `Converse` call answers "Model use case details have not
+  been submitted for this account"; the agent returned its spoken fallback with no tool
+  calls, and Polly, S3 and the session table all worked. The form is a console-only step
+  for the account holder (Bedrock, Model access, Anthropic); the API takes up to 15
+  minutes to honour it. Amazon: surfacing that state in `get-foundation-model-availability`
+  would save a deploy cycle.
+
 ## Kiro Crew
 
 No session recorded yet; see the Phase 0 entry above.
