@@ -79,7 +79,7 @@ fixture provider, which lets every tool be exercised without the private reposit
 
 | Probe | Owner | Evidence |
 | --- | --- | --- |
-| Deployed identity: `/health` returns the candidate commit | Owner | curl body saved locally |
+| Deployed identity: `/healthz` answers `{ ok, name, version }` | Owner | curl body saved locally |
 | Unauthenticated `POST /mcp` returns 401 with Protected Resource Metadata (RFC 9728) | Owner | curl body |
 | `/.well-known/oauth-authorization-server` lists `client_credentials` (RFC 8414) | Owner | curl body |
 | `/.well-known/jwks.json` serves the KMS public key | Owner | curl body |
@@ -144,7 +144,7 @@ seeded `sla/oauth-clients` document the authenticated checks run too. From Spain
 1. Identify the candidate: merge `develop` into `main` locally, then `git rev-parse main`, clean tree.
 2. Run the local gate: `python3 .rpi/scripts/rpi-verify.py`.
 3. Deploy that candidate: `pnpm deploy` (Owner authorization).
-4. Verify deployed identity (`/health`).
+4. Verify deployed identity (`/healthz`).
 5. Run the A3 probes.
 6. Record results in the friction log entry for the release.
 7. Owner approval.

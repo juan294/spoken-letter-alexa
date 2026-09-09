@@ -60,6 +60,22 @@ export const COPY_AUTHORIZATION_FUNCTION = `function handler(event) {
   return event.request;
 }`;
 
+/**
+ * CloudFront Function (viewer response, API): Lambda function URLs rename a few response
+ * headers, `WWW-Authenticate` among them, to `x-amzn-remapped-*`. MCP clients discover the
+ * authorization server from the RFC 9728 challenge in `WWW-Authenticate`, so the original
+ * name is restored at the edge (first deploy finding, D24).
+ */
+export const RESTORE_WWW_AUTHENTICATE_FUNCTION = `function handler(event) {
+  var headers = event.response.headers;
+  var remapped = headers["x-amzn-remapped-www-authenticate"];
+  if (remapped) {
+    headers["www-authenticate"] = { value: remapped.value };
+    delete headers["x-amzn-remapped-www-authenticate"];
+  }
+  return event.response;
+}`;
+
 /** CloudFront Function (viewer request, SPA): deep links resolve to the app; `/demo` redirects to `/demo/`. */
 export const SPA_ROUTING_FUNCTION = `function handler(event) {
   var request = event.request;
@@ -143,6 +159,11 @@ export class EdgeStack extends Stack {
       code: cloudfront.FunctionCode.fromInline(COPY_AUTHORIZATION_FUNCTION),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
+    const restoreWwwAuthenticate = new cloudfront.Function(this, "RestoreWwwAuthenticate", {
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      comment: "Restore WWW-Authenticate renamed by the function URL",
+      code: cloudfront.FunctionCode.fromInline(RESTORE_WWW_AUTHENTICATE_FUNCTION),
+    });
     const spaRouting = new cloudfront.Function(this, "SpaRouting", {
       functionName: "sla-alexa-spa-routing",
       comment: "Deep links to /demo/index.html; /demo redirects to /demo/",
@@ -186,7 +207,10 @@ export class EdgeStack extends Stack {
         responseHeadersPolicy,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         compress: false, // SSE frames must pass through untouched
-        functionAssociations: [{ function: copyAuthorization, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+        functionAssociations: [
+          { function: copyAuthorization, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST },
+          { function: restoreWwwAuthenticate, eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE },
+        ],
       },
       additionalBehaviors: {
         "/demo": { origin: assetsOrigin, ...spaBehavior },

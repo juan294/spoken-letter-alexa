@@ -165,7 +165,9 @@ describe("Phase 6 stacks", () => {
         FunctionConfig: Match.objectLike({ Runtime: "cloudfront-js-2.0" }),
       });
       const defaultBehavior = config.DefaultCacheBehavior as { FunctionAssociations?: { EventType: string }[] };
-      expect(defaultBehavior.FunctionAssociations?.map((a) => a.EventType)).toEqual(["viewer-request"]);
+      expect(defaultBehavior.FunctionAssociations?.map((a) => a.EventType).sort()).toEqual(["viewer-request", "viewer-response"]);
+      // The function URL renames WWW-Authenticate; the viewer-response function restores it (D24).
+      t.edge.hasResourceProperties("AWS::CloudFront::Function", { FunctionCode: Match.stringLikeRegexp("x-amzn-remapped-www-authenticate") });
       // The SPA behaviours carry the routing function (deep links, /demo redirect).
       t.edge.hasResourceProperties("AWS::CloudFront::Function", { FunctionCode: Match.stringLikeRegexp("/demo/index.html") });
       const spa = (config.CacheBehaviors as { PathPattern: string; FunctionAssociations?: { EventType: string }[] }[]).filter((b) => b.PathPattern.startsWith("/demo"));

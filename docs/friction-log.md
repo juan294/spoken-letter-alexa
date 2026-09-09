@@ -314,6 +314,11 @@ entries by tool.
   gate is now itself `awslambda.streamifyResponse`-wrapped and writes its 403 to the
   response stream (`gateStreamingHandler`, unit-tested with a fake runtime). Found only
   on the deployed function: the local gate cannot see the runtime's handler check.
+- **Function URLs rename `WWW-Authenticate`.** Severity high for an MCP server. The
+  function URL returns the challenge as `x-amzn-remapped-www-authenticate`, so the RFC
+  9728 discovery hint never reached clients through CloudFront; a viewer-response
+  CloudFront Function restores the header (D24). Amazon: this remapping is documented
+  for function URLs but easy to miss when the protocol depends on that exact header.
 - **`cdk deploy --require-approval broadening` prompts.** Severity low. An agent-driven
   deploy uses `--require-approval never` after the Owner's explicit authorization; the
   documented command keeps the prompt for hand runs.

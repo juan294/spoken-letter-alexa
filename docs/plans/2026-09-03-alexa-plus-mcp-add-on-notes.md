@@ -772,3 +772,15 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
   reservation can return with the value the plan intended.
 - Why: the demo load is one parent and one Echo; the reservation protected against a
   noisy neighbour that does not exist in this account.
+
+### D24. `WWW-Authenticate` restored by a viewer-response function (first deploy, 2026-09-09)
+
+- Plan said: the 401 challenge with `resource_metadata` reaches the client through CloudFront.
+- Found: Lambda function URLs rename `WWW-Authenticate` to
+  `x-amzn-remapped-www-authenticate` on the way out; `scripts/verify-deploy.mjs` failed
+  its RFC 9728 probe against the live host while the Lambda's own response was correct.
+- Chose: a CloudFront Function on the API behaviour's viewer response copies the value
+  back under the original name and drops the remapped header; tested in
+  `infra/test/stacks.test.ts`.
+- Why: MCP clients (Alexa+, the Inspector, the agent) discover the authorization server
+  from that header; nothing else in the stack can rename it.
