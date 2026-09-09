@@ -1,5 +1,5 @@
 import { type Hono } from "hono";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 
 import { createOfflineDeps } from "./offline.ts";
 import { createAgentApp, type AgentDeps } from "./routes.ts";
@@ -78,7 +78,10 @@ describe("agent routes", () => {
     expect(turn.toolCalls.map((call) => call.name)).toEqual(["list_family_stories"]);
   });
 
-  test("device mode keys the session by the Alexa user id, reuses it and never stores the id in clear", async () => {
+  test("device mode keys the session by the Alexa user id, reuses it, never stores the id in clear, and talks to the device MCP endpoint", async () => {
+    const deviceFetch = vi.fn<typeof fetch>((input, init) => h.fetch(input, init));
+    const deviceApp = createAgentApp({ ...deps, mcpUrl: "https://gateway.invalid/mcp", mcpFetch: undefined, deviceMcp: { url: MCP_URL, fetch: deviceFetch } });
+    const app = deviceApp;
     const first = (await (await post(app, "/agent/session", { mode: "device", deviceUserId: "amzn1.ask.account.OWNER" })).json()) as SessionBody;
     expect(first).toMatchObject({ mode: "device", subject: "svc:alexa-m2m", offline: false });
     expect(first.sessionId).toMatch(/^dev_[0-9a-f]{32}$/);
@@ -89,6 +92,7 @@ describe("agent routes", () => {
     expect(again.sessionId).toBe(first.sessionId);
     const next = (await (await post(app, "/agent/turn", { sessionId: again.sessionId, text: "play another" })).json()) as TurnBody;
     expect(next.play?.title).toBe("The owl who forgot how to hoot");
+    expect(deviceFetch).toHaveBeenCalled();
     expect((await post(app, "/agent/session", { mode: "device" })).status).toBe(400);
   });
 

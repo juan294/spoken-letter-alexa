@@ -14,6 +14,12 @@ export type AgentDeps = {
   modelId: string | null;
   mcpUrl: string;
   mcpFetch?: typeof fetch | undefined;
+  /**
+   * The MCP endpoint for device (classic skill) sessions. The demo subject goes through
+   * the AgentCore Gateway when `MCP_URL` names it; a gateway tool call costs seconds and
+   * Alexa allows the skill eight, so device turns take the server's own `/mcp`.
+   */
+  deviceMcp?: { url: string; fetch?: typeof fetch | undefined } | undefined;
   sessions: SessionStore;
   speech: SpeechSynthesizer;
   transcribe: Transcriber;
@@ -96,7 +102,8 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const session = await deps.sessions.get(parsed.data.sessionId);
     if (!session) return jsonError(c, 404, "session_not_found", "Start a new session");
     const accessToken = session.mode === "linked" ? session.accessToken : await serviceToken();
-    const result = await runTurn({ model: deps.model, mcpUrl: deps.mcpUrl, accessToken, fetch: deps.mcpFetch, history: session.history }, parsed.data.text);
+    const mcp = session.mode === "device" && deps.deviceMcp ? deps.deviceMcp : { url: deps.mcpUrl, fetch: deps.mcpFetch };
+    const result = await runTurn({ model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history }, parsed.data.text);
     // The skill speaks `say` with Alexa's own voice, so Polly runs for the simulator only.
     const [speechUrl] = await Promise.all([
       session.mode === "device" ? Promise.resolve(null) : deps.speech.synthesize(result.say),

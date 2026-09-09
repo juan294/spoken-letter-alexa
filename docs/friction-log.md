@@ -332,6 +332,13 @@ entries by tool.
   called on `/mcp` directly, and the whole turn took 6.4 s against 4.2 s. The gateway path
   serves the demo subject as the plan intends; the latency figures go into the product
   feedback.
+- **The gateway path is too slow for a classic skill turn.** Severity high for Phase 9.
+  The first simulated "ask spoken letter to play the story aunt whitney sent" reached
+  the Lambda through `CatchAllIntent` correctly, then hit the 6-second agent budget
+  ("This operation was aborted"): one gateway tool call costs 2 to 3 seconds cold and a
+  turn needs two plus two Bedrock calls. Device sessions now use the server's own `/mcp`
+  (`deviceMcp` in the agent deps, 15 ms per tool) while the demo subject keeps the
+  gateway; the skill's budget stays at 6 seconds inside Alexa's 8.
 - **`SynchronizeGatewayTargets` needs identity permissions on the caller.** Severity
   medium. The first synchronization failed with "not authorized to perform
   bedrock-agentcore:GetWorkloadAccessToken on workload-identity/<gateway>": the sync

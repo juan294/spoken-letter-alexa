@@ -145,6 +145,8 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
           modelId: env.BEDROCK_MODEL_ID,
           mcpUrl: env.MCP_URL,
           mcpFetch,
+          // Device (classic skill) turns must fit Alexa's eight seconds: always the local /mcp.
+          deviceMcp: { url: `${issuer}/mcp`, fetch: selfFetch },
           sessions:
             env.AGENT_SESSIONS_STORE === "dynamo"
               ? new DynamoSessionStore({ client: documentClient(env), tableName: env.AGENT_SESSIONS_TABLE })
