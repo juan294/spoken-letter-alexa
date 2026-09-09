@@ -1,10 +1,11 @@
 # Fixture stories
 
-The recordings under `fixtures/audio/` are the author's own voice, exported from Spoken
-Letter through the normal MP3 download (the `downloaded` status is exactly what the
-product calls delivery). They are included under this repository's MIT licence for
-demonstration: the `demo` subject and the judges' simulator play them. No AI narration,
-no child voice, no child data.
+The recordings under `fixtures/audio/` are three English stories recorded by a family
+member (shown as "Aunt Whitney") for the Owner's family and exported by the Owner through
+the normal MP3 download (the `downloaded` status is exactly what the product calls
+delivery). They are included under this repository's MIT licence for demonstration: the
+`demo` subject and the judges' simulator play them. No AI narration, no child voice, no
+child data: the catalog carries title, storyteller, duration and delivery time only.
 
 `fixtures/stories.json` is the catalog the fixture provider serves:
 
