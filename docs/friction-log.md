@@ -361,14 +361,16 @@ challenge with `resource_metadata` (after D24), `client_credentials` token, lega
 `initialize` at `2025-03-26` echoed, modern `server/discover` at `2026-07-28`, 20 of 20
 `tools/call`, SSE pass-through with the first frame after 361 ms.
 
-| Measure from Madrid (n=20) | Value |
-| --- | --- |
-| tools/call p50 | 340 ms |
-| tools/call p95 | 377 ms |
-| tools/call p99 | 382 ms |
+| tools/call (n=20) | Madrid | GitHub runner, us-east-1 |
+| --- | --- | --- |
+| p50 | 340 ms | 95 ms |
+| p95 | 377 ms | 107 ms |
+| p99 | 382 ms | 109 ms |
+| first SSE frame | 361 ms | 73 ms |
 
-The plan's p95 < 500 ms target is met even from Europe; the `us-east-1` runner number
-(`.github/workflows/latency.yml`) still needs `SLA_M2M_SECRET`. Direct function URL
+The plan's p95 < 500 ms target is met from both vantage points. The runner figures come
+from the manual `latency` workflow (run 34377641274, 2026-09-09) with `SLA_M2M_SECRET`
+set by the Owner; every check passed there too. Direct function URL
 answers 403 without `x-origin-verify`; `/demo/` serves the simulator; `/fixtures/audio/*`
 answers 403 until the Owner's recordings are exported (`fixtures/README.md`) and the
 catalog is bundled (`fixtures_missing` warning at cold start until then).
