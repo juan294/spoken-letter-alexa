@@ -7,6 +7,10 @@
 | Alexa+ MCP Toolkit access (`alexa-ai` CLI, Inspector, simulator) | high | A self-serve access tier for hackathon entrants, and the manifest schema outside the gated toolkit. |
 | Alexa+ audio playback contract | high | One page stating which content types Alexa+ renders and plays from a tool result (`resource_link`, screened vs screenless). |
 | Alexa+ protocol facts | medium | Publish the live client's `initialize` version (2025-03-26), the Inspector's (2025-06-18) and its `Mcp-Session-Id` expectation on one page. |
+| Alexa custom skill turn budget | high | State the endpoint timeout as a number, and report per-turn endpoint latency against it in the simulator. |
+| Alexa progressive responses (Directive Service) | medium | Connect `apiEndpoint`/`apiAccessToken` to slow endpoints in the latency guidance, and ship it in the audio-player sample. |
+| ASK CLI interaction model validation | medium | Fail or warn when a manifest declares `AUDIO_PLAYER` but the model omits the required playback intents, or when two `AMAZON.SearchQuery` intents share carrier prefixes. |
+| `AMAZON.FirstName` built-in slot | low | Cover kinship-qualified names ("Aunt Whitney"), or document that a custom slot type is required. |
 | CloudFront OAC in front of a Lambda function URL | high | Document that the OAC overwrites the viewer's `Authorization` header, or let the OAC use another header; the viewer-request copy function is the workaround. |
 | MCP TypeScript SDK v2 | low | Export the modern revision constant; one "minimal modern request" example (three `_meta` keys, three headers). |
 | Strands Agents SDK | medium | Map `structuredContent` in `McpTool`; ship a 2.x-compatible client transport; stop pulling native optional dependencies. |
@@ -395,6 +399,106 @@ catalog is bundled (`fixtures_missing` warning at cold start until then).
   called `list_family_stories` in 14.6 ms and answered in 4.2 s. Amazon: the two error
   messages point at the wrong causes; `agreementAvailability` was the field that told the
   truth.
+
+## 2026-09-10: first unscripted conversation on a real Echo
+
+Six spoken turns between 08:56 and 08:58 UTC, plus one at 08:28, reconstructed from
+`/aws/lambda/sla-alexa-skill` and `/aws/lambda/sla-alexa-api`. This is the first entry
+written from an ordinary use of the skill rather than a scripted demo run, and the first
+time end-to-end turn latency was measured as the speaker experiences it.
+
+| Time (UTC) | Turn | Tools called | Played | Lambda duration |
+| --- | --- | --- | --- | --- |
+| 08:28:15 | PlayStoryIntent (cold) | list, get | yes | 6892 ms (billed 7033) |
+| 08:56:20 | LaunchRequest (cold) | — | — | 36 ms |
+| 08:56:33 | empty response | — | — | 2.1 ms |
+| 08:56:43 | PlayStoryIntent | **none** | **no** | **6357 ms** |
+| 08:56:57 | empty response | — | — | 4.2 ms |
+| 08:57:05 | empty response | — | — | 2.6 ms |
+| 08:57:14 | WhatIsNewIntent | list | no | 3077 ms |
+| 08:57:28 | empty response | — | — | 14 ms |
+| 08:57:40 | PlayStoryIntent | get | yes | 3216 ms |
+| 08:57:48 | empty response | — | — | 1.8 ms |
+| 08:58:04 | empty response ×2 | — | — | ~1.8 ms |
+
+The request type is not logged, so the sub-40 ms empty responses are identified only by
+their timing shape: they are `SessionEndedRequest` and `AudioPlayer.*` events. The 13 s
+gap between the launch at 08:56:20 and the empty response at 08:56:33 fits an unanswered
+open question; the pair at 08:58:04 fits playback being stopped about 21 s into a
+five-minute story. Nothing in the logs confirms either reading. That is itself the last
+finding below.
+
+**The measurement that matters: turn latency is model round trips, nothing else.**
+`tool_latency` reports 0.02–0.33 ms server-side and 9.9–25.4 ms client-side for every call
+in the session. One tool call produces a ~3.1 s turn; two produce ~5.7–6.9 s. Each model
+round trip therefore costs about 2.8 s and the MCP backend costs nothing measurable. The
+p95 of 107 ms recorded on 2026-09-09 is a true number about a layer the speaker never
+perceives. The only latency lever is the number of model round trips per turn.
+
+### Amazon-facing
+
+- **A custom skill's ~8 s turn budget is not reconcilable with an agentic turn, and
+  nothing in the tooling says so.** Severity high. A two-tool agent turn measured 6892 ms
+  on a cold container, 100 ms under this repo's own 7 s client abort and roughly 1 s under
+  Alexa's ceiling. The developer console, `ask deploy` and `ask validate` never mention a
+  budget, and there is no warning, metric or simulator check that a skill endpoint is
+  approaching it. Fix: state the endpoint timeout in the custom-skill documentation as a
+  number, and have the simulator report per-turn endpoint latency against it.
+- **Progressive responses are the documented remedy for exactly this and are almost
+  invisible.** Severity medium. `context.System.apiEndpoint` and `apiAccessToken` arrive in
+  every request envelope and are the whole mechanism, but nothing in the request reference,
+  the skill templates or the ASK SDK quickstart connects them to slow endpoints. Fix:
+  mention the Directive Service in the custom-skill latency guidance and ship it in the
+  audio-player sample skill.
+- **Declaring `AUDIO_PLAYER` in `skill.json` does not add or require the playback
+  intents.** Severity medium. The developer console adds `AMAZON.NextIntent`,
+  `PreviousIntent`, `StartOverIntent`, `RepeatIntent`, `LoopOn/OffIntent` and
+  `ShuffleOn/OffIntent` when the interface is switched on in the UI. A `skill-package`
+  deployed with `ask deploy` keeps whatever the interaction model file contains — ours
+  contained none of them — and `ask validate` did not object. The gap only surfaces when a
+  person says "next" mid-story and nothing happens. Fix: have `ask validate` fail, or at
+  least warn, when a manifest declares `AUDIO_PLAYER` and the model omits the required
+  playback intents.
+- **Two `AMAZON.SearchQuery` slots in one interaction model route unpredictably, with no
+  build-time warning.** Severity medium. `PlayStoryIntent.title` and `CatchAllIntent.text`
+  are both `AMAZON.SearchQuery`, and their carrier phrases overlap (`i want to {text}`
+  against `i want to hear {title}`). Amazon documents that `SearchQuery` cannot be combined
+  with other slots in one sample, but not that two such intents in one model compete. Fix:
+  warn at model build time when two `AMAZON.SearchQuery` intents share carrier prefixes.
+- **`AMAZON.FirstName` does not cover the way families name each other.** Severity low.
+  Every fixture story is recorded by "Aunt Whitney"; `AMAZON.FirstName` is built for
+  "Whitney". A relationship word in front of a first name is the normal spoken form in this
+  domain. Fix: either extend `AMAZON.FirstName` with relationship prefixes or document that
+  a custom slot type is required for kinship-qualified names.
+
+### Ours, not Amazon's
+
+Recorded here because the same session produced them and the fixes are planned together.
+
+- **The skill teaches an utterance that cannot succeed.** `packages/skill/src/handler.ts`
+  lines 48, 50 and 53, and `skill.json`'s `examplePhrases` and `testingInstructions`, all
+  offer "play the story Grandpa sent". `fixtures/stories.json` holds three stories, all by
+  Aunt Whitney. Every prompt the skill speaks steers the speaker into a miss.
+- **A play request dead-ended after 6.36 s.** The 08:56:43 turn called no tools, played
+  nothing and answered with a question. Why is not recoverable from the logs.
+- **`suggest_next_story` is registered but the agent is never told it exists.**
+  `packages/mcp-server/src/tools/index.ts:100` registers it;
+  `packages/agent/src/persona.ts` names only `list_family_stories` and `get_family_story`.
+  `NextStoryIntent` reaches the model as free text with no tool behind it.
+- **`SuggestionMemory` is per-container and in-memory.** `secrets_loaded` fired at 08:06,
+  08:13, 08:24 (twice), 08:37 and 08:56, so containers recycle every 10–30 minutes and "the
+  next story" is not reliably next.
+- **Nothing bridges the end of a story.** `handler.ts:127` answers every `AudioPlayer.*`
+  event with an empty response, so `PlaybackNearlyFinished` enqueues nothing and
+  `PlaybackFinished` stages nothing. The story ends and the room goes quiet.
+- **One failure string covers every failure.** `RETRY` (`handler.ts:51`) is spoken for
+  timeouts, auth loss and provider outages alike, and `FALLBACK_SAY` tells the speaker to
+  reconnect the skill in the Alexa app even when the cause was a model timeout.
+- **The turn log cannot explain a turn.** `skill_turn` carries the intent name, the tool
+  names with their timings and a `played` boolean: no request type, slot values, spoken
+  text, story id, wall-clock duration or error class.
+
+Remediation is planned in `docs/plans/2026-09-10-alexa-skill-interaction-ux.md`.
 
 ## Kiro Crew
 
