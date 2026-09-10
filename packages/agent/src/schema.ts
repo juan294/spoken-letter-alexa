@@ -2,6 +2,7 @@ import { z } from "zod";
 
 /** What the agent hands the simulator: never prose to parse. */
 export const playSchema = z.object({
+  id: z.string().min(1).describe("The story id from get_family_story, untouched"),
   url: z.url().describe("The family recording's MP3 URL from get_family_story, untouched"),
   title: z.string().min(1).max(200),
   storyteller: z.string().min(1).max(80),

@@ -20,6 +20,9 @@ if (!skillId) throw new Error("SKILL_ID is required: deploy the skill (pnpm -F s
 const recording = process.env.RECORD_UTTERANCES === "1";
 if (recording) log.warn("utterance_recording_on", { hint: "RECORD_UTTERANCES=1: catch-all phrasings are logged for pnpm -F skill record:pull" });
 
+const logSay = process.env.LOG_SAY === "1";
+if (logSay) log.warn("say_logging_on", { hint: "LOG_SAY=1: spoken replies are logged in skill_turn for one recorded device session, then the flag goes back to 0" });
+
 const skill = createHandler({
   skillId,
   agent: createAgentClient({ baseUrl: publicBaseUrl, timeoutMs: AGENT_BUDGET_MS }),
@@ -28,6 +31,7 @@ const skill = createHandler({
         log.info("utterance_recorded", utterance);
       }
     : undefined,
+  logSay,
 });
 
 export const handler = (event: AlexaRequestEnvelope): Promise<AlexaResponseEnvelope> => skill(event);

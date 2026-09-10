@@ -21,6 +21,7 @@ describe("runTurn with the scripted model against the real MCP server", () => {
     expect(result.say.length).toBeLessThanOrEqual(400);
     // Newest first: the lighthouse story was delivered last.
     expect(result.play).toEqual({
+      id: "st_lighthouse",
       url: `${ISSUER}/fixtures/audio/st_lighthouse.mp3`,
       title: "A lighthouse for Mateo",
       storyteller: "Grandpa Juan",

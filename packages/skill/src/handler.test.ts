@@ -1,12 +1,13 @@
-import { describe, expect, test, vi } from "vitest";
+import { log } from "@spoken-letter-alexa/shared";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { type AgentClient } from "./agent-client.ts";
+import { AgentHttpError, type AgentClient } from "./agent-client.ts";
 import { encodeStreamToken } from "./audio.ts";
 import { createHandler, type AlexaRequestEnvelope, type AlexaResponseEnvelope } from "./handler.ts";
 
 const SKILL_ID = "amzn1.ask.skill.00000000-0000-4000-8000-000000000000";
 const ART_URL = "https://alexa.spokenletter.com/fixtures/art/st_owl.png";
-const PLAY = { url: "https://alexa.spokenletter.com/fixtures/audio/st_owl.mp3", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan", durationSeconds: 184, artUrl: ART_URL };
+const PLAY = { id: "st_owl", url: "https://alexa.spokenletter.com/fixtures/audio/st_owl.mp3", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan", durationSeconds: 184, artUrl: ART_URL };
 
 function envelope(request: Record<string, unknown>, overrides: Partial<AlexaRequestEnvelope> = {}): AlexaRequestEnvelope {
   return {
@@ -31,6 +32,10 @@ function fakeAgent(overrides: Partial<AgentClient> = {}): AgentClient & { turn: 
 }
 
 const ssml = (r: AlexaResponseEnvelope) => (r.response.outputSpeech as { ssml?: string } | undefined)?.ssml ?? "";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("skill handler", () => {
   test("rejects a wrong or missing application id before touching the agent", async () => {
@@ -162,5 +167,93 @@ describe("skill handler", () => {
     await handler(intent("WhatIsNewIntent"));
     expect(record).toHaveBeenCalledTimes(1);
     expect(record).toHaveBeenCalledWith({ locale: "en-US", text: "let's hear grandpa" });
+  });
+});
+
+type SkillTurnFields = {
+  event: string;
+  requestType: string;
+  intent?: string;
+  slots?: Record<string, string | null>;
+  ms: number;
+  played: boolean;
+  storyId?: string | null;
+  tools: string[];
+  say?: string;
+  outcome: string;
+  errorClass?: string;
+  reason?: string;
+};
+
+function loggedSkillTurns(info: { mock: { calls: unknown[][] } }): SkillTurnFields[] {
+  return info.mock.calls.filter(([event]) => event === "skill_turn").map(([, fields]) => fields as SkillTurnFields);
+}
+
+describe("skill_turn telemetry (phase-1.md)", () => {
+  test.each([
+    ["LaunchRequest", () => envelope({ type: "LaunchRequest" })],
+    ["SessionEndedRequest", () => envelope({ type: "SessionEndedRequest", reason: "USER_INITIATED" })],
+    ["AudioPlayer.PlaybackStarted", () => envelope({ type: "AudioPlayer.PlaybackStarted" })],
+    ["IntentRequest", () => intent("WhatIsNewIntent")],
+  ])("emits a skill_turn line for %s", async (requestType, buildEvent) => {
+    const info = vi.spyOn(log, "info");
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    await handler(buildEvent());
+    const [line] = loggedSkillTurns(info);
+    expect(line).toBeDefined();
+    expect(line?.requestType).toBe(requestType);
+    expect(typeof line?.ms).toBe("number");
+  });
+
+  test("SessionEndedRequest carries reason and error; other non-intent lines carry neither", async () => {
+    const info = vi.spyOn(log, "info");
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    await handler(envelope({ type: "SessionEndedRequest", reason: "ERROR", error: { type: "INTERNAL_SERVICE_ERROR", message: "boom" } }));
+    await handler(envelope({ type: "AudioPlayer.PlaybackNearlyFinished" }));
+    const [ended, audio] = loggedSkillTurns(info);
+    expect(ended).toMatchObject({ reason: "ERROR", error: { type: "INTERNAL_SERVICE_ERROR", message: "boom" } });
+    expect(audio && "reason" in audio).toBe(false);
+  });
+
+  test("an IntentRequest logs intent, slots ({} when none), played and storyId", async () => {
+    const info = vi.spyOn(log, "info");
+    const turn = vi
+      .fn()
+      .mockResolvedValueOnce({ say: "Here it is.", play: PLAY, toolCalls: [] })
+      .mockResolvedValueOnce({ say: "You have 2 stories.", play: null, toolCalls: [] });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ turn }) });
+    await handler(intent("PlayStoryIntent", { title: "the owl" }));
+    await handler(intent("WhatIsNewIntent"));
+    const [played, notPlayed] = loggedSkillTurns(info);
+    expect(played).toMatchObject({ intent: "PlayStoryIntent", slots: { title: "the owl" }, played: true, storyId: PLAY.id, outcome: "ok" });
+    expect(notPlayed).toMatchObject({ intent: "WhatIsNewIntent", slots: {}, played: false, storyId: null });
+  });
+
+  test("say is absent when logSay is unset and present, truncated to 120 chars, when set", async () => {
+    const longSay = "x".repeat(200);
+    const agent = fakeAgent({ turn: vi.fn().mockResolvedValue({ say: longSay, play: null, toolCalls: [] }) });
+
+    const withoutFlag = vi.spyOn(log, "info");
+    await createHandler({ skillId: SKILL_ID, agent })(intent("WhatIsNewIntent"));
+    expect(loggedSkillTurns(withoutFlag)[0]?.say).toBeUndefined();
+    withoutFlag.mockRestore();
+
+    const withFlag = vi.spyOn(log, "info");
+    await createHandler({ skillId: SKILL_ID, agent, logSay: true })(intent("WhatIsNewIntent"));
+    expect(loggedSkillTurns(withFlag)[0]?.say).toBe(longSay.slice(0, 120));
+  });
+
+  test("an agent HTTP rejection is classified rejected, with the AgentHttpError code", async () => {
+    const info = vi.spyOn(log, "info");
+    const agent = fakeAgent({ turn: vi.fn().mockRejectedValue(new AgentHttpError(404, "session_not_found", "no session")) });
+    await createHandler({ skillId: SKILL_ID, agent })(intent("PlayStoryIntent"));
+    expect(loggedSkillTurns(info)[0]).toMatchObject({ outcome: "rejected", errorClass: "AgentHttpError:session_not_found" });
+  });
+
+  test("an aborted (timed out) agent call is classified timeout", async () => {
+    const info = vi.spyOn(log, "info");
+    const agent = fakeAgent({ turn: vi.fn().mockRejectedValue(new DOMException("The operation was aborted.", "AbortError")) });
+    await createHandler({ skillId: SKILL_ID, agent })(intent("PlayStoryIntent"));
+    expect(loggedSkillTurns(info)[0]).toMatchObject({ outcome: "timeout", errorClass: "DOMException" });
   });
 });

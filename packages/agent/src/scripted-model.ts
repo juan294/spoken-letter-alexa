@@ -137,6 +137,7 @@ export class ScriptedModel extends Model {
         ? emitReply({
             say: `Here is "${story.title}" in ${story.storyteller}'s voice.`,
             play: {
+              id: story.id,
               url: story.audio.url,
               title: story.title,
               storyteller: story.storyteller,

@@ -10,7 +10,7 @@ import { ISSUER, MCP_URL, mcpHarness, type McpHarness } from "./test-support.ts"
 type SessionBody = { sessionId: string; mode: string; subject: string; offline: boolean };
 type TurnBody = {
   say: string;
-  play: { url: string; title: string; storyteller: string; durationSeconds: number | null; artUrl: string | null } | null;
+  play: { id: string; url: string; title: string; storyteller: string; durationSeconds: number | null; artUrl: string | null } | null;
   speechUrl: string | null;
   toolCalls: { name: string; ms: number; era: string; ok: boolean }[];
 };
@@ -56,6 +56,7 @@ describe("agent routes", () => {
     expect(turn.status).toBe(200);
     const body = (await turn.json()) as TurnBody;
     expect(body.play).toEqual({
+      id: "st_lighthouse",
       url: `${ISSUER}/fixtures/audio/st_lighthouse.mp3`,
       title: "A lighthouse for Mateo",
       storyteller: "Grandpa Juan",

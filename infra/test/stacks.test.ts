@@ -283,6 +283,21 @@ describe("Phase 6 stacks", () => {
       });
       t.observability.hasResourceProperties("AWS::SNS::Subscription", { Protocol: "email", Endpoint: "owner@example.com" });
     });
+
+    test("phase-1.md: p95 alarm on SkillTurnMs > 5000 ms, and dashboard widgets for SkillTurnMs and DeadEndPlay", () => {
+      t.observability.hasResourceProperties("AWS::CloudWatch::Alarm", {
+        Namespace: "sla/mcp",
+        MetricName: "SkillTurnMs",
+        ExtendedStatistic: "p95",
+        Threshold: 5000,
+        Period: 300,
+        ComparisonOperator: "GreaterThanThreshold",
+      });
+      const [dashboard] = resources(t.observability, "AWS::CloudWatch::Dashboard");
+      const body = JSON.stringify(dashboard?.Properties.DashboardBody);
+      expect(body).toContain("SkillTurnMs");
+      expect(body).toContain("DeadEndPlay");
+    });
   });
 
   describe("CoreStack extension", () => {

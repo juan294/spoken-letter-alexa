@@ -23,10 +23,15 @@ describe("SkillStack", () => {
       Architectures: ["arm64"],
       Runtime: "nodejs24.x",
       MemorySize: 256,
-      Environment: { Variables: Match.objectLike({ PUBLIC_BASE_URL: "https://alexa.spokenletter.com", SKILL_ID, RECORD_UTTERANCES: "0" }) },
+      Environment: { Variables: Match.objectLike({ PUBLIC_BASE_URL: "https://alexa.spokenletter.com", SKILL_ID, RECORD_UTTERANCES: "0", LOG_SAY: "0", EMF_NAMESPACE: "sla/mcp" }) },
     });
     withId.hasResourceProperties("AWS::Logs::LogGroup", { RetentionInDays: 30 });
     withoutId.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ SKILL_ID: "", RECORD_UTTERANCES: "1" }) } });
+  });
+
+  test("phase-1.md: EMF_NAMESPACE is set for skill_turn metrics; LOG_SAY follows sla:logSay", () => {
+    const withLogSay = Template.fromStack(new SkillStack(new App(), "SkillWithLogSay", { env, publicBaseUrl: "https://alexa.spokenletter.com", bundle: false, logSay: true }));
+    withLogSay.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ LOG_SAY: "1", EMF_NAMESPACE: "sla/mcp" }) } });
   });
 
   test("Alexa may invoke it only with the skill id as the event source token", () => {
