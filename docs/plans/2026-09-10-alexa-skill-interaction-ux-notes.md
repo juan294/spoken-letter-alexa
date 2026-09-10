@@ -164,12 +164,12 @@ sequentially) is green after the token-leak fix and the zod refactor.
 
 ## Phase 3 — Interaction model, slot types and manifest copy
 
-**Status.** Automated scope complete, merged to `develop`. The manual gate (Owner
-`pnpm -F skill generate` review + `ask deploy --target skill-metadata`, then `ask validate`,
-then five on-device checks) is **not done** — deploying skill metadata is Owner-gated, and
-`ask validate` can only validate a model that is already deployed, so it cannot discharge
-D-U4's first claim against this session's regenerated, undeployed model. See `phase-3.md`
-section 8.
+**Status.** Automated scope complete, merged to `develop`. Owner authorized `ask deploy
+--target skill-metadata` (2026-09-10); `ask smapi submit-skill-validation` afterward
+discharged D-U4's first claim (certification does not require the playback intents — see
+`phase-3.md` section 8 and the corrected `docs/friction-log.md` AUDIO_PLAYER entry). The one
+remaining manual step is the Owner's five on-device checks (`phase-3.md` section 8); Phase 4
+is gated on those plus their outcomes being carried forward.
 
 **Worktree.** `../spoken-letter-alexa-phase3`, branch `feat/skill-ux-phase3`, base `develop`
 at `fd993a3`.
@@ -193,6 +193,29 @@ on a fragment the plan's prose didn't call out. The fix follows the identical pa
 established (find a same-meaning phrasing that avoids the fragment) rather than requesting a
 new decision — it's a wording substitution, not an architectural choice. Verified
 independently by a fresh reviewer against `CLASS_C_DENYLIST`'s actual contents.
+
+### Deviation: `WhatIsNewIntent` referenced a slot it never declared — found by `ask deploy` itself
+
+**Plan said (section 4):** add `what did {storyteller} send me` to `WhatIsNewIntent`'s
+samples (see the `"send"` deviation above for why the actual text differs). The plan did not
+address, and `TOOL_INTENTS`'s existing `WhatIsNewIntent` entry did not declare, a
+`storyteller` slot — only `PlayStoryIntent` had one.
+**Found:** the first real `ask deploy --target skill-metadata` failed Amazon's server-side
+model build: `"the intent doesn't declare the slot 'storyteller'"` on
+`WhatIsNewIntent`. Neither `utteranceAllowed`, `assertNoCarrierCollision`, nor any existing
+generator check catches an undeclared slot reference — this is a class of bug only Amazon's
+own validation surfaced, the same way `ask deploy`'s first run is explicitly there to catch
+things local checks can't.
+**Chose:** declared `slots: [{ name: "storyteller", type: "StorytellerName" }]` on
+`WhatIsNewIntent` in `TOOL_INTENTS`, and added `assertSlotsDeclared` (mirroring
+`assertNoCarrierCollision`'s pattern) to `generateInteractionModel`, so a future sample
+referencing an undeclared slot fails `pnpm -F skill generate`/the test suite instead of
+`ask deploy`. Regenerated, redeployed — model build succeeded.
+**Why:** matches this phase's own established pattern (turn a class of live-mis-route/
+deploy-time bug into a generate-time assertion, as already done for carrier collisions);
+the handler doesn't need to consume the new slot value (WhatIsNewIntent's response text is
+already fixed regardless of slots, unchanged from before this phase), so no handler.ts change
+was needed beyond the model declaration.
 
 ### Simplify pass (post plan-compliance review)
 

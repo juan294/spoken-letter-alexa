@@ -84,6 +84,10 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
   },
   list_family_stories: {
     name: "WhatIsNewIntent",
+    // "what {storyteller} sent me" needs the slot declared, or Amazon's own model build
+    // rejects the sample ("the intent doesn't declare the slot") — a plan gap the generator's
+    // own checks didn't catch, only `ask deploy`'s server-side validation did.
+    slots: [{ name: "storyteller", type: "StorytellerName" }],
     samples: [
       "what is new",
       "what's new",
@@ -205,6 +209,25 @@ export function assertNoCarrierCollision(playSamples: string[], catchAllSamples:
   }
 }
 
+const SLOT_PLACEHOLDER = /\{([a-zA-Z0-9_]+)\}/g;
+
+/**
+ * Every `{slot}` referenced in an intent's samples must be declared on that intent, or
+ * Amazon's server-side model build rejects it ("the intent doesn't declare the slot") —
+ * caught only at `ask deploy` before this check existed. Generate-time failure instead.
+ */
+export function assertSlotsDeclared(intent: ModelIntent): void {
+  const declared = new Set((intent.slots ?? []).map((slot) => slot.name));
+  for (const sample of intent.samples) {
+    for (const match of sample.matchAll(SLOT_PLACEHOLDER)) {
+      const slotName = match[1];
+      if (slotName !== undefined && !declared.has(slotName)) {
+        throw new Error(`Intent "${intent.name}" sample "${sample}" references slot "{${slotName}}", which is not declared on ${intent.name}`);
+      }
+    }
+  }
+}
+
 /** A kinship word's other common spoken forms, so any of them still matches the same person. */
 const KINSHIP_SYNONYM_FORMS: Record<string, string[]> = {
   aunt: ["auntie"],
@@ -260,6 +283,7 @@ export function generateInteractionModel(input: { training: string[]; stories: C
 
   const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];
   assertNoCarrierCollision(playSamples, [...catchAll]);
+  for (const intent of intents) assertSlotsDeclared(intent);
 
   for (const name of BUILT_IN_INTENTS) intents.push({ name, samples: [] });
 

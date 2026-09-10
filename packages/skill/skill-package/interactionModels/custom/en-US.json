@@ -5,6 +5,12 @@
       "intents": [
         {
           "name": "WhatIsNewIntent",
+          "slots": [
+            {
+              "name": "storyteller",
+              "type": "StorytellerName"
+            }
+          ],
           "samples": [
             "what is new",
             "what's new",

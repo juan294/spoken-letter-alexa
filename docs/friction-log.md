@@ -451,14 +451,22 @@ perceives. The only latency lever is the number of model round trips per turn.
   mention the Directive Service in the custom-skill latency guidance and ship it in the
   audio-player sample skill.
 - **Declaring `AUDIO_PLAYER` in `skill.json` does not add or require the playback
-  intents.** Severity medium. The developer console adds `AMAZON.NextIntent`,
-  `PreviousIntent`, `StartOverIntent`, `RepeatIntent`, `LoopOn/OffIntent` and
-  `ShuffleOn/OffIntent` when the interface is switched on in the UI. A `skill-package`
-  deployed with `ask deploy` keeps whatever the interaction model file contains — ours
-  contained none of them — and `ask validate` did not object. The gap only surfaces when a
-  person says "next" mid-story and nothing happens. Fix: have `ask validate` fail, or at
-  least warn, when a manifest declares `AUDIO_PLAYER` and the model omits the required
-  playback intents.
+  intents.** Severity **low** (corrected 2026-09-10, D-U4 first claim — was "medium" and
+  framed as a certification risk; it isn't one). The developer console adds
+  `AMAZON.NextIntent`, `PreviousIntent`, `StartOverIntent`, `RepeatIntent`, `LoopOn/OffIntent`
+  and `ShuffleOn/OffIntent` when the interface is switched on in the UI. A `skill-package`
+  deployed with `ask deploy` keeps whatever the interaction model file contains, and this
+  entry's own original text already noted `ask validate` did not object even when the model
+  had none of them. Phase 3 (`docs/plans/2026-09-10-alexa-skill-interaction-ux-phases/
+  phase-3.md` section 8) added all ten intents and re-ran `ask smapi submit-skill-validation`
+  against the deployed result: `SUCCESSFUL`, "Initial functional tests" passed, no finding
+  mentions `AUDIO_PLAYER` or the playback intents at all (the one `FAILED` item is
+  "Eligibility to update your live skill instantly," unrelated — this skill has never been
+  live). Two runs, with and without the intents, both validate clean: **certification does
+  not require them.** The gap is real but purely functional — a person says "next" mid-story
+  and nothing happens — which is why the intents were still worth adding. Fix (revised): no
+  `ask validate` change needed; the earlier fix suggestion (have validation fail or warn on
+  the gap) does not apply since validation was never actually checking for it.
 - **Two `AMAZON.SearchQuery` slots in one interaction model route unpredictably, with no
   build-time warning.** Severity medium. `PlayStoryIntent.title` and `CatchAllIntent.text`
   are both `AMAZON.SearchQuery`, and their carrier phrases overlap (`i want to {text}`

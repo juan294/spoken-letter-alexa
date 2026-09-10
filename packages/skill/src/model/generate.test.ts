@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { CLASS_C_DENYLIST } from "@spoken-letter-alexa/shared";
 import { describe, expect, test } from "vitest";
 
-import { assertNoCarrierCollision, generateExamplePhrases, generateInteractionModel, loadStories, MODEL_PATH, readTraining, storytellerSlotType, utteranceAllowed } from "./generate.ts";
+import { assertNoCarrierCollision, assertSlotsDeclared, generateExamplePhrases, generateInteractionModel, loadStories, MODEL_PATH, readTraining, storytellerSlotType, utteranceAllowed } from "./generate.ts";
 
 const stories = loadStories();
 const model = generateInteractionModel({ training: [], stories });
@@ -66,11 +66,14 @@ describe("generateInteractionModel", () => {
     expect(play.samples).not.toContain("play the story {storyteller} recorded");
   });
 
-  test("WhatIsNewIntent gained the new samples", () => {
+  test("WhatIsNewIntent gained the new samples, and declares the storyteller slot they reference", () => {
     const whatIsNew = byName.WhatIsNewIntent!;
     expect(whatIsNew.samples).toContain("what {storyteller} sent me");
     expect(whatIsNew.samples).toContain("who sent a story");
     expect(whatIsNew.samples).toContain("what do you have");
+    // Amazon's model build rejects a sample slot with no matching declaration; asserted at
+    // generate time too, below (assertSlotsDeclared).
+    expect(whatIsNew.slots).toEqual([{ name: "storyteller", type: "StorytellerName" }]);
   });
 
   test("no utterance names a child, a denylisted fragment or a non-ASCII character", () => {
@@ -118,6 +121,22 @@ describe("assertNoCarrierCollision", () => {
 
   test("ignores a catch-all sample with no slot placeholder", () => {
     expect(() => { assertNoCarrierCollision(["play a story"], ["play a story"]); }).not.toThrow();
+  });
+});
+
+describe("assertSlotsDeclared", () => {
+  test("catches a sample referencing a slot the intent never declared", () => {
+    const intent = { name: "WhatIsNewIntent", samples: ["what {storyteller} sent me"] };
+    expect(() => { assertSlotsDeclared(intent); }).toThrow(/storyteller.*not declared/);
+  });
+
+  test("passes when every referenced slot is declared", () => {
+    const intent = { name: "WhatIsNewIntent", slots: [{ name: "storyteller", type: "StorytellerName" }], samples: ["what {storyteller} sent me", "what do you have"] };
+    expect(() => { assertSlotsDeclared(intent); }).not.toThrow();
+  });
+
+  test("every generated intent declares every slot its samples reference", () => {
+    for (const generated of intents) expect(() => { assertSlotsDeclared(generated); }).not.toThrow();
   });
 });
 

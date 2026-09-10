@@ -144,11 +144,18 @@ A and B are `[batch-eligible]`. One integration owner; no working-branch push, n
 - `handler` answers `AMAZON.StartOverIntent` with a play directive at offset 0
 - `handler` answers `AMAZON.LoopOnIntent` with speech, not an empty response
 
-**`ask validate` result.** Not run. `ask validate`/`ask smapi submit-skill-validation`
-checks whatever model is already deployed to the skill at the target stage — it cannot
-validate this session's regenerated, undeployed `en-US.json`. Deploying it
-(`ask deploy --target skill-metadata`) is the Owner-gated manual step below; D-U4's first
-claim stays undischarged until the Owner runs `ask deploy` and then `ask validate`.
+**`ask validate` result — discharged, 2026-09-10.** Owner authorized `ask deploy
+--target skill-metadata`; it initially failed Amazon's server-side model build
+(`WhatIsNewIntent`'s new `{storyteller}` sample referenced a slot the intent never declared —
+a plan gap `assertSlotsDeclared` now catches at generate time; see
+`docs/plans/2026-09-10-alexa-skill-interaction-ux-notes.md`). Fixed, regenerated, redeployed
+successfully. `ask smapi submit-skill-validation` against the deployed model: `SUCCESSFUL`.
+"Initial functional tests" passed; no finding mentions `AUDIO_PLAYER` or the playback intents.
+(The one `FAILED` item, "Eligibility to update your live skill instantly," is about
+already-live skills — this one has never been live — and is unrelated to this claim.)
+**The claim under test does not hold: certification does not require the playback intents.**
+The friction-log entry's severity is corrected (medium → low) and its fix recommendation
+withdrawn — `docs/friction-log.md`, 2026-09-10 AUDIO_PLAYER entry.
 
 **Manual, Owner.** `pnpm -F skill generate`, review the model diff, then
 `ask deploy --target skill-metadata` (per `docs/plans/…-notes.md`; not `--ignore-hook`).
