@@ -142,17 +142,86 @@ Paste the resulting `skill_turn` lines into section 7 below. Then redeploy with
 
 ## 7. Recorded evidence
 
-*(empty until the manual run — Phase 2 does not start until this section is filled)*
+Recorded 2026-09-10, 14:48:07-14:56:46 UTC, real Echo device, `sla-alexa-skill` deployed
+with `-c sla:logSay=1` (commit `a316dad`). Pulled from `/aws/lambda/sla-alexa-skill` via
+`aws logs filter-log-events --filter-pattern "skill_turn"`, two passes (one to close the
+"next one" gap below), nothing elided.
 
-**D-U4 second claim, to be discharged here.** The sub-40 ms empty responses at 08:56:33,
-08:56:57, 08:57:05, 08:57:28, 08:57:48 and 08:58:04 (twice) were inferred to be
-`SessionEndedRequest` and `AudioPlayer.*` events from their timing shape alone. Record
-what `requestType` actually says, and correct the friction-log entry if the inference was
-wrong.
+| Time (UTC) | requestType | intent | slots | ms | played | outcome | note |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 14:48:07.179 | LaunchRequest | — | — | 0 | false | ok | "open spoken letter" |
+| 14:48:52.694 | SessionEndedRequest | — | reason: USER_INITIATED | 0 | false | ok | reprompt unanswered, session closed |
+| 14:48:52.792 | LaunchRequest | — | — | 0 | false | ok | re-launched |
+| 14:49:11.557 | IntentRequest | WhatIsNewIntent | — | **7005** | false | **timeout** (`DOMException`) | hit the 7 s agent-client abort |
+| 14:49:26.783 | IntentRequest | WhatIsNewIntent | — | 3737 | false | ok | retry; tools=[list_family_stories:7.6ms]; say: "You have the same three stories—no new ones since last time. The newest is still..." |
+| 14:49:37.799 | IntentRequest | AMAZON.FallbackIntent | — | 0 | false | ok | unrecognized utterance (raw speech not logged) |
+| 14:49:50.182 | IntentRequest | PlayStoryIntent | title: "grandpa sent" | 3327 | false | ok, **DeadEndPlay=1** | say: "I don't see any stories from Grandpa—all three stories are from Aunt Whitney. Would you like me to play one of those ins[tead]..." |
+| 14:49:58.773 | IntentRequest | AMAZON.FallbackIntent | — | 0 | false | ok | unrecognized utterance |
+| 14:50:11.681 | IntentRequest | PlayStoryIntent | title: "Ignacio" | 3936 | true | ok | storyId: st_ignacio_the_snail; tools=[get_family_story:10.4ms]; say: "Here's \"Ignacio the snail\" from Aunt Whitney!" |
+| 14:50:15.686 | AudioPlayer.PlaybackStarted | — | — | 0 | false | ok | |
+| 14:52:20.057 | IntentRequest | AMAZON.PauseIntent | — | 0 | false | ok | "stop" (routed to Pause, not Stop/Cancel) |
+| 14:52:21.304 | AudioPlayer.PlaybackStopped | — | — | 0 | false | ok | |
+| 14:55:41.455 | LaunchRequest | — | — | 0 | false | ok | re-launched to close the "next one" gap |
+| 14:55:55.468 | IntentRequest | AMAZON.FallbackIntent | — | 0 | false | ok | unrecognized utterance |
+| 14:56:13.184 | IntentRequest | PlayStoryIntent | storyteller: "aunt Whitney" | 6251 | true | ok | storyId: st_mauricio_the_bull; tools=[suggest_next_story:25.9ms, get_family_story:10.4ms]; say: "Here's the newest one from Aunt Whitney—\"Mauricio the train riding bull\"!" |
+| 14:56:18.645 | AudioPlayer.PlaybackStarted | — | — | 0 | false | ok | |
+| 14:56:30.217 | IntentRequest | **AMAZON.NextIntent** | — | 0 | false | ok | "next one" said while playing; **not a case `createHandler`'s switch handles** — falls through to `textForIntent` -> null -> "Which family story would you like?" (the dead-end the Owner heard) |
+| 14:56:41.999 | IntentRequest | NextStoryIntent | — | 3925 | true | ok | storyId: st_martina_the_mermaid; tools=[suggest_next_story:7.1ms, get_family_story:6.8ms]; say: "Here's \"Martina the music loving mermaid\" from Aunt Whitney!" — same spoken request, this time routed to the intent the skill does handle |
+| 14:56:43.816 | AudioPlayer.PlaybackStopped | — | — | 0 | false | ok | |
+| 14:56:46.552 | AudioPlayer.PlaybackStarted | — | — | 0 | false | ok | |
+
+**D-U4 second claim, discharged.** The sub-40 ms empty-response inference from the original
+08:56-08:58 session was that they were `SessionEndedRequest` and `AudioPlayer.*` events,
+guessed from timing shape alone. This recording confirms it directly: `SessionEndedRequest`,
+`LaunchRequest` and every `AudioPlayer.*` line above measure 0 ms with `requestType` now
+logged explicitly. The inference was correct; no friction-log correction needed.
+
+**New finding: the timeout is not hypothetical.** `WhatIsNewIntent` at 14:49:11 hit the 7 s
+client abort exactly as the 2026-09-10 friction-log entry described for `PlayStoryIntent`;
+the identical turn 15 s later (retry, warm) took 3737 ms. This is a second, independent
+measurement of the same "turn latency is model round trips" finding, now with an
+`outcome: "timeout"` / `errorClass: "DOMException"` telemetry signature Phase 2 can alert on
+directly.
+
+**New finding: the dead-end play reproduced live.** "Grandpa sent" — the skill's own
+advertised utterance (`packages/skill/src/handler.ts` help text) — produced
+`DeadEndPlay: 1`: no story played, `say` explained no story is from a "Grandpa." This is
+the exact defect Phase 3/4 are scoped to fix, now confirmed against a real user turn rather
+than only the friction-log's synthetic reasoning.
+
+**Item 5, closed with a live defect: "next one" mid-playback is not reliable.** The first
+attempt (14:56:30) routed to `AMAZON.NextIntent`, which nothing in
+`packages/skill/src/handler.ts`'s intent switch handles, so it fell through to
+`textForIntent` returning `null` and the skill asked "Which family story would you like?" —
+the exact dead-end the Owner heard live. A second, differently-phrased attempt (14:56:41)
+routed to `NextStoryIntent`, which the skill does handle, and it played correctly. This is
+the plan's own predicted risk (section 6, "Adding playback intents can shift NLU routing for
+existing utterances... `AMAZON.NextIntent` will compete for it"), now observed from the
+opposite direction: today `AMAZON.NextIntent` is not a competing route, it is an unhandled
+dead end. **Carried into Phase 3:** the interaction model needs `AMAZON.NextIntent` routed to
+the same behavior as `NextStoryIntent`, not just added alongside it as the plan's risk table
+assumed.
 
 ## 8. Handoff
 
-**Next.** Phase 2, but only once section 7 is filled and the Owner has confirmed the
-deploy. Carry forward: the measured p50/p95 of `SkillTurnMs` by intent (Phase 2's
-acceptance criterion is stated against it), the true request types from section 7, and
-whatever section 7 reveals about the zero-tool play turn.
+**Section 7 filled, deploy confirmed by the Owner (2026-09-10).** D-U2's gate is satisfied;
+Phase 2 may start.
+
+**Next.** Phase 2. Carry forward:
+
+- **Measured `SkillTurnMs` (n=1 per turn, not yet a distribution — Phase 2's acceptance
+  criterion needs at least ten play turns before it can be read as p95):**
+  `WhatIsNewIntent` 7005 ms (timeout) then 3737 ms (warm retry); `PlayStoryIntent` 3327 ms
+  (dead end, no tools called), 3936 ms (played, one tool), 6251 ms (played, two tools —
+  `suggest_next_story` + `get_family_story`, cold); `NextStoryIntent` 3925 ms (played, two
+  tools, warm). Consistent with the friction log's "~3.1 s one tool, ~5.7-6.9 s two tools"
+  finding.
+- **The true request types (section 7, D-U4 second claim):** confirmed —
+  `SessionEndedRequest` and every `AudioPlayer.*` line measure 0 ms, matching the original
+  inference.
+- **The zero-tool play turn:** not reproduced this session (14:49:50's dead end called zero
+  tools but that's the "grandpa sent" no-match case, not the original unexplained one) — no
+  new evidence either way.
+- **New for Phase 3:** `AMAZON.NextIntent` said mid-playback is an unhandled dead end today
+  (section 7); the interaction-model work must route it to the same behavior as
+  `NextStoryIntent`, not merely add it as a second option.
