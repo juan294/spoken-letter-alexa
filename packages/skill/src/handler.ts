@@ -66,6 +66,8 @@ const HELP = "You can say: play the story Grandpa sent, or ask what is new. Whic
 const RETRY = "I'm still looking for that one. Ask again in a moment.";
 const NOTHING_TO_RESUME = "There is nothing to resume. Ask for a family story first.";
 const NOTHING_TO_PLAY = "Which family story would you like? You can say: play the story Grandpa sent.";
+const NOTHING_TO_GO_BACK_TO = "That was the first one. Ask for another story instead.";
+const ONE_AT_A_TIME = "I play family stories one at a time.";
 
 /** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
 function progressiveText(playOriented: boolean): string {
@@ -103,6 +105,14 @@ const tell = (text: string, directives?: AudioDirective[]) => speak(text, { endS
 /** Playback control without speech. */
 const control = (directives: AudioDirective[]): AlexaResponseEnvelope => ({ version: "1.0", response: { directives, shouldEndSession: true } });
 
+/** Resume, start over and repeat all decode the current AudioPlayer token and re-issue a play directive, differing only in the offset. */
+function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number): AlexaResponseEnvelope {
+  const token = event.context.AudioPlayer?.token;
+  const play = token ? decodeStreamToken(token) : null;
+  if (!play) return ask(NOTHING_TO_RESUME);
+  return control([playDirective(play, offsetInMilliseconds)]);
+}
+
 function slotValue(event: AlexaRequestEnvelope, name: string): string | undefined {
   const value = event.request.intent?.slots?.[name]?.value?.trim();
   return value === undefined || value === "" ? undefined : value;
@@ -136,6 +146,9 @@ function textForIntent(event: AlexaRequestEnvelope): IntentText | null {
     case "WhatIsNewIntent":
       return { text: "what family stories are new?", playOriented: false };
     case "NextStoryIntent":
+    case "AMAZON.NextIntent":
+      // Both route identically (phase-3.md section 1 "Routing note"): NextStoryIntent's
+      // samples stay, since the generator binds that intent name to suggest_next_story.
       return { text: "play the next family story", playOriented: true };
     case "CatchAllIntent": {
       const text = slotValue(event, "text");
@@ -197,12 +210,20 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         case "AMAZON.StopIntent":
         case "AMAZON.CancelIntent":
           return control([STOP_DIRECTIVE]);
-        case "AMAZON.ResumeIntent": {
-          const token = event.context.AudioPlayer?.token;
-          const play = token ? decodeStreamToken(token) : null;
-          if (!play) return ask(NOTHING_TO_RESUME);
-          return control([playDirective(play, event.context.AudioPlayer?.offsetInMilliseconds ?? 0)]);
-        }
+        case "AMAZON.ResumeIntent":
+          return resumablePlay(event, event.context.AudioPlayer?.offsetInMilliseconds ?? 0);
+        case "AMAZON.StartOverIntent":
+        case "AMAZON.RepeatIntent":
+          return resumablePlay(event, 0);
+        case "AMAZON.PreviousIntent":
+          // No session history of prior stories is kept; always the honest fallback.
+          return ask(NOTHING_TO_GO_BACK_TO);
+        case "AMAZON.LoopOnIntent":
+        case "AMAZON.LoopOffIntent":
+        case "AMAZON.ShuffleOnIntent":
+        case "AMAZON.ShuffleOffIntent":
+          // Acknowledged, not silently ignored — a skill that answers nothing reads as broken.
+          return ask(ONE_AT_A_TIME);
         case "AMAZON.HelpIntent":
         case "AMAZON.FallbackIntent":
           return ask(HELP);

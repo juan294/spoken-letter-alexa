@@ -161,3 +161,49 @@ efficiency angles.
 
 Full local gate (`pnpm typecheck && pnpm lint && pnpm test && pnpm -F infra synth`, run
 sequentially) is green after the token-leak fix and the zod refactor.
+
+## Phase 3 — Interaction model, slot types and manifest copy
+
+**Status.** Automated scope complete, merged to `develop`. The manual gate (Owner
+`pnpm -F skill generate` review + `ask deploy --target skill-metadata`, then `ask validate`,
+then five on-device checks) is **not done** — deploying skill metadata is Owner-gated, and
+`ask validate` can only validate a model that is already deployed, so it cannot discharge
+D-U4's first claim against this session's regenerated, undeployed model. See `phase-3.md`
+section 8.
+
+**Worktree.** `../spoken-letter-alexa-phase3`, branch `feat/skill-ux-phase3`, base `develop`
+at `fd993a3`.
+
+### Deviation: `"send"` is denylisted; the plan's own literal sample text doesn't compile
+
+**Plan said (section 4):** add `what did {storyteller} send` to `PlayStoryIntent` and
+`what did {storyteller} send me` to `WhatIsNewIntent`. The plan explicitly flagged one other
+sample in the same section (`play the story {storyteller} recorded`) as failing
+`utteranceAllowed` on the `record` fragment and named the fix (`made`), but said nothing
+about these two.
+**Found:** `CLASS_C_DENYLIST` (`packages/shared/src/contract/agent-tools.ts:20`) includes the
+fragment `"send"`, and `"what did {storyteller} send"` / `"...send me"` both contain it
+literally — `generate.test.ts`'s existing `utteranceAllowed` assertion failed on first run.
+**Chose:** substituted past-tense phrasing already used throughout the rest of the file for
+this exact meaning (`"play the story {storyteller} sent"` etc.): `"what {storyteller} sent"`
+and `"what {storyteller} sent me"`. `"sent"` does not contain `"send"` as a substring, so it
+clears the filter; the phrasing is consistent with the file's existing style.
+**Why:** this is the same class of bug the plan explicitly anticipated for `"recorded"`, just
+on a fragment the plan's prose didn't call out. The fix follows the identical pattern already
+established (find a same-meaning phrasing that avoids the fragment) rather than requesting a
+new decision — it's a wording substitution, not an architectural choice. Verified
+independently by a fresh reviewer against `CLASS_C_DENYLIST`'s actual contents.
+
+### Simplify pass (post plan-compliance review)
+
+One fix applied: `packages/skill/src/handler.ts`'s `AMAZON.ResumeIntent` and
+`AMAZON.StartOverIntent`/`RepeatIntent` cases duplicated the same "decode the current
+AudioPlayer token or fall back" pattern, differing only in the replay offset. Factored into
+`resumablePlay(event)`, called by both with the offset supplied at the call site.
+
+No other findings from the reviewer's four angles beyond the two already folded into this
+phase's own record above (the `ask validate` placeholder, now filled in `phase-3.md` section
+8, and this deviation entry).
+
+Full local gate (`pnpm typecheck && pnpm lint && pnpm test && pnpm -F infra synth`, run
+sequentially) is green after the extraction.
