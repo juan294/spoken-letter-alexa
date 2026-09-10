@@ -6,6 +6,13 @@ export const playSchema = z.object({
   title: z.string().min(1).max(200),
   storyteller: z.string().min(1).max(80),
   durationSeconds: z.number().int().positive().nullable(),
+  // Deliberately `string`, not `url`: artwork is decoration, and a model that mangles it
+  // must not fail the whole turn's structured output and silence the story. Consumers
+  // check it themselves (`packages/skill/src/audio.ts` requires https).
+  artUrl: z
+    .string()
+    .nullish()
+    .describe("The story's artUrl from get_family_story, untouched, or null when it has none"),
 });
 
 export const turnOutputSchema = z.object({

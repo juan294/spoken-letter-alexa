@@ -13,8 +13,17 @@ const fixtureStorySchema = z
     deliveredAt: z.iso.datetime(),
     /** File name under `fixtures/audio/`; always `<id>.mp3`. */
     file: z.string().regex(/^[a-z0-9_-]+\.mp3$/),
+    /** File name under `fixtures/art/`; always `<id>.png`. Absent when the story has no artwork. */
+    art: z
+      .string()
+      .regex(/^[a-z0-9_-]+\.png$/)
+      .optional(),
   })
-  .refine((story) => story.file === `${story.id}.mp3`, { path: ["file"], message: "file must be <id>.mp3" });
+  .refine((story) => story.file === `${story.id}.mp3`, { path: ["file"], message: "file must be <id>.mp3" })
+  .refine((story) => story.art === undefined || story.art === `${story.id}.png`, {
+    path: ["art"],
+    message: "art must be <id>.png",
+  });
 
 const fixtureCatalogSchema = z.object({ stories: z.array(fixtureStorySchema) });
 
@@ -36,20 +45,11 @@ export async function loadFixtureCatalog(path: string): Promise<FixtureStory[]> 
   return parseFixtureCatalog(JSON.parse(await readFile(path, "utf8")));
 }
 
-function toSummary(story: FixtureStory): StorySummary {
-  return {
-    id: story.id,
-    title: story.title,
-    storyteller: story.storyteller,
-    durationSeconds: story.durationSeconds,
-    deliveredAt: story.deliveredAt,
-  };
-}
-
 /**
  * Serves the Owner's own recorded stories (author's voice) for the `demo` subject and
- * for judges. Audio URLs point at `${publicBaseUrl}/fixtures/audio/<file>`: served by
- * the local Hono app in development and by S3 behind CloudFront once deployed.
+ * for judges. Audio URLs point at `${publicBaseUrl}/fixtures/audio/<file>` and artwork at
+ * `${publicBaseUrl}/fixtures/art/<art>`: served by the local Hono app in development and
+ * by S3 behind CloudFront once deployed.
  */
 export class FixtureProvider implements AccountProvider {
   private readonly stories: FixtureStory[];
@@ -60,15 +60,27 @@ export class FixtureProvider implements AccountProvider {
     this.publicBaseUrl = options.publicBaseUrl.replace(/\/$/, "");
   }
 
+  private toSummary(story: FixtureStory): StorySummary {
+    return {
+      id: story.id,
+      title: story.title,
+      storyteller: story.storyteller,
+      durationSeconds: story.durationSeconds,
+      deliveredAt: story.deliveredAt,
+      // Absent, not undefined: a story with no artwork carries no `artUrl` key at all.
+      ...(story.art !== undefined && { artUrl: `${this.publicBaseUrl}/fixtures/art/${story.art}` }),
+    };
+  }
+
   listDeliveredStories(_subject: string, limit: number): Promise<StorySummary[]> {
-    return Promise.resolve(this.stories.slice(0, limit).map(toSummary));
+    return Promise.resolve(this.stories.slice(0, limit).map((story) => this.toSummary(story)));
   }
 
   getStory(_subject: string, storyId: string): Promise<StoryWithAudio | null> {
     const story = this.stories.find((entry) => entry.id === storyId);
     if (!story) return Promise.resolve(null);
     return Promise.resolve({
-      ...toSummary(story),
+      ...this.toSummary(story),
       audio: {
         url: `${this.publicBaseUrl}/fixtures/audio/${story.file}`,
         expiresAt: new Date(Date.now() + AUDIO_TTL_MS).toISOString(),

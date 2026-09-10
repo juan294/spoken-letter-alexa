@@ -19,7 +19,7 @@ import { type TurnOutput } from "./schema.ts";
 
 const STRUCTURED_OUTPUT_TOOL = "strands_structured_output";
 
-type StoryJson = { id: string; title: string; storyteller: string; durationSeconds?: number };
+type StoryJson = { id: string; title: string; storyteller: string; durationSeconds?: number; artUrl?: string };
 type ListJson = { stories: StoryJson[] };
 type StoryWithAudioJson = StoryJson & { audio: { url: string } };
 type ErrorJson = { error: string; message?: string };
@@ -136,7 +136,13 @@ export class ScriptedModel extends Model {
       events = story
         ? emitReply({
             say: `Here is "${story.title}" in ${story.storyteller}'s voice.`,
-            play: { url: story.audio.url, title: story.title, storyteller: story.storyteller, durationSeconds: story.durationSeconds ?? null },
+            play: {
+              url: story.audio.url,
+              title: story.title,
+              storyteller: story.storyteller,
+              durationSeconds: story.durationSeconds ?? null,
+              artUrl: story.artUrl ?? null,
+            },
           })
         : emitReply({ say: "That story's recording is not available right now. Try another one.", play: null });
     } else {

@@ -9,6 +9,7 @@ export const FIXTURE_TURN = {
     title: "The owl who forgot how to hoot",
     storyteller: "Grandpa Juan",
     durationSeconds: 184,
+    artUrl: "/fixtures/story-art.png",
   },
   speechUrl: null as string | null,
   toolCalls: [

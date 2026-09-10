@@ -8,6 +8,8 @@ export const FIXTURE_STORY = {
   title: "The owl who forgot how to hoot",
   storyteller: "Grandpa Juan",
   durationSeconds: 184,
+  // The brand-mark card, not any real story's artwork: the mock carries no account data.
+  artUrl: `${import.meta.env.BASE_URL}fixtures/story-art.png`,
 } as const;
 
 export const MOCK_TRANSCRIPT = "Alexa, play the story Grandpa sent";

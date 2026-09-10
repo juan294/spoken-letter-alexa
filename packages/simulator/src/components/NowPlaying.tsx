@@ -76,7 +76,18 @@ export function NowPlaying({ status, play, playKey, speechUrl, sampleUtterance, 
       <div className="panel-body">
         {play ? (
           <>
-            <BrandMark size="xl" leftDot="cream" glow />
+            {play.artUrl ? (
+              <img
+                className="story-art"
+                data-testid="now-playing-art"
+                src={play.artUrl}
+                alt={`Artwork for ${play.title}`}
+                width={168}
+                height={168}
+              />
+            ) : (
+              <BrandMark size="xl" leftDot="cream" glow />
+            )}
             <p className="panel-title" data-testid="now-playing-title">
               {play.title}
             </p>

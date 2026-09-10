@@ -25,6 +25,7 @@ describe("runTurn with the scripted model against the real MCP server", () => {
       title: "A lighthouse for Mateo",
       storyteller: "Grandpa Juan",
       durationSeconds: 241,
+      artUrl: `${ISSUER}/fixtures/art/st_lighthouse.png`,
     });
     expect(result.history.length).toBeGreaterThan(0);
   });
@@ -38,6 +39,8 @@ describe("runTurn with the scripted model against the real MCP server", () => {
       "play another one",
     );
     expect(second.play?.title).toBe("The owl who forgot how to hoot");
+    // That story carries no artwork, and the reply says so rather than reusing the last one's.
+    expect(second.play?.artUrl).toBeNull();
     expect(second.toolCalls.map((call) => call.name)).toEqual(["list_family_stories", "get_family_story"]);
   });
 

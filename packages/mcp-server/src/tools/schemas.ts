@@ -6,6 +6,7 @@ export const storySummarySchema = z.object({
   storyteller: z.string(),
   durationSeconds: z.number().int().positive().optional(),
   deliveredAt: z.string(),
+  artUrl: z.string().optional().describe("The story's artwork to show on a screen device; absent when it has none"),
 });
 
 export const storyAudioSchema = z.object({

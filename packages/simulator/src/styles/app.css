@@ -477,6 +477,17 @@ input {
   overflow: hidden;
 }
 
+/* The story's own artwork, in the slot the brand mark holds when a story carries none.
+   The card already bakes in the hard-edged upscale of the story's pixel icon, so this
+   only shrinks it — smooth scaling, not `pixelated`, which would alias at 0.35x. */
+.story-art {
+  width: 168px;
+  height: 168px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  object-fit: cover;
+}
+
 .panel-title {
   margin: var(--space-6) 0 0;
   font-family: var(--font-heading);

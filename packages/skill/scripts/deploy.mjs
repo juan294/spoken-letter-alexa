@@ -41,6 +41,17 @@ const modelPath = path.join(pkgRoot, "skill-package/interactionModels/custom/en-
 if (!existsSync(modelPath)) fail("interaction model missing: run pnpm -F skill generate");
 console.log("ok: interaction model present");
 
+// `file://` icon URIs are resolved inside the uploaded package, so a missing or misnamed
+// file fails at Amazon's import rather than here. Catch it before the upload.
+const locale = manifest.manifest?.publishingInformation?.locales?.["en-US"] ?? {};
+for (const key of ["smallIconUri", "largeIconUri"]) {
+  const value = locale[key];
+  if (typeof value !== "string" || !value.startsWith("file://")) fail(`skill.json ${key} must be a file:// path inside skill-package`);
+  const asset = path.join(pkgRoot, "skill-package", value.slice("file://".length));
+  if (!existsSync(asset)) fail(`${key} points at skill-package/${value.slice("file://".length)}, which does not exist`);
+}
+console.log("ok: 108 px and 512 px locale icons present");
+
 const version = spawnSync("ask", ["--version"], { encoding: "utf8" });
 if (version.status !== 0) fail("ASK CLI not found: npm i -g ask-cli, then `ask configure` (Owner gate)");
 console.log(`ok: ask-cli ${version.stdout.trim()}`);

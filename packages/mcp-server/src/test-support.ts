@@ -7,7 +7,10 @@ import { FixtureProvider, type FixtureStory } from "./provider/fixtures.ts";
 export const TEST_BASE_URL = "http://localhost:4310";
 export const TEST_DEV_TOKEN = "dev-token-for-tests-only";
 
-/** Three delivered stories, newest first once sorted by deliveredAt. */
+/**
+ * Three delivered stories, newest first once sorted by deliveredAt. Only `st_owl` carries
+ * artwork, so both the with-art and the without-art paths stay covered.
+ */
 export const TEST_STORIES: FixtureStory[] = [
   {
     id: "st_owl",
@@ -16,6 +19,7 @@ export const TEST_STORIES: FixtureStory[] = [
     durationSeconds: 184,
     deliveredAt: "2026-08-30T19:12:00.000Z",
     file: "st_owl.mp3",
+    art: "st_owl.png",
   },
   {
     id: "st_lighthouse",

@@ -25,6 +25,8 @@ export const TEST_STORIES: FixtureStory[] = [
     durationSeconds: 241,
     deliveredAt: "2026-09-02T20:05:00.000Z",
     file: "st_lighthouse.mp3",
+    // Only the newest story carries artwork, so both branches reach the scripted model.
+    art: "st_lighthouse.png",
   },
 ];
 

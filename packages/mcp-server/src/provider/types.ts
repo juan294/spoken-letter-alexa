@@ -10,6 +10,12 @@ export type StorySummary = {
   durationSeconds?: number | undefined;
   /** ISO 8601; the Owner's delivery moment (`downloadedAt` in Spoken Letter). */
   deliveredAt: string;
+  /**
+   * The story's own artwork for a screen device. Absent when the story carries none, and
+   * ignored by a caller with no screen. A URL to a picture of the story: no Yoto id, no
+   * card id and no icon title cross the boundary with it.
+   */
+  artUrl?: string | undefined;
 };
 
 export type StoryAudio = { url: string; expiresAt: string; contentType: "audio/mpeg" };

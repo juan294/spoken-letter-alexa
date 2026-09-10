@@ -11,6 +11,9 @@ const bridgeStorySchema = z.object({
   storyteller: z.string().min(1).max(80),
   durationSeconds: z.number().int().positive().optional(),
   deliveredAt: z.string().min(1),
+  // Phase 3 may serve the story's own artwork. Until it does the key is simply absent and
+  // a screen device shows nothing but the title.
+  artUrl: z.url().optional(),
 });
 const bridgeStoriesSchema = z.object({ stories: z.array(bridgeStorySchema) });
 const bridgeAudioSchema = z.object({
@@ -68,6 +71,7 @@ export class HttpProvider implements AccountProvider {
       storyteller: story.storyteller,
       durationSeconds: story.durationSeconds,
       deliveredAt: story.deliveredAt,
+      artUrl: story.artUrl,
     }));
     this.listCache.set(subject, { at: this.now(), limit, stories });
     return stories;

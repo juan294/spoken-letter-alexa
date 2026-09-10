@@ -111,6 +111,9 @@ describe("simulated Alexa+ client", () => {
     await ask("play the story");
     expect(await screen.findByText("The owl who forgot how to hoot")).toBeInTheDocument();
     expect(chip()).toHaveTextContent("Playing");
+    const art = screen.getByTestId("now-playing-art");
+    expect(art).toHaveAttribute("src", "/fixtures/story-art.png");
+    expect(art).toHaveAccessibleName("Artwork for The owl who forgot how to hoot");
 
     const audio = screen.getByTestId("story-audio");
     const pause = vi.spyOn(audio as HTMLAudioElement, "pause");

@@ -19,6 +19,10 @@ test("the parent asks by keyboard and the fixture story reaches the Now Playing 
   await expect(page.getByTestId("now-playing-title")).toHaveText("The owl who forgot how to hoot");
   await expect(panel).toContainText("Grandpa Juan");
   await expect(panel).toContainText("3:04");
+  // The story's artwork takes the brand mark's slot, and the file really resolves.
+  const art = page.getByTestId("now-playing-art");
+  await expect(art).toBeVisible();
+  await expect(art).toHaveJSProperty("naturalWidth", 480);
   await expect(page.getByTestId("status-chip")).toHaveText("Playing");
   await expect(page.getByRole("progressbar", { name: "Story progress" })).toBeVisible();
 

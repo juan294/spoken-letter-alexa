@@ -20,6 +20,8 @@ export const playSchema = z.object({
   title: z.string(),
   storyteller: z.string(),
   durationSeconds: z.number().nullable(),
+  /** The story's artwork; the panel shows the brand mark when it is absent. */
+  artUrl: z.string().nullish(),
 });
 
 export const turnResponseSchema = z.object({

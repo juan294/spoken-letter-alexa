@@ -5,7 +5,8 @@ import { encodeStreamToken } from "./audio.ts";
 import { createHandler, type AlexaRequestEnvelope, type AlexaResponseEnvelope } from "./handler.ts";
 
 const SKILL_ID = "amzn1.ask.skill.00000000-0000-4000-8000-000000000000";
-const PLAY = { url: "https://alexa.spokenletter.com/fixtures/audio/st_owl.mp3", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan", durationSeconds: 184 };
+const ART_URL = "https://alexa.spokenletter.com/fixtures/art/st_owl.png";
+const PLAY = { url: "https://alexa.spokenletter.com/fixtures/audio/st_owl.mp3", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan", durationSeconds: 184, artUrl: ART_URL };
 
 function envelope(request: Record<string, unknown>, overrides: Partial<AlexaRequestEnvelope> = {}): AlexaRequestEnvelope {
   return {
@@ -72,9 +73,23 @@ describe("skill handler", () => {
       playBehavior: "REPLACE_ALL",
       audioItem: {
         stream: { url: PLAY.url, offsetInMilliseconds: 0, token: encodeStreamToken(PLAY) },
-        metadata: { title: PLAY.title, subtitle: "read by Grandpa Juan" },
+        metadata: {
+          title: PLAY.title,
+          subtitle: "read by Grandpa Juan",
+          art: { sources: [{ url: ART_URL, size: "X_SMALL", widthPixels: 480, heightPixels: 480 }] },
+        },
       },
     });
+  });
+
+  test("a story with no artwork plays with a card that carries no art", async () => {
+    const { artUrl: _artUrl, ...bare } = PLAY;
+    const agent = fakeAgent({ turn: vi.fn().mockResolvedValue({ say: "Here it is.", play: bare, toolCalls: [] }) });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const response = await handler(intent("PlayStoryIntent", { title: "the owl" }));
+    const [directive] = response.response.directives ?? [];
+    const metadata = (directive as { audioItem: { metadata: Record<string, unknown> } }).audioItem.metadata;
+    expect(metadata).toEqual({ title: PLAY.title, subtitle: "read by Grandpa Juan" });
   });
 
   test("a reply without a story keeps talking and leaves the session open", async () => {

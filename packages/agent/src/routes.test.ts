@@ -10,7 +10,7 @@ import { ISSUER, MCP_URL, mcpHarness, type McpHarness } from "./test-support.ts"
 type SessionBody = { sessionId: string; mode: string; subject: string; offline: boolean };
 type TurnBody = {
   say: string;
-  play: { url: string; title: string; storyteller: string; durationSeconds: number | null } | null;
+  play: { url: string; title: string; storyteller: string; durationSeconds: number | null; artUrl: string | null } | null;
   speechUrl: string | null;
   toolCalls: { name: string; ms: number; era: string; ok: boolean }[];
 };
@@ -60,6 +60,7 @@ describe("agent routes", () => {
       title: "A lighthouse for Mateo",
       storyteller: "Grandpa Juan",
       durationSeconds: 241,
+      artUrl: `${ISSUER}/fixtures/art/st_lighthouse.png`,
     });
     expect(body.speechUrl?.startsWith("data:audio/mpeg;base64,")).toBe(true);
     expect(body.toolCalls.map((call) => call.name)).toEqual(["list_family_stories", "get_family_story"]);

@@ -13,15 +13,18 @@ const env = readServerEnv();
 const { app: server, generated, stories } = await bootstrap(env, { allowGenerated: true });
 
 const app = new Hono();
-// `fixtures/audio/<file>` next to the catalog; Phase 6 serves the same files from S3.
+// `fixtures/audio/<file>` and `fixtures/art/<file>` next to the catalog; Phase 6 serves
+// the same files from S3.
 const fixturesDir = path.dirname(path.resolve(env.FIXTURES_PATH));
-app.use(
-  "/fixtures/audio/*",
-  serveStatic({
-    root: path.dirname(fixturesDir),
-    rewriteRequestPath: (p) => p.replace(/^\/fixtures/, `/${path.basename(fixturesDir)}`),
-  }),
-);
+for (const route of ["/fixtures/audio/*", "/fixtures/art/*"]) {
+  app.use(
+    route,
+    serveStatic({
+      root: path.dirname(fixturesDir),
+      rewriteRequestPath: (p) => p.replace(/^\/fixtures/, `/${path.basename(fixturesDir)}`),
+    }),
+  );
+}
 app.route("/", server);
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {

@@ -6,7 +6,8 @@
       "storyteller": "Aunt Whitney",
       "durationSeconds": 288,
       "deliveredAt": "2026-07-21T18:37:07.000Z",
-      "file": "st_ignacio_the_snail.mp3"
+      "file": "st_ignacio_the_snail.mp3",
+      "art": "st_ignacio_the_snail.png"
     },
     {
       "id": "st_mauricio_the_bull",
@@ -14,7 +15,8 @@
       "storyteller": "Aunt Whitney",
       "durationSeconds": 309,
       "deliveredAt": "2026-08-11T17:35:29.000Z",
-      "file": "st_mauricio_the_bull.mp3"
+      "file": "st_mauricio_the_bull.mp3",
+      "art": "st_mauricio_the_bull.png"
     },
     {
       "id": "st_martina_the_mermaid",
@@ -22,7 +24,8 @@
       "storyteller": "Aunt Whitney",
       "durationSeconds": 374,
       "deliveredAt": "2026-08-03T00:03:24.000Z",
-      "file": "st_martina_the_mermaid.mp3"
+      "file": "st_martina_the_mermaid.mp3",
+      "art": "st_martina_the_mermaid.png"
     }
   ]
 }

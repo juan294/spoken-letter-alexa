@@ -5,6 +5,8 @@
       "locales": {
         "en-US": {
           "name": "Spoken Letter",
+          "smallIconUri": "file://assets/images/en-US_smallIconUri.png",
+          "largeIconUri": "file://assets/images/en-US_largeIconUri.png",
           "summary": "Play the family stories delivered to your Spoken Letter account on your Echo.",
           "description": "Spoken Letter lets grandparents and relatives record family stories that are delivered to a family's account. Ask for the newest story, the story a storyteller sent, or the next one, and it plays on your Echo. Development stage only: this skill is tested on the Owner's devices and is not submitted for certification.",
           "examplePhrases": [
@@ -12,11 +14,17 @@
             "Alexa, ask spoken letter to play the story Grandpa sent",
             "Alexa, ask spoken letter what is new"
           ],
-          "keywords": ["family", "stories", "audio"]
+          "keywords": [
+            "family",
+            "stories",
+            "audio"
+          ]
         }
       },
       "isAvailableWorldwide": false,
-      "distributionCountries": ["US"],
+      "distributionCountries": [
+        "US"
+      ],
       "testingInstructions": "Development stage. Say: open spoken letter; play the story Grandpa sent; what is new; play the next one; pause; resume. Stories are the fixture recordings served from alexa.spokenletter.com.",
       "category": "COMMUNICATION"
     },

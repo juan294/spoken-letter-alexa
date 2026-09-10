@@ -18,6 +18,21 @@ describe("FixtureProvider", () => {
     expect(Object.keys(story!).sort()).toEqual(["deliveredAt", "durationSeconds", "id", "storyteller", "title"]);
   });
 
+  test("a story with artwork carries its public url and nothing more", async () => {
+    const stories = await provider.listDeliveredStories("demo", 10);
+    const owl = stories.find((story) => story.id === "st_owl");
+    expect(Object.keys(owl!).sort()).toEqual(["artUrl", "deliveredAt", "durationSeconds", "id", "storyteller", "title"]);
+    expect(owl!.artUrl).toBe(`${TEST_BASE_URL}/fixtures/art/st_owl.png`);
+  });
+
+  test("getStory carries the artwork url alongside the audio", async () => {
+    const story = await provider.getStory("demo", "st_owl");
+    expect(story!.artUrl).toBe(`${TEST_BASE_URL}/fixtures/art/st_owl.png`);
+    const without = await provider.getStory("demo", "st_bread");
+    expect(without).not.toBeNull();
+    expect("artUrl" in without!).toBe(false);
+  });
+
   test("getStory returns the public MP3 url with a one-hour expiry", async () => {
     const before = Date.now();
     const story = await provider.getStory("demo", "st_owl");
@@ -74,5 +89,11 @@ describe("parseFixtureCatalog", () => {
         stories: [{ id: "st_x", title: "T", storyteller: "S", deliveredAt: "2026-09-01T00:00:00.000Z", file: "other.mp3" }],
       }),
     ).toThrow(/stories\.0\.file/);
+  });
+
+  test("requires the artwork file to be named after the id", () => {
+    const story = { id: "st_x", title: "T", storyteller: "S", deliveredAt: "2026-09-01T00:00:00.000Z", file: "st_x.mp3" };
+    expect(() => parseFixtureCatalog({ stories: [{ ...story, art: "other.png" }] })).toThrow(/stories\.0\.art/);
+    expect(parseFixtureCatalog({ stories: [{ ...story, art: "st_x.png" }] })[0]!.art).toBe("st_x.png");
   });
 });

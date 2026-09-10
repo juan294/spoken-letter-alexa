@@ -46,6 +46,10 @@ if (!Number.isFinite(seconds) || seconds <= 0) {
 const catalogPath = path.resolve("fixtures/stories.json");
 const catalog = existsSync(catalogPath) ? JSON.parse(readFileSync(catalogPath, "utf8")) : { stories: [] };
 catalog.stories = catalog.stories.filter((story) => story.id !== id);
+// Artwork is optional: the entry gains `art` only once fixtures/art/<id>.png exists
+// (fixtures/README.md documents how that card is rendered).
+const artName = `${id}.png`;
+const hasArt = existsSync(path.resolve("fixtures/art", artName));
 catalog.stories.push({
   id,
   title,
@@ -53,6 +57,7 @@ catalog.stories.push({
   durationSeconds: Math.round(seconds),
   deliveredAt: delivered.toISOString(),
   file: base,
+  ...(hasArt ? { art: artName } : {}),
 });
 writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
-console.log(`added ${id} (${Math.round(seconds)} s) to ${catalogPath}`);
+console.log(`added ${id} (${Math.round(seconds)} s${hasArt ? ", with artwork" : ", no artwork"}) to ${catalogPath}`);
