@@ -182,17 +182,16 @@ fewer than the script called for; recorded as-is rather than padded.
 
 ## 8. Handoff
 
-**Gate not cleanly closed — Owner decision needed before Phase 3.** The literal p95 target
-(below 4000 ms) is not met on this sample, for a reason section 1-4 don't address (Lambda
-cold start) rather than the reason the plan does (model round trips). Options for the Owner:
-accept with this evidence and the cold-start caveat recorded; gather one more Owner-run batch
-(the asked-for 10th turn, and/or a third cold container) to see if the pattern holds; or open
-a new decision on cold-start mitigation (provisioned concurrency, etc.) as out-of-scope
-follow-up. Not decided here.
+**Gate closed — accepted as-is. Owner decision, 2026-09-10.** The literal p95 target (below
+4000 ms) is not met on this sample, but for a reason sections 1-4 don't address (Lambda cold
+start) rather than the reason the plan does (model round trips): `list_family_stories` was
+called zero times across all 9 turns, including both cold-start ones, so the catalog
+mechanism this phase built demonstrably works. Cold-start latency is accepted as a real, but
+separately-scoped, problem — not a reason to hold Phase 3. No follow-up decision opened here;
+revisit if cold starts become a submission-blocking concern.
 
-**Next.** Phase 3, once the Owner resolves the above. Carry forward: the three-band latency
-picture above (single-tool warm / two-tool warm / cold-start), the MCP client cache was
-implemented and scoped to device sessions only after a token-leak bug was found and fixed
-(section 3; see `docs/plans/2026-09-10-alexa-skill-interaction-ux-notes.md`), and no
-catalog-staleness behavior was observed (session lifetimes in this test were well under the
-15-minute TTL).
+**Next.** Phase 3. Carry forward: the three-band latency picture above (single-tool warm /
+two-tool warm / cold-start), the MCP client cache was implemented and scoped to device
+sessions only after a token-leak bug was found and fixed (section 3; see
+`docs/plans/2026-09-10-alexa-skill-interaction-ux-notes.md`), and no catalog-staleness
+behavior was observed (session lifetimes in this test were well under the 15-minute TTL).
