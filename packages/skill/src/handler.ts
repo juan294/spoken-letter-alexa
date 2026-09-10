@@ -2,6 +2,7 @@ import { emfEnvelope, log } from "@spoken-letter-alexa/shared";
 
 import { AgentHttpError, type AgentClient } from "./agent-client.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
+import { scheduleProgressiveResponse } from "./progressive.ts";
 
 type Slot = { name: string; value?: string };
 
@@ -9,7 +10,13 @@ export type AlexaRequestEnvelope = {
   version: string;
   session?: { new: boolean; sessionId: string; application: { applicationId: string }; user: { userId: string } };
   context: {
-    System: { application: { applicationId: string }; user: { userId: string } };
+    System: {
+      application: { applicationId: string };
+      user: { userId: string };
+      /** Directive Service base URL, for a progressive response while the agent call is in flight (phase-2.md section 2). */
+      apiEndpoint?: string;
+      apiAccessToken?: string;
+    };
     AudioPlayer?: { token?: string; offsetInMilliseconds?: number; playerActivity?: string };
   };
   request: {
@@ -47,6 +54,8 @@ export type HandlerOptions = {
   recordUtterance?: ((utterance: { locale: string; text: string }) => void) | undefined;
   /** Phase 1 section 3: `say` is model output, only logged for a deliberate recorded session. */
   logSay?: boolean | undefined;
+  /** Test injection point for the Directive Service call (phase-2.md section 2); defaults to global `fetch`. */
+  progressiveFetch?: typeof fetch | undefined;
 };
 
 export type SkillHandler = (event: AlexaRequestEnvelope) => Promise<AlexaResponseEnvelope>;
@@ -57,6 +66,11 @@ const HELP = "You can say: play the story Grandpa sent, or ask what is new. Whic
 const RETRY = "I'm still looking for that one. Ask again in a moment.";
 const NOTHING_TO_RESUME = "There is nothing to resume. Ask for a family story first.";
 const NOTHING_TO_PLAY = "Which family story would you like? You can say: play the story Grandpa sent.";
+
+/** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
+function progressiveText(playOriented: boolean): string {
+  return playOriented ? "Looking for that one." : "Checking what's new.";
+}
 
 const SAY_LOG_LIMIT = 120;
 
@@ -202,6 +216,18 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       telemetry.playOriented = playOriented;
       if (intent === "CatchAllIntent") options.recordUtterance?.({ locale, text });
 
+      const { apiEndpoint, apiAccessToken } = event.context.System;
+      const progressive =
+        apiEndpoint && apiAccessToken
+          ? scheduleProgressiveResponse({
+              apiEndpoint,
+              apiAccessToken,
+              requestId: event.request.requestId,
+              text: progressiveText(playOriented),
+              fetch: options.progressiveFetch,
+            })
+          : undefined;
+
       const deviceUserId = event.context.System.user.userId;
       try {
         const reply = await options.agent.turn({ deviceUserId, text });
@@ -215,6 +241,9 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         telemetry.outcome = outcome;
         telemetry.errorClass = errorClass;
         return ask(RETRY);
+      } finally {
+        // The agent settled — a progressive response would only be spoken over a still-open turn.
+        progressive?.cancel();
       }
     }
 

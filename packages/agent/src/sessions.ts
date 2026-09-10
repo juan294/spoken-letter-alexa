@@ -14,6 +14,14 @@ export type AgentSession = {
   history: MessageData[];
   createdAt: number;
   expiresAt: number;
+  /**
+   * Device sessions only (Phase 2 section 1): `list_family_stories`, formatted one story per
+   * line, composed into the system prompt so most play turns skip that tool call. A cache,
+   * never the authority — refetched when stale (`isCatalogStale`).
+   */
+  catalog?: string;
+  /** Epoch seconds `catalog` was fetched. */
+  catalogFetchedAt?: number;
 };
 
 export interface SessionStore {
@@ -37,6 +45,14 @@ export function newSession(
  */
 export function deviceSessionId(deviceUserId: string): string {
   return `dev_${sha256Hex(`device:${deviceUserId}`).slice(0, 32)}`;
+}
+
+/** How long a session's cached catalog is trusted before a session open refetches it. */
+export const CATALOG_TTL_SECONDS = 15 * 60;
+
+/** A story delivered after the catalog was cached stays invisible until this returns true. */
+export function isCatalogStale(session: Pick<AgentSession, "catalog" | "catalogFetchedAt">, now: number): boolean {
+  return session.catalog === undefined || session.catalogFetchedAt === undefined || now - session.catalogFetchedAt >= CATALOG_TTL_SECONDS;
 }
 
 export class MemorySessionStore implements SessionStore {
@@ -92,6 +108,8 @@ export class DynamoSessionStore implements SessionStore {
       history: Array.isArray(item.history) ? (item.history as MessageData[]) : [],
       createdAt: Number(item.createdAt),
       expiresAt: item.expiresAt,
+      ...(typeof item.catalog === "string" && { catalog: item.catalog }),
+      ...(typeof item.catalogFetchedAt === "number" && { catalogFetchedAt: item.catalogFetchedAt }),
     };
   }
 }
