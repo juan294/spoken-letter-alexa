@@ -10,3 +10,21 @@ export const ALEXA_PERSONA = [
   "Every tool result carries a JSON text block with the ids and fields you need; use it.",
   "Tool names may carry a prefix such as spoken-letter___; treat them as the tools above.",
 ].join(" ");
+
+/**
+ * The persona plus a device session's cached catalog (Phase 2 section 1). The catalog is a
+ * cache, never the authority: `list_family_stories` stays available for a story it doesn't
+ * have. `catalog` is undefined for sessions with no cache (or a session that never had one),
+ * in which case this is exactly `ALEXA_PERSONA`.
+ */
+export function personaWithCatalog(catalog: string | undefined): string {
+  if (!catalog) return ALEXA_PERSONA;
+  return [
+    ALEXA_PERSONA,
+    'Stories already known this session, one per line as "id: title by storyteller, duration":',
+    catalog,
+    "When the requested story is in that list, skip list_family_stories and call get_family_story",
+    "with its id directly. It may be missing something delivered moments ago — call",
+    "list_family_stories if the speaker asks for a story that isn't in it.",
+  ].join("\n\n");
+}

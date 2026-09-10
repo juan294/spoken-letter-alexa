@@ -257,3 +257,63 @@ describe("skill_turn telemetry (phase-1.md)", () => {
     expect(loggedSkillTurns(info)[0]).toMatchObject({ outcome: "timeout", errorClass: "DOMException" });
   });
 });
+
+function intentWithApi(name: string, slots: Record<string, string | undefined> = {}) {
+  const base = intent(name, slots);
+  return { ...base, context: { ...base.context, System: { ...base.context.System, apiEndpoint: "https://api.amazonalexa.com", apiAccessToken: "api-token" } } };
+}
+
+describe("progressive response (phase-2.md section 2)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("a hanging Directive Service call never blocks the response", async () => {
+    vi.useFakeTimers();
+    const progressiveFetch = vi.fn<typeof fetch>(() => new Promise<Response>(() => undefined));
+    const agent = fakeAgent({
+      turn: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => { resolve({ say: "Here it is.", play: PLAY, toolCalls: [] }); }, 700);
+          }),
+      ),
+    });
+    const handler = createHandler({ skillId: SKILL_ID, agent, progressiveFetch: progressiveFetch });
+    const responsePromise = handler(intentWithApi("PlayStoryIntent", { title: "the owl" }));
+    // Past the 600 ms progressive delay (so the hanging fetch actually starts) and the 700 ms agent turn.
+    await vi.advanceTimersByTimeAsync(700);
+    const response = await responsePromise;
+    expect(ssml(response)).toBe("<speak>Here it is.</speak>");
+    expect(progressiveFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("a Directive Service 500 does not change the handler's response", async () => {
+    vi.useFakeTimers();
+    const progressiveFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 500 }));
+    const agent = fakeAgent({
+      turn: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => { resolve({ say: "Here it is.", play: PLAY, toolCalls: [] }); }, 700);
+          }),
+      ),
+    });
+    const handler = createHandler({ skillId: SKILL_ID, agent, progressiveFetch: progressiveFetch });
+    const responsePromise = handler(intentWithApi("PlayStoryIntent", { title: "the owl" }));
+    await vi.advanceTimersByTimeAsync(700);
+    const response = await responsePromise;
+    expect(ssml(response)).toBe("<speak>Here it is.</speak>");
+    const [directive] = response.response.directives ?? [];
+    expect(directive).toMatchObject({ type: "AudioPlayer.Play" });
+  });
+
+  test("with no apiEndpoint/apiAccessToken, no Directive Service call is made", async () => {
+    vi.useFakeTimers();
+    const progressiveFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent(), progressiveFetch: progressiveFetch });
+    await handler(intent("PlayStoryIntent", { title: "the owl" }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(progressiveFetch).not.toHaveBeenCalled();
+  });
+});

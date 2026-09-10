@@ -1,8 +1,9 @@
+import { type MessageData } from "@strands-agents/sdk";
 import { type Hono } from "hono";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 
 import { createOfflineDeps } from "./offline.ts";
-import { createAgentApp, type AgentDeps } from "./routes.ts";
+import { createAgentApp, trimHistory, type AgentDeps } from "./routes.ts";
 import { ScriptedModel } from "./scripted-model.ts";
 import { deviceSessionId, MemorySessionStore, newSession } from "./sessions.ts";
 import { ISSUER, MCP_URL, mcpHarness, type McpHarness } from "./test-support.ts";
@@ -98,6 +99,27 @@ describe("agent routes", () => {
     expect((await post(app, "/agent/session", { mode: "device" })).status).toBe(400);
   });
 
+  test("a device session opened against a real MCP returns a session carrying the catalog (phase-2.md section 1)", async () => {
+    const deviceFetch = vi.fn<typeof fetch>((input, init) => h.fetch(input, init));
+    const deviceApp = createAgentApp({ ...deps, deviceMcp: { url: MCP_URL, fetch: deviceFetch } });
+    const created = (await (await post(deviceApp, "/agent/session", { mode: "device", deviceUserId: "amzn1.ask.account.CATALOG" })).json()) as SessionBody;
+    const stored = await deps.sessions.get(created.sessionId);
+    expect(stored?.catalog).toContain("A lighthouse for Mateo");
+    expect(stored?.catalog).toContain("The owl who forgot how to hoot");
+    expect(stored?.catalogFetchedAt).toBeGreaterThan(0);
+  });
+
+  test("a session whose catalog fetch throws still opens, with no catalog (phase-2.md section 1)", async () => {
+    const throwingFetch: typeof fetch = () => Promise.reject(new Error("network down"));
+    const deviceApp = createAgentApp({ ...deps, deviceMcp: { url: MCP_URL, fetch: throwingFetch } });
+    const response = await post(deviceApp, "/agent/session", { mode: "device", deviceUserId: "amzn1.ask.account.NOCATALOG" });
+    expect(response.status).toBe(200);
+    const created = (await response.json()) as SessionBody;
+    const stored = await deps.sessions.get(created.sessionId);
+    expect(stored?.catalog).toBeUndefined();
+    expect(stored?.catalogFetchedAt).toBeUndefined();
+  });
+
   test("a turn on a device session whose service token lapsed renews the token instead of failing", async () => {
     const stale = `x.${Buffer.from(JSON.stringify({ sub: "svc:alexa-m2m", exp: 1 })).toString("base64url")}.y`;
     const id = deviceSessionId("amzn1.ask.account.STALE");
@@ -144,5 +166,45 @@ describe("offline deps", () => {
     expect(turn.play?.title).toBe("A lighthouse for Mateo");
     const transcript = await app.request("/agent/transcribe", { method: "POST", headers: { "content-type": "audio/webm" }, body: new Uint8Array([0]) });
     await expect(transcript.json()).resolves.toEqual({ text: "Alexa, play the story Grandpa sent" });
+  });
+});
+
+describe("trimHistory (phase-2.md section 4)", () => {
+  const userText = (text: string): MessageData => ({ role: "user", content: [{ text }] });
+  const assistantText = (text: string): MessageData => ({ role: "assistant", content: [{ text }] });
+  const assistantToolUse = (toolUseId: string): MessageData => ({ role: "assistant", content: [{ toolUse: { name: "list_family_stories", toolUseId, input: {} } }] });
+  const userToolResult = (toolUseId: string): MessageData => ({ role: "user", content: [{ toolResult: { toolUseId, status: "success", content: [] } }] });
+
+  test("leaves history at or under the limit untouched", () => {
+    const history = [userText("a"), assistantText("b")];
+    expect(trimHistory(history, 8)).toEqual(history);
+  });
+
+  test("keeps exactly the last `max` messages when the cutoff lands on an independent message", () => {
+    const history = Array.from({ length: 10 }, (_v, i) => userText(`m${i}`));
+    expect(trimHistory(history, 8)).toEqual(history.slice(2));
+  });
+
+  test("backs the cutoff up rather than splitting a tool-use/tool-result pair", () => {
+    // 10 messages, max 8: a naive cut at index 2 lands on a toolResult whose toolUse is at
+    // index 1 — the cutoff must back up to 1, keeping 9 messages rather than dropping the pair.
+    const history: MessageData[] = [
+      userText("hi"),
+      assistantToolUse("tu_1"),
+      userToolResult("tu_1"),
+      assistantText("here you go"),
+      userText("next"),
+      assistantToolUse("tu_2"),
+      userToolResult("tu_2"),
+      assistantText("ok"),
+      userText("another"),
+      assistantText("done"),
+    ];
+    const trimmed = trimHistory(history, 8);
+    expect(trimmed).toEqual(history.slice(1));
+    expect(trimmed).toHaveLength(9);
+    // The pair survives whole: a toolUse never appears without its toolResult, or vice versa.
+    expect(trimmed[0]).toEqual(assistantToolUse("tu_1"));
+    expect(trimmed[1]).toEqual(userToolResult("tu_1"));
   });
 });

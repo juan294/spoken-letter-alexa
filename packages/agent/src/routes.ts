@@ -1,12 +1,12 @@
 import { decodeJwtClaims, log } from "@spoken-letter-alexa/shared";
-import { type Model } from "@strands-agents/sdk";
+import { type MessageData, type Model } from "@strands-agents/sdk";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 
 import { type SpeechSynthesizer } from "./polly.ts";
-import { type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
+import { isCatalogStale, type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
-import { runTurn } from "./turn.ts";
+import { mcpClientFor, runTurn } from "./turn.ts";
 
 export type AgentDeps = {
   model: Model;
@@ -68,6 +68,65 @@ export function cachedServiceToken(mint: () => Promise<string>, now: () => numbe
   };
 }
 
+const catalogStorySchema = z.object({ id: z.string(), title: z.string(), storyteller: z.string(), durationSeconds: z.number().optional() });
+const catalogStoriesSchema = z.array(catalogStorySchema);
+type CatalogStory = z.infer<typeof catalogStorySchema>;
+
+function formatDuration(seconds: number | undefined): string {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "unknown length";
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return minutes > 0 ? `${minutes}m${rest}s` : `${rest}s`;
+}
+
+/** One line per story: id, title, storyteller and duration (phase-2.md section 1). */
+function formatCatalog(stories: CatalogStory[]): string {
+  return stories.map((story) => `${story.id}: ${story.title} by ${story.storyteller}, ${formatDuration(story.durationSeconds)}`).join("\n");
+}
+
+/**
+ * `list_family_stories` once, through the same in-process MCP endpoint (and cached client,
+ * `mcpClientFor`) a device turn uses. Never throws: a failed fetch just means no catalog, and
+ * the turn falls back to calling the tool itself (phase-2.md section 1).
+ */
+async function fetchCatalog(mcp: { url: string; fetch?: typeof fetch | undefined }, accessToken: string): Promise<string | undefined> {
+  try {
+    const client = mcpClientFor(mcp.url, accessToken, mcp.fetch);
+    const listTool = (await client.listTools()).find((tool) => tool.name === "list_family_stories" || tool.name.endsWith("_list_family_stories"));
+    if (!listTool) return undefined;
+    const result = (await client.callTool(listTool, { limit: 20 })) as { structuredContent?: { stories?: unknown } } | undefined;
+    const parsed = catalogStoriesSchema.safeParse(result?.structuredContent?.stories);
+    if (!parsed.success || parsed.data.length === 0) return undefined;
+    return formatCatalog(parsed.data);
+  } catch (error) {
+    log.warn("agent_catalog_fetch_failed", { message: error instanceof Error ? error.message : String(error) });
+    return undefined;
+  }
+}
+
+/** Sessions kept this many turns of history; longer evenings would otherwise grow the prompt forever. */
+export const MAX_HISTORY_MESSAGES = 8;
+
+function hasToolResult(message: MessageData): boolean {
+  return message.content.some((block) => "toolResult" in block);
+}
+
+/**
+ * The last `max` messages, never splitting a tool-use/tool-result pair: a user message that
+ * opens with a tool result depends on the assistant's tool-use message just before it, so the
+ * cutoff backs up past it rather than leaving a dangling `toolUse` the model would reject.
+ */
+export function trimHistory(history: MessageData[], max = MAX_HISTORY_MESSAGES): MessageData[] {
+  if (history.length <= max) return history;
+  let start = history.length - max;
+  while (start > 0) {
+    const boundary = history[start];
+    if (!boundary || !hasToolResult(boundary)) break;
+    start -= 1;
+  }
+  return history.slice(start);
+}
+
 export function createAgentApp(deps: AgentDeps): Hono {
   const app = new Hono();
   const now = deps.now ?? (() => Math.floor(Date.now() / 1000));
@@ -88,9 +147,13 @@ export function createAgentApp(deps: AgentDeps): Hono {
     // A device (Echo user) keeps one conversation across invocations; other modes start fresh.
     const id = parsed.data.mode === "device" ? deviceSessionId(parsed.data.deviceUserId) : undefined;
     const existing = id === undefined ? null : await deps.sessions.get(id);
-    const session = existing
+    let session = existing
       ? { ...existing, expiresAt: now() + SESSION_TTL_SECONDS }
       : newSession({ mode, subject: subjectOf(accessToken), accessToken, ...(id !== undefined && { id }) }, now);
+    if (mode === "device" && deps.deviceMcp && isCatalogStale(session, now())) {
+      const catalog = await fetchCatalog(deps.deviceMcp, accessToken);
+      if (catalog !== undefined) session = { ...session, catalog, catalogFetchedAt: now() };
+    }
     await deps.sessions.put(session);
     log.info("agent_session", { mode: session.mode, offline: deps.offline });
     return c.json({ sessionId: session.id, mode: session.mode, subject: session.subject, offline: deps.offline });
@@ -103,11 +166,14 @@ export function createAgentApp(deps: AgentDeps): Hono {
     if (!session) return jsonError(c, 404, "session_not_found", "Start a new session");
     const accessToken = session.mode === "linked" ? session.accessToken : await serviceToken();
     const mcp = session.mode === "device" && deps.deviceMcp ? deps.deviceMcp : { url: deps.mcpUrl, fetch: deps.mcpFetch };
-    const result = await runTurn({ model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history }, parsed.data.text);
+    const result = await runTurn(
+      { model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history, catalog: session.catalog, reuseMcpClient: session.mode === "device" },
+      parsed.data.text,
+    );
     // The skill speaks `say` with Alexa's own voice, so Polly runs for the simulator only.
     const [speechUrl] = await Promise.all([
       session.mode === "device" ? Promise.resolve(null) : deps.speech.synthesize(result.say),
-      deps.sessions.put({ ...session, history: result.history }),
+      deps.sessions.put({ ...session, history: trimHistory(result.history) }),
     ]);
     log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play) });
     return c.json({ say: result.say, play: result.play, speechUrl, toolCalls: result.toolCalls });
