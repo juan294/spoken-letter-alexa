@@ -133,8 +133,66 @@ containers. Acceptance is stated over the Phase 1 telemetry, not over a single t
 If p95 lands between 4000 and 5000 ms, record the number here and treat D-U3 (the model
 bypass) as the live question it was written to be, rather than tightening this phase.
 
-## 7. Handoff
+## 7. Recorded evidence
 
-**Next.** Phase 3. Carry forward: the measured p95 by intent after this phase, whether the
-MCP client cache was implemented or dropped (section 3), and the observed catalog staleness
-behaviour if any story was delivered mid-session.
+Recorded 2026-09-10, two sessions (16:00:33-16:02:48 UTC, then 16:15:41-16:19:02 UTC, a
+~13-minute gap) on a real Echo device, `sla-alexa-skill` deployed at commit `3d50b83`.
+Pulled from `/aws/lambda/sla-alexa-skill` via `aws logs filter-log-events --filter-pattern
+"skill_turn"`. **9 `PlayStoryIntent` turns, not the asked-for 10** (5 + 4) — the Owner ran one
+fewer than the script called for; recorded as-is rather than padded.
+
+| Time (UTC) | ms | tools | note |
+| --- | --- | --- | --- |
+| 16:00:33.901 | **6816** | get_family_story | first turn, session 1 (cold) |
+| 16:01:03.472 | 3254 | get_family_story | |
+| 16:01:30.333 | 5167 | suggest_next_story, get_family_story | no story named |
+| 16:02:07.686 | 3181 | suggest_next_story, get_family_story | no story named |
+| 16:02:32.849 | 2313 | get_family_story | |
+| 16:15:41.073 | **6706** | get_family_story | first turn, session 2 (cold) |
+| 16:16:15.690 | 2842 | get_family_story | |
+| 16:18:06.698 | 4599 | suggest_next_story, get_family_story | no story named |
+| 16:18:45.826 | 3329 | get_family_story | |
+
+**Stats (n=9, too small to be a real distribution — logged as-is per section 6).** Median
+(p50): 3329 ms. p95 (nearest-rank): 6816 ms.
+
+**Against the acceptance criteria:**
+- `SkillTurnMs` p95 for `PlayStoryIntent` below 4000 ms — **not met** (6816 ms). Driven
+  entirely by the two cold-container first turns (6816, 6706 ms); every other turn is
+  under 5200 ms.
+- The median play turn calls `get_family_story` only, no `list_family_stories` — **met**.
+  Stronger than asked: `list_family_stories` was called **zero times across all 9 turns**,
+  including both cold-start turns — section 1's catalog-in-prompt mechanism worked on every
+  single turn, cold or warm, named story or not.
+- The progressive response is audible on a turn that exceeds ~1 s — **met**, confirmed by
+  the Owner; no `progressive_response_failed` line in the window.
+
+**What the numbers actually show.** Three distinct latency bands, not one:
+- **Single-tool, warm** (story named by title, container already warm): 2313-3329 ms — well
+  under the 4000 ms target, and this is most turns (5 of 9).
+- **Two-tool, warm** (no story named — "play a family story," "the newest one" — needs
+  `suggest_next_story` before `get_family_story`): 4599-5167 ms — over target. This is the
+  exact trade-off D-U3 describes: these are the turns a model bypass would help most, since
+  the catalog can't pick "which story" for the speaker.
+- **Single-tool, cold container**: 6706-6816 ms — comparable in magnitude to the original
+  6892 ms two-tool baseline, but for a different reason. The catalog optimization already
+  removed the extra model round trip (tool trace is `get_family_story` only, same as the warm
+  single-tool turns); what's left is Lambda cold-start cost (module load, first Bedrock
+  connection) that this phase never targeted and section 3 does not touch.
+
+## 8. Handoff
+
+**Gate not cleanly closed — Owner decision needed before Phase 3.** The literal p95 target
+(below 4000 ms) is not met on this sample, for a reason section 1-4 don't address (Lambda
+cold start) rather than the reason the plan does (model round trips). Options for the Owner:
+accept with this evidence and the cold-start caveat recorded; gather one more Owner-run batch
+(the asked-for 10th turn, and/or a third cold container) to see if the pattern holds; or open
+a new decision on cold-start mitigation (provisioned concurrency, etc.) as out-of-scope
+follow-up. Not decided here.
+
+**Next.** Phase 3, once the Owner resolves the above. Carry forward: the three-band latency
+picture above (single-tool warm / two-tool warm / cold-start), the MCP client cache was
+implemented and scoped to device sessions only after a token-leak bug was found and fixed
+(section 3; see `docs/plans/2026-09-10-alexa-skill-interaction-ux-notes.md`), and no
+catalog-staleness behavior was observed (session lifetimes in this test were well under the
+15-minute TTL).
