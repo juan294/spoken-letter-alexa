@@ -7,6 +7,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import { type Construct } from "constructs";
 
 import { bundledCode } from "./lambda-code.ts";
+import { METRIC_NAMESPACE } from "./observability-stack.ts";
 
 const SKILL_FUNCTION_NAME = "sla-alexa-skill";
 
@@ -19,6 +20,8 @@ export type SkillStackProps = StackProps & {
   bundle?: boolean;
   /** Recording mode (phase-9.md section 3): `-c sla:recordUtterances=1` for one session. */
   recordUtterances?: boolean;
+  /** Phase 1 section 3: `-c sla:logSay=1` for the one recorded device session, then unset. */
+  logSay?: boolean;
   /**
    * First registration only (`-c sla:skillPermissionOpen=1`): the Skill Management API
    * refuses to create a skill whose Lambda does not already allow
@@ -66,6 +69,8 @@ export class SkillStack extends Stack {
         // "1" for a recording session only: catch-all phrasings are logged for the
         // interaction-model training file, then the flag goes back to "0".
         RECORD_UTTERANCES: props.recordUtterances ? "1" : "0",
+        LOG_SAY: props.logSay ? "1" : "0",
+        EMF_NAMESPACE: METRIC_NAMESPACE,
         LOG_LEVEL: "info",
       },
       handler: "index.handler",

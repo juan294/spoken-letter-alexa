@@ -4,6 +4,7 @@ import { artSource, decodeStreamToken, encodeStreamToken, playDirective, type Pl
 
 const ART_URL = "https://alexa.spokenletter.com/fixtures/art/st_owl.png";
 const PLAY: Play = {
+  id: "st_owl",
   url: "https://alexa.spokenletter.com/fixtures/audio/st_owl.mp3",
   title: "The owl who forgot how to hoot",
   storyteller: "Grandpa Juan",
@@ -64,6 +65,14 @@ describe("stream token", () => {
       JSON.stringify({ url: PLAY.url, title: PLAY.title, storyteller: PLAY.storyteller, durationSeconds: 184 }),
       "utf8",
     ).toString("base64url");
-    expect(decodeStreamToken(legacy)).toEqual({ ...PLAY, artUrl: null });
+    expect(decodeStreamToken(legacy)).toEqual({ ...PLAY, id: null, artUrl: null });
+  });
+
+  test("still decodes a token minted before the story id existed, with id null", () => {
+    const legacy = Buffer.from(
+      JSON.stringify({ url: PLAY.url, title: PLAY.title, storyteller: PLAY.storyteller, durationSeconds: PLAY.durationSeconds, artUrl: ART_URL }),
+      "utf8",
+    ).toString("base64url");
+    expect(decodeStreamToken(legacy)).toEqual({ ...PLAY, id: null });
   });
 });

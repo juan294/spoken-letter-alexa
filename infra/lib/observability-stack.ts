@@ -24,6 +24,7 @@ export const TOOL_NAMES = ["list_family_stories", "get_family_story", "suggest_n
 export class ObservabilityStack extends Stack {
   readonly dashboard: cloudwatch.Dashboard;
   readonly alarm: cloudwatch.Alarm;
+  readonly skillTurnAlarm: cloudwatch.Alarm;
 
   constructor(scope: Construct, id: string, props: ObservabilityStackProps) {
     super(scope, id, props);
@@ -54,6 +55,22 @@ export class ObservabilityStack extends Stack {
     });
     this.alarm.addAlarmAction(new actions.SnsAction(topic));
 
+    // skill_turn (phase-1.md), same namespace, undimensioned series: 5000 ms leaves headroom
+    // under the 7 s client abort in packages/skill/src/agent-client.ts; it is not a target.
+    // No `label`: a labeled metric makes CfnAlarm synthesize the newer metric-math shape
+    // instead of the flat Namespace/MetricName/Statistic properties this stack asserts on.
+    const skillTurn = (statistic: string) => new cloudwatch.Metric({ namespace: METRIC_NAMESPACE, metricName: "SkillTurnMs", statistic, period: Duration.minutes(5) });
+    this.skillTurnAlarm = new cloudwatch.Alarm(this, "SkillTurnP95", {
+      alarmName: "sla-alexa-skill-turn-p95",
+      alarmDescription: "Skill turn latency p95 above 5000 ms over 5 minutes (headroom under the 7 s client abort)",
+      metric: skillTurn("p95"),
+      threshold: 5000,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    this.skillTurnAlarm.addAlarmAction(new actions.SnsAction(topic));
+
     this.dashboard = new cloudwatch.Dashboard(this, "Dashboard", { dashboardName: "sla-alexa" });
     this.dashboard.addWidgets(
       new cloudwatch.GraphWidget({
@@ -71,6 +88,19 @@ export class ObservabilityStack extends Stack {
           props.api.fn.metricThrottles({ period: Duration.minutes(5) }),
           props.api.fn.metric("Url5xxCount", { statistic: "Sum", period: Duration.minutes(5), label: "function URL 5xx" }),
         ],
+      }),
+    );
+    this.dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: "Skill turn latency p50 / p95 / p99 (ms)",
+        width: 12,
+        left: [skillTurn("p50").with({ label: "p50" }), skillTurn("p95").with({ label: "p95" }), skillTurn("p99").with({ label: "p99" })],
+        leftAnnotations: [{ value: 5000, label: "alarm", color: "#d13212" }],
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Dead-end plays (play intent, nothing played)",
+        width: 12,
+        left: [new cloudwatch.Metric({ namespace: METRIC_NAMESPACE, metricName: "DeadEndPlay", statistic: "Sum", period: Duration.minutes(5), label: "DeadEndPlay sum" })],
       }),
     );
     this.dashboard.addWidgets(

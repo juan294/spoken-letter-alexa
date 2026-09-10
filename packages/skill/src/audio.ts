@@ -4,6 +4,8 @@
  * must not depend on the agent package (Strands, Bedrock, Polly, Transcribe).
  */
 export type Play = {
+  /** The story id from `get_family_story`. Null when decoded from a token minted before this field existed. */
+  id: string | null;
   url: string;
   title: string;
   storyteller: string;
@@ -38,6 +40,7 @@ export type AudioDirective = PlayDirective | StopDirective;
 export function encodeStreamToken(play: Play): string {
   const art = artSource(play.artUrl);
   const canonical = {
+    id: play.id,
     url: play.url,
     title: play.title,
     storyteller: play.storyteller,
@@ -53,6 +56,7 @@ export function decodeStreamToken(token: string): Play | null {
     const parsed = JSON.parse(Buffer.from(token, "base64url").toString("utf8")) as Partial<Play>;
     if (typeof parsed.url !== "string" || typeof parsed.title !== "string" || typeof parsed.storyteller !== "string") return null;
     return {
+      id: typeof parsed.id === "string" ? parsed.id : null,
       url: parsed.url,
       title: parsed.title,
       storyteller: parsed.storyteller,

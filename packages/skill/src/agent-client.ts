@@ -21,7 +21,7 @@ type SessionBody = { sessionId: string };
 type TurnBody = { say: string; play: Play | null; toolCalls: ToolTrace[] };
 type ErrorBody = { error?: string; message?: string };
 
-class AgentHttpError extends Error {
+export class AgentHttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,

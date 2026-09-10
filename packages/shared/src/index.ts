@@ -1,5 +1,6 @@
 export { readEnv, type EnvSource } from "./env.ts";
 export { log } from "./logger.ts";
+export { emfEnvelope, type EmfMetric, type EmfUnit } from "./metrics.ts";
 export { constantTimeEqual, decodeJwtClaims, hmacSha256Hex, randomToken, sha256Base64Url, sha256Hex } from "./crypto.ts";
 export { BRAND_TOKENS, brand, flattenTokens, resolveToken } from "./brand/index.ts";
 export {
