@@ -131,6 +131,41 @@ describe("skill handler", () => {
     }
   });
 
+  test("start over and repeat restart the current story at offset 0 (phase-3.md section 1)", async () => {
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    const token = encodeStreamToken(PLAY);
+    const playing = { AudioPlayer: { token, offsetInMilliseconds: 90_000, playerActivity: "PLAYING" } };
+    for (const name of ["AMAZON.StartOverIntent", "AMAZON.RepeatIntent"]) {
+      const response = await handler(envelope({ type: "IntentRequest", intent: { name } }, { context: { ...envelope({}).context, ...playing } }));
+      expect(response.response.directives?.[0]).toMatchObject({ type: "AudioPlayer.Play", audioItem: { stream: { url: PLAY.url, token, offsetInMilliseconds: 0 } } });
+    }
+    const nothing = await handler(envelope({ type: "IntentRequest", intent: { name: "AMAZON.StartOverIntent" } }));
+    expect(ssml(nothing)).toMatch(/nothing to resume/i);
+  });
+
+  test("previous always answers honestly: no story history is kept", async () => {
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    const response = await handler(envelope({ type: "IntentRequest", intent: { name: "AMAZON.PreviousIntent" } }));
+    expect(ssml(response)).toMatch(/first one/i);
+    expect(response.response.shouldEndSession).toBe(false);
+  });
+
+  test("loop and shuffle intents are acknowledged with speech, never an empty response", async () => {
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    for (const name of ["AMAZON.LoopOnIntent", "AMAZON.LoopOffIntent", "AMAZON.ShuffleOnIntent", "AMAZON.ShuffleOffIntent"]) {
+      const response = await handler(envelope({ type: "IntentRequest", intent: { name } }));
+      expect(response.response.outputSpeech).toBeDefined();
+      expect(ssml(response)).toMatch(/one at a time/i);
+    }
+  });
+
+  test("AMAZON.NextIntent routes identically to NextStoryIntent (phase-3.md \"Routing note\")", async () => {
+    const agent = fakeAgent();
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    await handler(intent("AMAZON.NextIntent"));
+    expect(agent.turn).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", text: "play the next family story" });
+  });
+
   test("AudioPlayer lifecycle requests get an empty response and SessionEndedRequest too", async () => {
     const agent = fakeAgent();
     const handler = createHandler({ skillId: SKILL_ID, agent });

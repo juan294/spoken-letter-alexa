@@ -18,7 +18,10 @@
             "list the stories",
             "is there a new story",
             "are there new stories",
-            "any new stories"
+            "any new stories",
+            "what {storyteller} sent me",
+            "who sent a story",
+            "what do you have"
           ]
         },
         {
@@ -30,7 +33,7 @@
             },
             {
               "name": "storyteller",
-              "type": "AMAZON.FirstName"
+              "type": "StorytellerName"
             }
           ],
           "samples": [
@@ -38,12 +41,20 @@
             "play a story",
             "play the latest story",
             "play the newest story",
+            "play a short story",
+            "play something short",
+            "play a bedtime story",
+            "play something for bedtime",
+            "play that again",
+            "play it again",
             "play the story {storyteller} sent",
             "play the story from {storyteller}",
             "play the story by {storyteller}",
+            "play the story {storyteller} made",
             "play the one {storyteller} sent",
             "play the one from {storyteller}",
             "play the story of {storyteller}",
+            "what {storyteller} sent",
             "put on the story {storyteller} sent",
             "let's hear the story {storyteller} sent",
             "play {title}",
@@ -86,9 +97,6 @@
             "can you {text}",
             "could you {text}",
             "would you {text}",
-            "i want to {text}",
-            "i would like to {text}",
-            "i'd like to {text}",
             "ask spoken letter to {text}",
             "ask spoken letter {text}",
             "tell spoken letter to {text}",
@@ -118,9 +126,64 @@
         {
           "name": "AMAZON.StopIntent",
           "samples": []
+        },
+        {
+          "name": "AMAZON.NextIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.PreviousIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StartOverIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.LoopOnIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.LoopOffIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ShuffleOnIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ShuffleOffIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
         }
       ],
-      "types": []
+      "types": [
+        {
+          "name": "StorytellerName",
+          "values": [
+            {
+              "name": {
+                "value": "Aunt Whitney",
+                "synonyms": [
+                  "Auntie Whitney",
+                  "Whitney"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   }
 }

@@ -1,20 +1,24 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
+import { parseFixtureCatalog, TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
 import { CLASS_C_DENYLIST } from "@spoken-letter-alexa/shared";
 
 export type ModelSlot = { name: string; type: string };
 export type ModelIntent = { name: string; slots?: ModelSlot[]; samples: string[] };
+export type ModelSlotTypeValue = { name: { value: string; synonyms?: string[] } };
+export type ModelSlotType = { name: string; values: ModelSlotTypeValue[] };
 export type InteractionModel = {
   interactionModel: {
-    languageModel: { invocationName: string; intents: ModelIntent[]; types: never[] };
+    languageModel: { invocationName: string; intents: ModelIntent[]; types: ModelSlotType[] };
   };
 };
 
 /** `skill-package/interactionModels/custom/en-US.json`, committed and drift-checked. */
 export const MODEL_PATH = path.resolve(import.meta.dirname, "../../skill-package/interactionModels/custom/en-US.json");
 export const TRAINING_PATH = path.resolve(import.meta.dirname, "../../skill-package/training/en-US.jsonl");
+/** `fixtures/stories.json` at the repo root — the same catalog the MCP server serves. */
+export const FIXTURES_PATH = path.resolve(import.meta.dirname, "../../../../fixtures/stories.json");
 
 export const INVOCATION_NAME = "spoken letter";
 
@@ -25,6 +29,13 @@ export function readTraining(file = TRAINING_PATH): string[] {
     .split("\n")
     .filter(Boolean)
     .map((line) => (JSON.parse(line) as { text: string }).text);
+}
+
+export type CatalogStoryteller = { storyteller: string };
+
+/** The delivered-story catalog, for the storyteller slot type (phase-3.md section 2). */
+export function loadStories(file = FIXTURES_PATH): CatalogStoryteller[] {
+  return parseFixtureCatalog(JSON.parse(readFileSync(file, "utf8")));
 }
 
 /**
@@ -38,19 +49,27 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
     name: "PlayStoryIntent",
     slots: [
       { name: "title", type: "AMAZON.SearchQuery" },
-      { name: "storyteller", type: "AMAZON.FirstName" },
+      { name: "storyteller", type: "StorytellerName" },
     ],
     samples: [
       "play a family story",
       "play a story",
       "play the latest story",
       "play the newest story",
+      "play a short story",
+      "play something short",
+      "play a bedtime story",
+      "play something for bedtime",
+      "play that again",
+      "play it again",
       "play the story {storyteller} sent",
       "play the story from {storyteller}",
       "play the story by {storyteller}",
+      "play the story {storyteller} made",
       "play the one {storyteller} sent",
       "play the one from {storyteller}",
       "play the story of {storyteller}",
+      "what {storyteller} sent",
       "put on the story {storyteller} sent",
       "let's hear the story {storyteller} sent",
       "play {title}",
@@ -79,6 +98,9 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
       "is there a new story",
       "are there new stories",
       "any new stories",
+      "what {storyteller} sent me",
+      "who sent a story",
+      "what do you have",
     ],
   },
   suggest_next_story: {
@@ -104,6 +126,10 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
  * sample that is only the slot), so unmatched speech reaches the agent as plain text.
  * Alexa returns only the slot value, so every carrier is intent-neutral: the verb stays
  * inside `{text}` ("to play the lighthouse one" arrives as "play the lighthouse one").
+ * `i want to {text}` / `i would like to {text}` / `i'd like to {text}` are deliberately
+ * absent: `PlayStoryIntent` samples such as `i want to hear {title}` share that prefix, and
+ * Alexa's NLU can route the whole phrase to whichever intent's sample matches first
+ * (phase-3.md section 3, `assertNoCarrierCollision` below).
  */
 const CATCH_ALL_SAMPLES = [
   "to {text}",
@@ -111,16 +137,30 @@ const CATCH_ALL_SAMPLES = [
   "can you {text}",
   "could you {text}",
   "would you {text}",
-  "i want to {text}",
-  "i would like to {text}",
-  "i'd like to {text}",
   "ask spoken letter to {text}",
   "ask spoken letter {text}",
   "tell spoken letter to {text}",
   "tell spoken letter {text}",
 ];
 
-const BUILT_IN_INTENTS = ["AMAZON.CancelIntent", "AMAZON.FallbackIntent", "AMAZON.HelpIntent", "AMAZON.PauseIntent", "AMAZON.ResumeIntent", "AMAZON.StopIntent"];
+const BUILT_IN_INTENTS = [
+  "AMAZON.CancelIntent",
+  "AMAZON.FallbackIntent",
+  "AMAZON.HelpIntent",
+  "AMAZON.PauseIntent",
+  "AMAZON.ResumeIntent",
+  "AMAZON.StopIntent",
+  "AMAZON.NextIntent",
+  "AMAZON.PreviousIntent",
+  "AMAZON.StartOverIntent",
+  "AMAZON.RepeatIntent",
+  "AMAZON.LoopOnIntent",
+  "AMAZON.LoopOffIntent",
+  "AMAZON.ShuffleOnIntent",
+  "AMAZON.ShuffleOffIntent",
+  "AMAZON.YesIntent",
+  "AMAZON.NoIntent",
+];
 
 const CHILD_WORDS = /\b(kid|kids|child|children|son|daughter|grandson|granddaughter)\b/;
 
@@ -141,7 +181,70 @@ export function utteranceAllowed(sample: string): boolean {
   return CLASS_C_DENYLIST.every((denied) => !sample.includes(denied.fragment));
 }
 
-export function generateInteractionModel(input: { training: string[] }): InteractionModel {
+/** The literal text before a sample's first `{slot}`, or the whole sample when it has none. */
+function carrierPrefix(sample: string): string {
+  const index = sample.indexOf("{");
+  return index === -1 ? sample : sample.slice(0, index);
+}
+
+/**
+ * Every `CatchAllIntent` carrier must be intent-neutral: if one is a literal prefix of a
+ * `PlayStoryIntent` sample, Alexa's NLU can route a play request to the catch-all instead
+ * of `PlayStoryIntent` (phase-3.md section 3). Throws with both colliding samples named, so
+ * this is a generate-time failure rather than a live mis-route.
+ */
+export function assertNoCarrierCollision(playSamples: string[], catchAllSamples: string[]): void {
+  for (const catchAllSample of catchAllSamples) {
+    const prefix = carrierPrefix(catchAllSample);
+    if (prefix === catchAllSample) continue; // no slot placeholder: not a carrier phrase
+    for (const playSample of playSamples) {
+      if (playSample.startsWith(prefix)) {
+        throw new Error(`CatchAllIntent carrier "${catchAllSample}" is a prefix of PlayStoryIntent sample "${playSample}" — remove or rephrase the carrier`);
+      }
+    }
+  }
+}
+
+/** A kinship word's other common spoken forms, so any of them still matches the same person. */
+const KINSHIP_SYNONYM_FORMS: Record<string, string[]> = {
+  aunt: ["auntie"],
+  grandma: ["grandmother", "granny"],
+  grandpa: ["grandfather", "gramps"],
+  mom: ["mommy", "mother"],
+  dad: ["daddy", "father"],
+};
+
+/**
+ * `StorytellerName` (phase-3.md section 2): `AMAZON.FirstName` only matches a bare first
+ * name, but every fixture storyteller is kinship-qualified ("Aunt Whitney"). The full string
+ * is the canonical value; synonyms add the bare first name and, when the leading word is a
+ * recognized kinship term, its other common forms ("Auntie Whitney").
+ */
+export function storytellerSlotType(stories: CatalogStoryteller[]): ModelSlotType {
+  const distinct = [...new Set(stories.map((story) => story.storyteller))].sort();
+  const values = distinct.map((storyteller) => {
+    const [kinshipWord, ...rest] = storyteller.split(" ");
+    const bareName = rest.join(" ");
+    const kinshipVariants = bareName ? (KINSHIP_SYNONYM_FORMS[kinshipWord?.toLowerCase() ?? ""] ?? []) : [];
+    const synonyms = bareName
+      ? [bareName, ...kinshipVariants.map((variant) => `${variant.charAt(0).toUpperCase()}${variant.slice(1)} ${bareName}`)].sort()
+      : [];
+    return { name: { value: storyteller, ...(synonyms.length > 0 && { synonyms }) } };
+  });
+  return { name: "StorytellerName", values };
+}
+
+/** The store listing's fixed three-entry `examplePhrases`, generated so it never drifts from what actually works. */
+export function generateExamplePhrases(stories: CatalogStoryteller[]): [string, string, string] {
+  const [storyteller] = [...new Set(stories.map((story) => story.storyteller))].sort();
+  return [
+    "Alexa, open spoken letter",
+    `Alexa, ask spoken letter to play the story ${storyteller ?? "your family"} sent`,
+    "Alexa, ask spoken letter what is new",
+  ];
+}
+
+export function generateInteractionModel(input: { training: string[]; stories: CatalogStoryteller[] }): InteractionModel {
   const intents: ModelIntent[] = TOOL_METADATA.map((tool) => {
     const intent = TOOL_INTENTS[tool.name];
     if (!intent) throw new Error(`tool ${tool.name} has no skill intent: add it to TOOL_INTENTS in packages/skill/src/model/generate.ts`);
@@ -155,7 +258,14 @@ export function generateInteractionModel(input: { training: string[] }): Interac
   }
   intents.push({ name: "CatchAllIntent", slots: [{ name: "text", type: "AMAZON.SearchQuery" }], samples: [...catchAll] });
 
+  const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];
+  assertNoCarrierCollision(playSamples, [...catchAll]);
+
   for (const name of BUILT_IN_INTENTS) intents.push({ name, samples: [] });
 
-  return { interactionModel: { languageModel: { invocationName: INVOCATION_NAME, intents, types: [] } } };
+  return {
+    interactionModel: {
+      languageModel: { invocationName: INVOCATION_NAME, intents, types: [storytellerSlotType(input.stories)] },
+    },
+  };
 }
