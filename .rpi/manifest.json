@@ -2008,7 +2008,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "2272dc58a2bdc903f338605d98919cc16a39ca0d42b35e099fb045a56f7dd9a5",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2035,7 +2035,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "053c53cb342f25d97105a30d1c8bb66261bfe473a0b7ed0518fdfaa092df176a",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2062,7 +2062,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "443197febb82bb4dc340958bf06e82fcc70dac82fcd0450120362f230fc66368",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2089,7 +2089,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "7767c15a86efe3f999c3fe7ed531f47f7b6a54c22ea49e25485825a72f4b06d2",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2116,7 +2116,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "a499ccc8911a36e285eec3a3a3fdad0e973d8363318f696068ab8d6b214b8104",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2143,7 +2143,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "ab22c3e927f5185c036f149f6f533fd08cf37e1989d1ec8db0ee217356270922",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2170,7 +2170,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "57ff3f6102f7011ee71fd2285405dea2f44e685af9cfc07c6ab209586587405c",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2197,7 +2197,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "101226d16357512617b7f5b11a98686a5f83dcbda70e294904efb0f1ac69bbbe",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2224,7 +2224,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "c119ce4f91f437c6829b81123d2b245f6d912a81c3f73ab4a2dc2c222ce63fa1",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2251,7 +2251,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "a02de20d615fea28cc4be46800755b4ed0bc4899f13a1ba847be4b01ca18283b",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2278,7 +2278,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "8ca90edc265e92e7b6b5de5fee68a3b1e2cd2b7765142cc9d8a427c635c2d588",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2305,7 +2305,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "4dbfc989421270a35161a9c9f28b3ffa041f6cc242c07949c4c42481ff5257dc",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2332,7 +2332,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "6345ed00b010914b252aa84c2d1af3bd2efff3c743b2338e3efec1acdc7c9f9a",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2359,7 +2359,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "5963a0bd21a022185729a5055f8f8eae9ba81f81da61b76cb523d17060d889d2",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2386,7 +2386,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "529596bcd5799f34a790283a882ea48a0e994444f33c163a91f7974639254e49",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2421,7 +2421,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "dbeda69c14e1d67629e6074c9d478982dda390c081ab76fd58a71a0fff41bed1",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -2456,7 +2456,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "f71e147da14ddb4360a049930dfb733f81d29212a977e2aa2f608790e0d459be",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -3752,7 +3752,7 @@
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
         "rendered_sha256": "482e49d35c30321eb20ff529839a685611c56334162f9c4a84dbb59c06fb2f34",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "entry-owned"
@@ -4179,7 +4179,7 @@
         "harness": "claude",
         "sha256": "bb6160eda79372660a247b14d7d2e3cb467fda5c0f67c3004e7efe1ef435cf38"
       },
-      "base_hash": "aa00139ccc080ce33de89c1534ef28fb0104caee3a69bfd00541e9a4fcba579d",
+      "base_hash": "0dea9491512c706d9dcdcd48ef343b6f2254587a0f22584bedf3ab6e6fc28bfb",
       "component_id": "resource:policy-engine",
       "consumers": [
         "claude",
@@ -4190,8 +4190,8 @@
       "root_id": "project",
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
-        "rendered_sha256": "aa00139ccc080ce33de89c1534ef28fb0104caee3a69bfd00541e9a4fcba579d",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "rendered_sha256": "0dea9491512c706d9dcdcd48ef343b6f2254587a0f22584bedf3ab6e6fc28bfb",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       },
       "status": "clean"
@@ -4331,7 +4331,7 @@
       "route": "direct",
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       }
     },
@@ -4351,7 +4351,7 @@
       "route": "direct",
       "source": {
         "manifest_sha256": "d8c72cff72c7663ed862d007b9e8dbbb90ee65cb97efd6323cc93a8161362acc",
-        "revision": "c4ef2ee395231869034e411e9ef7c9e862d31330",
+        "revision": "0e786ccda5981566ce94ac74bc50937df3978c0c",
         "version": "2.0.2"
       }
     }

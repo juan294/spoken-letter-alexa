@@ -17,6 +17,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { hasAlexaTriggerPermission } from "./alexa-policy.mjs";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(here, "..");
 const repoRoot = path.resolve(pkgRoot, "../..");
@@ -71,7 +73,7 @@ if (dryRun) {
 // First run: `pnpm deploy -c sla:skillPermissionOpen=1` (open trigger), this script
 // creates the skill and records its id, then `pnpm deploy` locks the permission to it.
 const policy = spawnSync("aws", ["lambda", "get-policy", "--function-name", FUNCTION_NAME, "--region", region, "--profile", profile, "--query", "Policy", "--output", "text"], { encoding: "utf8" });
-if (policy.status !== 0 || !policy.stdout.includes("alexa-appkit.amazon.com")) {
+if (policy.status !== 0 || !hasAlexaTriggerPermission(policy.stdout)) {
   fail("the skill Lambda has no Alexa trigger permission yet: run `pnpm deploy -c sla:skillPermissionOpen=1` once, then this script again");
 }
 console.log("ok: Alexa trigger permission present");
