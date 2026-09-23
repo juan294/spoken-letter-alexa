@@ -16,8 +16,8 @@
     "@modelcontextprotocol/server": "2.0.0",
     "@spoken-letter-alexa/oauth": "workspace:*",
     "@spoken-letter-alexa/shared": "workspace:*",
-    "hono": "4.13.7",
-    "zod": "4.5.4"
+    "hono": "4.13.8",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "typescript": "6.0.3",
