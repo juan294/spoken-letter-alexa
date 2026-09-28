@@ -12,6 +12,7 @@ import { type Construct } from "constructs";
 export class CoreStack extends Stack {
   readonly oauthTable: dynamodb.Table;
   readonly agentSessionsTable: dynamodb.Table;
+  readonly demoStateTable: dynamodb.Table;
   readonly jwtKey: kms.Key;
   readonly bridgeSecret: secretsmanager.Secret;
   readonly oauthClientsSecret: secretsmanager.Secret;
@@ -45,6 +46,14 @@ export class CoreStack extends Stack {
     this.agentSessionsTable = new dynamodb.Table(this, "AgentSessionsTable", {
       tableName: "sla-agent-sessions",
       partitionKey: { name: "sessionId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: "expiresAt",
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    this.demoStateTable = new dynamodb.Table(this, "DemoStateTable", {
+      tableName: "sla-demo-state",
+      partitionKey: { name: "deviceKey", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       timeToLiveAttribute: "expiresAt",
       removalPolicy: RemovalPolicy.DESTROY,

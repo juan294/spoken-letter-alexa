@@ -8,7 +8,7 @@ type Slot = { name: string; value?: string };
 
 export type AlexaRequestEnvelope = {
   version: string;
-  session?: { new: boolean; sessionId: string; application: { applicationId: string }; user: { userId: string } };
+  session?: { new: boolean; sessionId: string; application: { applicationId: string }; user: { userId: string }; attributes?: Record<string, string> };
   context: {
     System: {
       application: { applicationId: string };
@@ -38,6 +38,7 @@ type OutputSpeech = { type: "SSML"; ssml: string };
 
 export type AlexaResponseEnvelope = {
   version: "1.0";
+  sessionAttributes?: Record<string, string>;
   response: {
     outputSpeech?: OutputSpeech;
     reprompt?: { outputSpeech: OutputSpeech };
@@ -62,13 +63,18 @@ export type SkillHandler = (event: AlexaRequestEnvelope) => Promise<AlexaRespons
 
 const REPROMPT = "You can say: play my stories, or ask what is new.";
 const LAUNCH = "Spoken Letter. Which family story would you like?";
-const HELP = "You can say: play my stories, or ask what is new. Which would you like?";
+const HELP = "You can say play my stories, ask what is new, or say let's create a demo story. For delivery and credits, use Spoken Letter. Which would you like?";
 const RETRY = "I'm still looking for that one. Ask again in a moment.";
 const NOTHING_TO_RESUME = "There is nothing to resume. Ask for a family story first.";
 const NOTHING_TO_PLAY = "Which family story would you like? You can say: play my stories.";
 const NOTHING_TO_GO_BACK_TO = "That was the first one. Ask for another story instead.";
 const ONE_AT_A_TIME = "I play family stories one at a time.";
 const NO_PLAY = "Which delivered story would you like? You can name a title, or say play my stories.";
+const THEME_PROMPT = "What general theme should the demo draft have? Say, about mermaids or about space.";
+const DRAFT_UNAVAILABLE = "No demo draft was saved. Try again in a moment.";
+const NAMED_HANDOFF = "I can prepare a name-free demo outline. Please choose the listener in Spoken Letter and finish delivery there.";
+const CREDITS_HELP = "Open Spoken Letter to add story credits. Alexa cannot charge you or change credits.";
+const CREATION_HELP = "Open Spoken Letter, choose a listener, make or record a story, and finish delivery there. Here I can save a name-free demo draft.";
 
 /** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
 function progressiveText(playOriented: boolean): string {
@@ -103,6 +109,7 @@ const ask = (text: string) => speak(text, { reprompt: REPROMPT, endSession: fals
 const tell = (text: string, directives?: AudioDirective[]) => speak(text, { endSession: true, ...(directives && { directives }) });
 /** Playback control without speech. */
 const control = (directives: AudioDirective[]): AlexaResponseEnvelope => ({ version: "1.0", response: { directives, shouldEndSession: true } });
+const askForTheme = (text = THEME_PROMPT): AlexaResponseEnvelope => ({ ...ask(text), sessionAttributes: { demoFlow: "draft" } });
 
 /** Resume, start over and repeat all decode the current AudioPlayer token and re-issue a play directive, differing only in the offset. */
 function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number): AlexaResponseEnvelope {
@@ -233,6 +240,16 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           return type.startsWith("AudioPlayer.") ? EMPTY : ask(RETRY);
         }
       };
+      const saveDemoDraft = async (theme: string): Promise<AlexaResponseEnvelope> => {
+        if (!options.agent.saveDraft) return askForTheme(DRAFT_UNAVAILABLE);
+        try {
+          await options.agent.saveDraft({ deviceUserId, requestId: event.request.requestId, theme });
+          return tell("I saved a demo draft. Open Spoken Letter to choose the listener and finish it.");
+        } catch (error) {
+          if (error instanceof AgentHttpError && error.code === "unsupported_theme") return askForTheme(error.message);
+          return askForTheme(DRAFT_UNAVAILABLE);
+        }
+      };
       if (type === "SessionEndedRequest") return EMPTY;
       if (type === "AudioPlayer.PlaybackNearlyFinished" || type === "AudioPlayer.PlaybackFinished") {
         if (!playlist || !event.request.token) return EMPTY;
@@ -253,6 +270,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const intent = event.request.intent?.name ?? "";
       const observed = event.context.AudioPlayer?.token;
       const tokenInput = observed ? { observedToken: observed } : {};
+      const pendingDraft = event.session?.attributes?.demoFlow === "draft";
       telemetry.intent = intent;
       const slots = loggedSlots(event);
       if (slots !== undefined) telemetry.slots = slots;
@@ -261,6 +279,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         case "AMAZON.PauseIntent":
         case "AMAZON.StopIntent":
         case "AMAZON.CancelIntent":
+          if (pendingDraft) return tell("Okay. No demo draft was saved.");
           return control([STOP_DIRECTIVE]);
         case "AMAZON.ResumeIntent":
           if (playlist) {
@@ -287,6 +306,40 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           return ask(HELP);
         default:
           break;
+      }
+
+      const catchAll = intent === "CatchAllIntent" ? slotValue(event, "text") : undefined;
+      if (catchAll && /\b(?:send|deliver)\b/i.test(catchAll)) return ask(NAMED_HANDOFF);
+      if (catchAll && /\b(?:create|make)\b.*\bfor\b/i.test(catchAll)) return ask(NAMED_HANDOFF);
+      const helpTopic = intent === "HelpTopicIntent" ? slotValue(event, "topic") : catchAll;
+      if (helpTopic && /\b(?:credit|credits|charge|purchase|buy)\b/i.test(helpTopic)) return ask(CREDITS_HELP);
+      if (catchAll && /\b(?:how|help)\b.*\b(?:create|make|draft)\b/i.test(catchAll)) return ask(CREATION_HELP);
+      if (intent === "HelpTopicIntent") return ask(CREATION_HELP);
+      if (intent === "ReadDemoDraftIntent") {
+        if (!options.agent.latestDraft) return ask(DRAFT_UNAVAILABLE);
+        try {
+          const latest = await options.agent.latestDraft({ deviceUserId });
+          return latest.status === "saved" ? tell(`Your demo draft says: ${latest.outline}`) : ask("There is no demo draft yet. Say, let's create a story.");
+        } catch {
+          return ask("I couldn't read the demo draft right now. Try again in a moment.");
+        }
+      }
+      if (intent === "StartStoryIntent") {
+        const theme = slotValue(event, "theme");
+        return theme ? saveDemoDraft(theme) : askForTheme();
+      }
+      if (pendingDraft && intent === "ThemeIntent") {
+        const theme = slotValue(event, "theme");
+        return theme ? saveDemoDraft(theme) : askForTheme();
+      }
+      if (pendingDraft && catchAll) {
+        const explicitTheme = /^(?:about|the theme is|make it about)\s+(.+)$/i.exec(catchAll)?.[1];
+        const bareTheme = /^(?:bedtime|space|ocean|forest|animals|friendship|mermaids)(?: story)?$/i.test(catchAll) ? catchAll : undefined;
+        if (explicitTheme || bareTheme) return saveDemoDraft(explicitTheme ?? bareTheme ?? "");
+      }
+      if (catchAll && /\b(?:create|make)\b.*\bstory\b/i.test(catchAll)) {
+        const theme = /\babout\s+(.+)$/i.exec(catchAll)?.[1];
+        return theme ? saveDemoDraft(theme) : askForTheme();
       }
 
       if (playlist) {

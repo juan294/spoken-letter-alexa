@@ -12,8 +12,10 @@ import {
   createSigV4Fetch,
   createTranscriber,
   DataUrlSpeechStore,
+  DynamoDemoDraftStore,
   DynamoSessionStore,
   DynamoPlaylistStore,
+  MemoryDemoDraftStore,
   MemorySessionStore,
   MemoryPlaylistStore,
   PollySpeech,
@@ -176,6 +178,12 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
       secret: env.ALEXA_SKILL_COMMAND_SECRET,
     };
   }
+
+  agentDeps.drafts = {
+    store: env.DEMO_STATE_STORE === "dynamo"
+      ? new DynamoDemoDraftStore({ client: documentClient(env), tableName: env.DEMO_STATE_TABLE })
+      : new MemoryDemoDraftStore(),
+  };
 
   const app = await createServerApp({
     issuer,

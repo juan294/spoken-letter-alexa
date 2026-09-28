@@ -8,7 +8,7 @@
           "smallIconUri": "file://assets/images/en-US_smallIconUri.png",
           "largeIconUri": "file://assets/images/en-US_largeIconUri.png",
           "summary": "Play the family stories delivered to your Spoken Letter account on your Echo.",
-          "description": "Spoken Letter lets grandparents and relatives record family stories that are delivered to a family's account. Ask for the newest story, the story a storyteller sent, or the next one, and it plays on your Echo. Development stage only: this skill is tested on the Owner's devices and is not submitted for certification.",
+          "description": "Spoken Letter plays family stories already delivered to your account. Ask for the newest story, a story from a storyteller, or the next one. You can also prepare a name-free demo story outline. Choose a listener, finish delivery, and manage credits in the Spoken Letter app. Development stage only: this skill is tested on the Owner's devices and is not submitted for certification.",
           "examplePhrases": [
             "Alexa, open spoken letter",
             "Alexa, ask spoken letter to play the story Aunt Whitney sent",
@@ -25,7 +25,7 @@
       "distributionCountries": [
         "US"
       ],
-      "testingInstructions": "Development stage. Say: open spoken letter; play the story Aunt Whitney sent; what is new; next; start over; shuffle on; pause; resume. Stories are the fixture recordings served from alexa.spokenletter.com.",
+      "testingInstructions": "Development stage. Say: open spoken letter; play the story Aunt Whitney sent; what is new; next; start over; shuffle on; pause; resume; let's create a story; about mermaids; read my demo draft; how do I add credits. Playback uses fixture recordings. Drafts are saved only for the demo and are not delivered.",
       "category": "COMMUNICATION"
     },
     "apis": {

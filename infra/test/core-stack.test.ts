@@ -40,6 +40,16 @@ describe("CoreStack", () => {
     });
   });
 
+  test("keeps demo drafts in a separate TTL table keyed by hashed device key", () => {
+    template.hasResourceProperties("AWS::DynamoDB::Table", {
+      TableName: "sla-demo-state",
+      BillingMode: "PAY_PER_REQUEST",
+      KeySchema: [{ AttributeName: "deviceKey", KeyType: "HASH" }],
+      TimeToLiveSpecification: { AttributeName: "expiresAt", Enabled: true },
+    });
+    template.hasResource("AWS::DynamoDB::Table", { Properties: { TableName: "sla-demo-state" }, DeletionPolicy: "Delete" });
+  });
+
   test("creates an RSA 2048 KMS key for JWT signing with an alias", () => {
     template.hasResourceProperties("AWS::KMS::Key", {
       KeySpec: "RSA_2048",

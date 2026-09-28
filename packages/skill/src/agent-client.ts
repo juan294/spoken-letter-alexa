@@ -26,10 +26,15 @@ export type PlaylistReply = {
   fallbackToSuggestion?: boolean;
 };
 
+export type DraftReceipt = { status: "saved"; draftId: string; theme: string; outline: string };
+export type LatestDraft = DraftReceipt | { status: "none" };
+
 export type AgentClient = {
   /** One line of text for the device user; the agent keeps the conversation per user. */
   turn: (input: { deviceUserId: string; text: string }) => Promise<AgentReply>;
   playlist?: (input: PlaylistCommand) => Promise<PlaylistReply>;
+  saveDraft?: (input: { deviceUserId: string; requestId: string; theme: string }) => Promise<DraftReceipt>;
+  latestDraft?: (input: { deviceUserId: string }) => Promise<LatestDraft>;
 };
 
 export type AgentClientOptions = {
@@ -98,6 +103,35 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   const skillSecret = options.skillSecret;
   return {
     ...(skillSecret && {
+      async saveDraft(input: { deviceUserId: string; requestId: string; theme: string }): Promise<DraftReceipt> {
+        const controller = new AbortController();
+        const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
+        try {
+          const reply: unknown = await post("/agent/demo/draft", input, controller.signal, { "x-alexa-skill-secret": skillSecret });
+          if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved" || !("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string") {
+            throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
+          }
+          return reply as DraftReceipt;
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+      async latestDraft(input: { deviceUserId: string }): Promise<LatestDraft> {
+        const controller = new AbortController();
+        const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
+        try {
+          const reply: unknown = await post("/agent/demo/draft/latest", input, controller.signal, { "x-alexa-skill-secret": skillSecret });
+          if (!reply || typeof reply !== "object" || !("status" in reply) || (reply.status !== "none" && reply.status !== "saved")) {
+            throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
+          }
+          if (reply.status === "saved" && (!("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string")) {
+            throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
+          }
+          return reply as LatestDraft;
+        } finally {
+          clearTimeout(timer);
+        }
+      },
       async playlist(input: PlaylistCommand): Promise<PlaylistReply> {
         const controller = new AbortController();
         const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);

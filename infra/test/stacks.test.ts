@@ -96,6 +96,17 @@ describe("Phase 6 stacks", () => {
       expect(variables.SECRETS_SKILL_COMMAND_ARN).toBeDefined();
     });
 
+    test("the API gets a separate demo-state table and scoped item access", () => {
+      const [fn] = resources(t.api, "AWS::Lambda::Function");
+      const variables = (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
+      expect(variables.DEMO_STATE_STORE).toBe("dynamo");
+      expect(JSON.stringify(variables.DEMO_STATE_TABLE)).toContain("DemoStateTable");
+      const demoAccess = statements(t.api).filter((statement) => JSON.stringify(statement.Resource).includes("DemoStateTable"));
+      expect(demoAccess).toHaveLength(1);
+      expect(demoAccess[0]?.Action).toEqual(["dynamodb:GetItem", "dynamodb:PutItem"]);
+      expect(JSON.stringify(demoAccess[0]?.Resource)).not.toContain("/index/*");
+    });
+
     test("IAM stays narrow: only Transcribe and Polly use Resource *", () => {
       const apiStatements = statements(t.api);
       for (const statement of apiStatements) {

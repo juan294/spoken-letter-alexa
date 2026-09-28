@@ -38,6 +38,71 @@ afterEach(() => {
 });
 
 describe("skill handler", () => {
+  test("creation asks for a theme, then saves one name-free demo draft on the follow-up", async () => {
+    const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "draft-1", theme: "mermaids", outline: "A gentle mermaid helps a friend." });
+    const agent = fakeAgent({ saveDraft });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const start = await handler(intent("StartStoryIntent"));
+    expect(ssml(start)).toMatch(/what general theme/i);
+    expect(start.sessionAttributes).toEqual({ demoFlow: "draft" });
+    expect(saveDraft).not.toHaveBeenCalled();
+    const followup = intent("ThemeIntent", { theme: "mermaids" });
+    followup.session = { ...followup.session!, attributes: { demoFlow: "draft" } };
+    const saved = await handler(followup);
+    expect(saveDraft).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", requestId: "amzn1.echo-api.request.1", theme: "mermaids" });
+    expect(ssml(saved)).toMatch(/saved a demo draft/i);
+    expect(ssml(saved)).toMatch(/private app|open Spoken Letter/i);
+    expect(ssml(saved)).not.toMatch(/sent|delivered/i);
+  });
+
+  test("named-listener creation and credits requests give safe app handoffs without writes", async () => {
+    const saveDraft = vi.fn();
+    const agent = fakeAgent({ saveDraft });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const named = await handler(intent("CatchAllIntent", { text: "create a story for Lily" }));
+    expect(ssml(named)).toMatch(/choose the listener in Spoken Letter/i);
+    expect(ssml(named)).not.toContain("Lily");
+    const credits = await handler(intent("HelpTopicIntent", { topic: "add credits" }));
+    expect(ssml(credits)).toMatch(/cannot charge|can't charge/i);
+    expect(ssml(credits)).not.toMatch(/charged|added credits/i);
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(agent.turn).not.toHaveBeenCalled();
+  });
+
+  test("a failed draft write never claims a save and keeps a retry path", async () => {
+    const saveDraft = vi.fn().mockRejectedValue(new AgentHttpError(503, "draft_unavailable", "No demo draft was saved. Try again in a moment."));
+    const agent = fakeAgent({ saveDraft });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const event = intent("StartStoryIntent", { theme: "space" });
+    const response = await handler(event);
+    expect(ssml(response)).toMatch(/no demo draft was saved/i);
+    expect(response.sessionAttributes).toEqual({ demoFlow: "draft" });
+    expect(response.response.shouldEndSession).toBe(false);
+  });
+
+  test("the parent can read back a saved demo draft", async () => {
+    const latestDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "draft-1", theme: "space", outline: "A gentle trip through the stars." });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ latestDraft }) })(intent("ReadDemoDraftIntent"));
+    expect(latestDraft).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER" });
+    expect(ssml(response)).toContain("A gentle trip through the stars.");
+    expect(ssml(response)).toMatch(/demo draft/i);
+  });
+  test("a pending draft does not turn a playback request into a saved draft", async () => {
+    const saveDraft = vi.fn();
+    const playlist = vi.fn().mockResolvedValue({ say: "Playing the forest story.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
+    const event = intent("CatchAllIntent", { text: "play the forest story" });
+    event.session = { ...event.session!, attributes: { demoFlow: "draft" } };
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft, playlist }) })(event);
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(ssml(response)).not.toMatch(/saved a demo draft/i);
+  });
+
+  test("catch-all creation help gives private app steps", async () => {
+    const saveDraft = vi.fn();
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) })(intent("CatchAllIntent", { text: "how do I create a story" }));
+    expect(ssml(response)).toMatch(/open Spoken Letter.*choose a listener/i);
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
   test("starts a newest playlist through the authenticated command route and plays the server token", async () => {
     const playlist = vi.fn().mockResolvedValue({ say: "Playing your new demo stories.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
     const agent = fakeAgent({ playlist });

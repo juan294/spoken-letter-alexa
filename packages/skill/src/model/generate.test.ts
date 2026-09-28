@@ -11,7 +11,7 @@ const intents = model.interactionModel.languageModel.intents;
 const byName = Object.fromEntries(intents.map((intent) => [intent.name, intent]));
 
 describe("generateInteractionModel", () => {
-  test("invocation name and one intent per tool plus the catch-all and the built-ins, including the ten added ones", () => {
+  test("invocation name and tool, demo, playlist, catch-all, and built-in intents", () => {
     expect(model.interactionModel.languageModel.invocationName).toBe("spoken letter");
     expect(Object.keys(byName).sort()).toEqual(
       [
@@ -32,6 +32,10 @@ describe("generateInteractionModel", () => {
         "AMAZON.YesIntent",
         "AMAZON.NoIntent",
         "CatchAllIntent",
+        "StartStoryIntent",
+        "ThemeIntent",
+        "HelpTopicIntent",
+        "ReadDemoDraftIntent",
         "NextStoryIntent",
         "PlayAllIntent",
         "PlayAgainIntent",
@@ -51,6 +55,16 @@ describe("generateInteractionModel", () => {
     expect(byName.StartPlaylistOverIntent?.samples).toContain("start the playlist over");
     expect(byName.PlayAgainIntent?.samples).toContain("play it again");
     expect(byName.PlayStoryIntent?.samples).not.toContain("play it again");
+  });
+
+  test("guided demo draft and app handoff intents have safe spoken carriers", () => {
+    expect(byName.StartStoryIntent?.samples).toContain("let's create a story");
+    expect(byName.StartStoryIntent?.slots).toEqual([{ name: "theme", type: "AMAZON.SearchQuery" }]);
+    expect(byName.ThemeIntent?.samples).toContain("about {theme}");
+    expect(byName.ThemeIntent?.slots).toEqual([{ name: "theme", type: "AMAZON.SearchQuery" }]);
+    expect(byName.HelpTopicIntent?.samples).toContain("help with {topic}");
+    expect(byName.HelpTopicIntent?.slots).toEqual([{ name: "topic", type: "AMAZON.SearchQuery" }]);
+    expect(byName.ReadDemoDraftIntent?.samples).toContain("read my demo draft");
   });
 
   test("the catch-all carries a single AMAZON.SearchQuery slot and utterances that route free text", () => {

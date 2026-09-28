@@ -279,6 +279,22 @@ export function generateInteractionModel(input: { training: string[]; stories: C
   }
   intents.push({ name: "CatchAllIntent", slots: [{ name: "text", type: "AMAZON.SearchQuery" }], samples: [...catchAll] });
   intents.push(
+    {
+      name: "StartStoryIntent",
+      slots: [{ name: "theme", type: "AMAZON.SearchQuery" }],
+      samples: ["let's create a story", "create a story", "make a story", "let's create a bedtime story", "create a story about {theme}", "make a story about {theme}"],
+    },
+    {
+      name: "ThemeIntent",
+      slots: [{ name: "theme", type: "AMAZON.SearchQuery" }],
+      samples: ["about {theme}", "the theme is {theme}", "make it about {theme}"],
+    },
+    {
+      name: "HelpTopicIntent",
+      slots: [{ name: "topic", type: "AMAZON.SearchQuery" }],
+      samples: ["help with {topic}", "how do i {topic}", "tell me about {topic}"],
+    },
+    { name: "ReadDemoDraftIntent", samples: ["read my demo draft", "what is in my demo draft", "what is my demo draft"] },
     { name: "PlayAllIntent", samples: ["play my stories", "play all my stories", "play the whole playlist", "shuffle my stories"] },
     { name: "PlayAgainIntent", samples: ["play it again", "play that again", "play the current story again"] },
     { name: "PlayNewStoriesIntent", samples: ["play my new stories", "play the new stories", "play my newest stories"] },

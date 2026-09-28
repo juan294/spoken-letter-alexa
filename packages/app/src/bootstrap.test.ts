@@ -57,10 +57,27 @@ describe("bootstrap", () => {
     expect((await app.request("/healthz")).status).toBe(200);
   });
 
+  test("local demo drafts use an in-memory store behind the skill credential", async () => {
+    const secret = "local-skill-command-secret-0123456789";
+    const env = readServerEnv({ ...BASE, ALEXA_SKILL_COMMAND_SECRET: secret });
+    const { app } = await bootstrap(env, { allowGenerated: true });
+    const latest = await app.request("/agent/demo/draft/latest", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-alexa-skill-secret": secret },
+      body: JSON.stringify({ deviceUserId: "parent-device" }),
+    });
+    expect(latest.status).toBe(200);
+    await expect(latest.json()).resolves.toEqual({ status: "none" });
+  });
+
   test("the bedrock model id and MCP url come from the environment", () => {
     const env = readServerEnv({ ...BASE, BEDROCK_MODEL_ID: "us.amazon.nova-lite-v1:0", MCP_URL: "https://gateway.example/mcp" });
     expect(env.BEDROCK_MODEL_ID).toBe("us.amazon.nova-lite-v1:0");
     expect(env.MCP_URL).toBe("https://gateway.example/mcp");
     expect(readServerEnv(BASE).MCP_URL).toBe("http://localhost:4310/mcp");
+    expect(readServerEnv(BASE).DEMO_STATE_TABLE).toBe("sla-demo-state");
+    expect(readServerEnv({ ...BASE, DEMO_STATE_TABLE: "custom-demo-state" }).DEMO_STATE_TABLE).toBe("custom-demo-state");
+    expect(readServerEnv(BASE).DEMO_STATE_STORE).toBe("memory");
+    expect(readServerEnv({ ...BASE, DEMO_STATE_STORE: "dynamo" }).DEMO_STATE_STORE).toBe("dynamo");
   });
 });

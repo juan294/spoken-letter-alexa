@@ -62,6 +62,8 @@ export class ApiStack extends Stack {
       KMS_KEY_ID: props.core.jwtKey.keyId,
       AGENT_SESSIONS_STORE: "dynamo",
       AGENT_SESSIONS_TABLE: props.core.agentSessionsTable.tableName,
+      DEMO_STATE_STORE: "dynamo",
+      DEMO_STATE_TABLE: props.core.demoStateTable.tableName,
       ASSETS_BUCKET: props.assetsBucketName,
       BEDROCK_MODEL_ID: modelId,
       MCP_URL: props.mcpUrl ?? `${publicBaseUrl}/mcp`,
@@ -103,6 +105,10 @@ export class ApiStack extends Stack {
         resources: tables.flatMap((table) => [table.tableArn, `${table.tableArn}/index/*`]),
       }),
     );
+    this.fn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["dynamodb:GetItem", "dynamodb:PutItem"],
+      resources: [props.core.demoStateTable.tableArn],
+    }));
     this.fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["secretsmanager:GetSecretValue"],

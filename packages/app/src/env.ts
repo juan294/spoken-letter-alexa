@@ -45,6 +45,9 @@ export const serverEnvShape = {
   MCP_URL: z.url().optional(),
   AGENT_SESSIONS_STORE: z.enum(["memory", "dynamo"]).default("memory"),
   AGENT_SESSIONS_TABLE: z.string().default("sla-agent-sessions"),
+  /** Expiring, parent-owned demo drafts; separate from OAuth and agent sessions. */
+  DEMO_STATE_STORE: z.enum(["memory", "dynamo"]).default("memory"),
+  DEMO_STATE_TABLE: z.string().default("sla-demo-state"),
   /** S3 bucket for Polly replies (`polly/` prefix) served by CloudFront; data URLs when absent. */
   ASSETS_BUCKET: z.string().optional(),
 };

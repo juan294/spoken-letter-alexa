@@ -6,6 +6,7 @@ import { type Context, Hono } from "hono";
 import { z } from "zod";
 
 import { type SpeechSynthesizer } from "./polly.ts";
+import { createModelDraftGenerator, DemoDraftController, DemoDraftError, type DemoDraftStore, type DraftGenerator } from "./demo-drafts.ts";
 import { PlaylistController, type PlaylistCatalog, type PlaylistStore } from "./playlist.ts";
 import { isCatalogStale, type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
@@ -30,6 +31,7 @@ export type AgentDeps = {
   demoToken: () => Promise<string>;
   offline: boolean;
   playlist?: { store: PlaylistStore; secret: string } | undefined;
+  drafts?: { store: DemoDraftStore; generator?: DraftGenerator | undefined } | undefined;
   now?: (() => number) | undefined;
 };
 
@@ -41,6 +43,9 @@ const sessionBodySchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("device"), deviceUserId: z.string().min(1).max(256) }),
 ]);
 const turnBodySchema = z.object({ sessionId: z.string().min(1).max(128), text: z.string().trim().min(1).max(500) });
+const draftBodySchema = z.object({ deviceUserId: z.string().min(1).max(256), requestId: z.string().min(1).max(256),
+  theme: z.string().trim().min(1).max(160) });
+const draftLatestBodySchema = z.object({ deviceUserId: z.string().min(1).max(256) });
 const playlistBodySchema = z.discriminatedUnion("command", [
   z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("start"), order: z.enum(["shuffle", "newest"]).optional(), storyteller: z.string().trim().min(1).max(80).optional() }),
   z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("title"), title: z.string().trim().min(1).max(200), storyteller: z.string().trim().min(1).max(80).optional() }),
@@ -155,6 +160,9 @@ export function createAgentApp(deps: AgentDeps): Hono {
   const app = new Hono();
   const now = deps.now ?? (() => Math.floor(Date.now() / 1000));
   const serviceToken = cachedServiceToken(deps.demoToken, now);
+  const demoDrafts = deps.drafts ? new DemoDraftController({
+    store: deps.drafts.store, generator: deps.drafts.generator ?? createModelDraftGenerator(deps.model), now,
+  }) : null;
 
   const playlistCatalog: PlaylistCatalog = {
     async list() {
@@ -196,6 +204,41 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const { deviceUserId, ...command } = parsed.data;
     const controller = new PlaylistController({ store: deps.playlist.store, catalog: playlistCatalog, now });
     return c.json(await controller.command(deviceSessionId(deviceUserId), command));
+  });
+
+  app.post("/agent/demo/draft", async (c) => {
+    if (!demoDrafts || !deps.playlist) return c.json({ error: "draft_unavailable", message: "No demo draft was saved. Try again in a moment." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) {
+      return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    }
+    const parsed = draftBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, request ID, and theme are required");
+    try {
+      return c.json(await demoDrafts.save(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId, parsed.data.theme));
+    } catch (error) {
+      if (error instanceof DemoDraftError && error.code === "unsupported_theme") {
+        return c.json({ error: "unsupported_theme", message: "Try a theme like bedtime, space, ocean, forest, animals, friendship, or mermaids." }, 422);
+      }
+      if (error instanceof DemoDraftError && error.code === "draft_limit_reached") {
+        return c.json({ error: "draft_limit_reached", message: "No demo draft was saved. Try again later." }, 429);
+      }
+      return c.json({ error: "draft_unavailable", message: "No demo draft was saved. Try again in a moment." }, 503);
+    }
+  });
+
+  app.post("/agent/demo/draft/latest", async (c) => {
+    if (!demoDrafts || !deps.playlist) return c.json({ error: "draft_unavailable", message: "The demo draft is unavailable. Try again in a moment." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) {
+      return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    }
+    const parsed = draftLatestBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
+    try {
+      const receipt = await demoDrafts.latest(deviceSessionId(parsed.data.deviceUserId));
+      return c.json(receipt ?? { status: "none" });
+    } catch {
+      return c.json({ error: "draft_unavailable", message: "The demo draft is unavailable. Try again in a moment." }, 503);
+    }
   });
 
   app.post("/agent/session", async (c) => {

@@ -12,6 +12,21 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("createAgentClient", () => {
+  test("saves and reads a demo draft through authenticated routes", async () => {
+    const fetchImpl = vi.fn<typeof fetch>((input, init) => {
+      expect(new Headers(init?.headers).get("x-alexa-skill-secret")).toBe("skill-secret");
+      if (urlOf(input).endsWith("/agent/demo/draft/latest")) {
+        expect(bodyOf(init)).toEqual({ deviceUserId: "owner" });
+        return Promise.resolve(jsonResponse({ status: "saved", draftId: "draft-1", theme: "space", outline: "A gentle trip through the stars." }));
+      }
+      expect(urlOf(input)).toBe(`${BASE}/agent/demo/draft`);
+      expect(bodyOf(init)).toEqual({ deviceUserId: "owner", requestId: "request-1", theme: "space" });
+      return Promise.resolve(jsonResponse({ status: "saved", draftId: "draft-1", theme: "space", outline: "A gentle trip through the stars." }));
+    });
+    const client = createAgentClient({ baseUrl: BASE, fetch: fetchImpl, timeoutMs: 6_000, skillSecret: "skill-secret" });
+    await expect(client.saveDraft!({ deviceUserId: "owner", requestId: "request-1", theme: "space" })).resolves.toMatchObject({ status: "saved", draftId: "draft-1" });
+    await expect(client.latestDraft!({ deviceUserId: "owner" })).resolves.toMatchObject({ status: "saved", draftId: "draft-1" });
+  });
   test("authenticates a playlist command and preserves its server token", async () => {
     const fetchImpl = vi.fn<typeof fetch>((input, init) => {
       expect(urlOf(input)).toBe(`${BASE}/agent/playlist`);
