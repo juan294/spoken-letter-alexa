@@ -328,6 +328,9 @@ importers:
 
   packages/skill:
     dependencies:
+      '@aws-sdk/client-secrets-manager':
+        specifier: 3.1127.0
+        version: 3.1127.0
       '@spoken-letter-alexa/mcp-server':
         specifier: workspace:*
         version: link:../mcp-server

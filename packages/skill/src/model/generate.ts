@@ -60,8 +60,6 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
       "play something short",
       "play a bedtime story",
       "play something for bedtime",
-      "play that again",
-      "play it again",
       "play the story {storyteller} sent",
       "play the story from {storyteller}",
       "play the story by {storyteller}",
@@ -280,6 +278,17 @@ export function generateInteractionModel(input: { training: string[]; stories: C
     if (sample && utteranceAllowed(sample)) catchAll.add(sample);
   }
   intents.push({ name: "CatchAllIntent", slots: [{ name: "text", type: "AMAZON.SearchQuery" }], samples: [...catchAll] });
+  intents.push(
+    { name: "PlayAllIntent", samples: ["play my stories", "play all my stories", "play the whole playlist", "shuffle my stories"] },
+    { name: "PlayAgainIntent", samples: ["play it again", "play that again", "play the current story again"] },
+    { name: "PlayNewStoriesIntent", samples: ["play my new stories", "play the new stories", "play my newest stories"] },
+    {
+      name: "PlayCreatorStoriesIntent",
+      slots: [{ name: "storyteller", type: "StorytellerName" }],
+      samples: ["play my stories from {storyteller}", "play stories from {storyteller}", "play all stories by {storyteller}"],
+    },
+    { name: "StartPlaylistOverIntent", samples: ["start the playlist over", "restart the playlist", "play the playlist from the beginning"] },
+  );
 
   const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];
   assertNoCarrierCollision(playSamples, [...catchAll]);

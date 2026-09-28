@@ -16,6 +16,7 @@ export class CoreStack extends Stack {
   readonly bridgeSecret: secretsmanager.Secret;
   readonly oauthClientsSecret: secretsmanager.Secret;
   readonly originVerifySecret: secretsmanager.Secret;
+  readonly skillCommandSecret: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
@@ -67,6 +68,12 @@ export class CoreStack extends Stack {
     this.originVerifySecret = new secretsmanager.Secret(this, "OriginVerifySecret", {
       secretName: "sla/origin-verify",
       description: "Shared header value CloudFront presents to the function URL (x-origin-verify); the Lambda refuses requests without it.",
+      generateSecretString: { excludePunctuation: true, passwordLength: 48 },
+    });
+
+    this.skillCommandSecret = new secretsmanager.Secret(this, "SkillCommandSecret", {
+      secretName: "sla/skill-command",
+      description: "Shared command credential for the Alexa skill Lambda and API playlist endpoint.",
       generateSecretString: { excludePunctuation: true, passwordLength: 48 },
     });
 

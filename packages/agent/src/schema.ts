@@ -19,6 +19,7 @@ export const playSchema = z.object({
 export const turnOutputSchema = z.object({
   say: z.string().min(1).max(400).describe("One or two short spoken sentences"),
   play: playSchema.nullable().describe("The story to play now, or null when nothing should play"),
+  needsAnswer: z.boolean().optional().describe("True when say asks the parent to choose or clarify before playback"),
 });
 
 export type Play = z.infer<typeof playSchema>;

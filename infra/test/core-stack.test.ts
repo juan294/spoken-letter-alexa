@@ -58,6 +58,10 @@ describe("CoreStack", () => {
       Name: "sla/origin-verify",
       GenerateSecretString: { ExcludePunctuation: true, PasswordLength: 48 },
     });
+    template.hasResourceProperties("AWS::SecretsManager::Secret", {
+      Name: "sla/skill-command",
+      GenerateSecretString: { ExcludePunctuation: true, PasswordLength: 48 },
+    });
   });
 
   test("keeps the OAuth table and signing key on stack deletion", () => {

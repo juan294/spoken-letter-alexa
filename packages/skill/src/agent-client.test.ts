@@ -12,6 +12,16 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("createAgentClient", () => {
+  test("authenticates a playlist command and preserves its server token", async () => {
+    const fetchImpl = vi.fn<typeof fetch>((input, init) => {
+      expect(urlOf(input)).toBe(`${BASE}/agent/playlist`);
+      expect(new Headers(init?.headers).get("x-alexa-skill-secret")).toBe("skill-secret");
+      expect(bodyOf(init)).toEqual({ deviceUserId: "owner", command: "start", order: "newest" });
+      return Promise.resolve(jsonResponse({ say: "Starting.", action: "play", play: { id: "story", url: "https://example.com/story.mp3", title: "Story", storyteller: "Aunt", durationSeconds: 42 }, token: "controller-token", playBehavior: "REPLACE_ALL" }));
+    });
+    const client = createAgentClient({ baseUrl: BASE, fetch: fetchImpl, timeoutMs: 6_000, skillSecret: "skill-secret" });
+    await expect(client.playlist!({ deviceUserId: "owner", command: "start", order: "newest" })).resolves.toMatchObject({ action: "play", token: "controller-token" });
+  });
   test("opens a device session once per device user and reuses it for the turn", async () => {
     const fetchImpl = vi.fn<typeof fetch>((input, init) => {
       const url = urlOf(input);

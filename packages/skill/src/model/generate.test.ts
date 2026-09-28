@@ -33,10 +33,24 @@ describe("generateInteractionModel", () => {
         "AMAZON.NoIntent",
         "CatchAllIntent",
         "NextStoryIntent",
+        "PlayAllIntent",
+        "PlayAgainIntent",
+        "PlayNewStoriesIntent",
+        "PlayCreatorStoriesIntent",
+        "StartPlaylistOverIntent",
         "PlayStoryIntent",
         "WhatIsNewIntent",
       ].sort(),
     );
+  });
+
+  test("playlist intents distinguish all, newest, creator, and reset", () => {
+    expect(byName.PlayAllIntent?.samples).toContain("play my stories");
+    expect(byName.PlayNewStoriesIntent?.samples).toContain("play my new stories");
+    expect(byName.PlayCreatorStoriesIntent?.slots).toEqual([{ name: "storyteller", type: "StorytellerName" }]);
+    expect(byName.StartPlaylistOverIntent?.samples).toContain("start the playlist over");
+    expect(byName.PlayAgainIntent?.samples).toContain("play it again");
+    expect(byName.PlayStoryIntent?.samples).not.toContain("play it again");
   });
 
   test("the catch-all carries a single AMAZON.SearchQuery slot and utterances that route free text", () => {
@@ -60,7 +74,7 @@ describe("generateInteractionModel", () => {
     expect(play.samples).toContain("play the story {storyteller} sent");
     // The utterances-people-actually-use additions (phase-3.md section 4).
     expect(play.samples).toContain("play a short story");
-    expect(play.samples).toContain("play that again");
+    expect(play.samples).not.toContain("play that again");
     // "recorded" fails utteranceAllowed (contains "record"); "made" is the substitute.
     expect(play.samples).toContain("play the story {storyteller} made");
     expect(play.samples).not.toContain("play the story {storyteller} recorded");

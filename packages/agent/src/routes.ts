@@ -1,9 +1,12 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import { decodeJwtClaims, log } from "@spoken-letter-alexa/shared";
 import { type MessageData, type Model } from "@strands-agents/sdk";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 
 import { type SpeechSynthesizer } from "./polly.ts";
+import { PlaylistController, type PlaylistCatalog, type PlaylistStore } from "./playlist.ts";
 import { isCatalogStale, type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
 import { mcpClientFor, runTurn } from "./turn.ts";
@@ -26,6 +29,7 @@ export type AgentDeps = {
   /** Mints the demo subject's client_credentials token (server-side; the secret never reaches the browser). */
   demoToken: () => Promise<string>;
   offline: boolean;
+  playlist?: { store: PlaylistStore; secret: string } | undefined;
   now?: (() => number) | undefined;
 };
 
@@ -37,6 +41,26 @@ const sessionBodySchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("device"), deviceUserId: z.string().min(1).max(256) }),
 ]);
 const turnBodySchema = z.object({ sessionId: z.string().min(1).max(128), text: z.string().trim().min(1).max(500) });
+const playlistBodySchema = z.discriminatedUnion("command", [
+  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("start"), order: z.enum(["shuffle", "newest"]).optional(), storyteller: z.string().trim().min(1).max(80).optional() }),
+  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("title"), title: z.string().trim().min(1).max(200), storyteller: z.string().trim().min(1).max(80).optional() }),
+  ...(["next", "previous", "restart", "reset"] as const).map((command) => z.object({ deviceUserId: z.string().min(1).max(256),
+    command: z.literal(command), observedToken: z.string().min(1).max(2048).optional() })),
+  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("resume"), observedToken: z.string().min(1).max(2048),
+    offsetInMilliseconds: z.number().int().min(0).max(24 * 60 * 60 * 1000) }),
+  ...(["nearlyFinished", "finished"] as const).map((command) => z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal(command), observedToken: z.string().min(1).max(2048), eventId: z.string().min(1).max(256) })),
+]);
+const playlistSummarySchema = z.object({ id: z.string(), title: z.string(), storyteller: z.string(), deliveredAt: z.string() });
+const playlistAudioSchema = playlistSummarySchema.extend({
+  audio: z.object({ url: z.url(), expiresAt: z.iso.datetime() }),
+  durationSeconds: z.number().int().positive().optional(), artUrl: z.string().optional(),
+});
+
+function skillSecretMatches(actual: string | undefined, expected: string): boolean {
+  if (!actual || !expected) return false;
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(actual), digest(expected));
+}
 
 function jsonError(c: Context, status: 400 | 404 | 413 | 500, error: string, message: string) {
   return c.json({ error, message }, status);
@@ -132,12 +156,47 @@ export function createAgentApp(deps: AgentDeps): Hono {
   const now = deps.now ?? (() => Math.floor(Date.now() / 1000));
   const serviceToken = cachedServiceToken(deps.demoToken, now);
 
+  const playlistCatalog: PlaylistCatalog = {
+    async list() {
+      const mcp = deps.deviceMcp ?? { url: deps.mcpUrl, fetch: deps.mcpFetch };
+      const client = mcpClientFor(mcp.url, await serviceToken(), mcp.fetch);
+      const tool = (await client.listTools()).find((item) => item.name === "list_family_stories" || item.name.endsWith("_list_family_stories"));
+      if (!tool) throw new Error("list_family_stories is unavailable");
+      const result = (await client.callTool(tool, { limit: 20 })) as { structuredContent?: { stories?: unknown } };
+      return z.array(playlistSummarySchema).parse(result.structuredContent?.stories);
+    },
+    async get(id) {
+      const mcp = deps.deviceMcp ?? { url: deps.mcpUrl, fetch: deps.mcpFetch };
+      const client = mcpClientFor(mcp.url, await serviceToken(), mcp.fetch);
+      const tool = (await client.listTools()).find((item) => item.name === "get_family_story" || item.name.endsWith("_get_family_story"));
+      if (!tool) throw new Error("get_family_story is unavailable");
+      const result = (await client.callTool(tool, { storyId: id })) as { isError?: boolean; structuredContent?: unknown };
+      if (result.isError) return null;
+      const story = playlistAudioSchema.parse(result.structuredContent);
+      return { id: story.id, title: story.title, storyteller: story.storyteller, url: story.audio.url,
+        durationSeconds: story.durationSeconds ?? null, artUrl: story.artUrl ?? null,
+        expiresAt: Math.floor(Date.parse(story.audio.expiresAt) / 1000) };
+    },
+  };
+
   app.onError((error, c) => {
     log.error("agent_unhandled", { path: c.req.path, message: error.message });
     return c.json({ error: "server_error", message: "The agent hit an internal error" }, 500);
   });
 
   app.get("/agent/health", (c) => c.json({ ok: true, offline: deps.offline, model: deps.modelId }));
+
+  app.post("/agent/playlist", async (c) => {
+    if (!deps.playlist) return c.json({ error: "unavailable", message: "Playlist commands are unavailable" }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) {
+      return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    }
+    const parsed = playlistBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A valid playlist command is required");
+    const { deviceUserId, ...command } = parsed.data;
+    const controller = new PlaylistController({ store: deps.playlist.store, catalog: playlistCatalog, now });
+    return c.json(await controller.command(deviceSessionId(deviceUserId), command));
+  });
 
   app.post("/agent/session", async (c) => {
     const parsed = sessionBodySchema.safeParse(await c.req.json().catch(() => null));
@@ -176,7 +235,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
       deps.sessions.put({ ...session, history: trimHistory(result.history) }),
     ]);
     log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play) });
-    return c.json({ say: result.say, play: result.play, speechUrl, toolCalls: result.toolCalls });
+    return c.json({ say: result.say, play: result.play, needsAnswer: result.needsAnswer ?? false, speechUrl, toolCalls: result.toolCalls });
   });
 
   app.post("/agent/transcribe", async (c) => {

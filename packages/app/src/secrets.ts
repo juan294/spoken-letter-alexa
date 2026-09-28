@@ -2,7 +2,7 @@ import { GetSecretValueCommand, type SecretsManagerClient } from "@aws-sdk/clien
 import { log } from "@spoken-letter-alexa/shared";
 
 /**
- * Lambda cold start: copy the two Secrets Manager values into the process environment
+ * Lambda cold start: copy the Secrets Manager values into the process environment
  * the way `readServerEnv` expects them. `sla/bridge` is the raw bridge secret;
  * `sla/oauth-clients` is JSON `{ clients: StaticClient[], m2mSecret: string }` written by
  * `pnpm -F infra seed:secrets`.
@@ -14,19 +14,23 @@ export async function loadSecretsIntoEnv(
   const bridgeArn = env.SECRETS_BRIDGE_ARN;
   const clientsArn = env.SECRETS_OAUTH_CLIENTS_ARN;
   const originArn = env.SECRETS_ORIGIN_VERIFY_ARN;
-  if (!bridgeArn || !clientsArn || !originArn) {
-    throw new Error("SECRETS_BRIDGE_ARN, SECRETS_OAUTH_CLIENTS_ARN and SECRETS_ORIGIN_VERIFY_ARN are required");
+  const commandArn = env.SECRETS_SKILL_COMMAND_ARN;
+  if (!bridgeArn || !clientsArn || !originArn || !commandArn) {
+    throw new Error("SECRETS_BRIDGE_ARN, SECRETS_OAUTH_CLIENTS_ARN, SECRETS_ORIGIN_VERIFY_ARN and SECRETS_SKILL_COMMAND_ARN are required");
   }
 
-  const [bridge, clients, origin] = await Promise.all([
+  const [bridge, clients, origin, command] = await Promise.all([
     client.send(new GetSecretValueCommand({ SecretId: bridgeArn })),
     client.send(new GetSecretValueCommand({ SecretId: clientsArn })),
     client.send(new GetSecretValueCommand({ SecretId: originArn })),
+    client.send(new GetSecretValueCommand({ SecretId: commandArn })),
   ]);
   if (!bridge.SecretString) throw new Error("sla/bridge has no value");
   if (!clients.SecretString) throw new Error("sla/oauth-clients has no value");
   if (!origin.SecretString) throw new Error("sla/origin-verify has no value");
+  if (!command.SecretString) throw new Error("sla/skill-command has no value");
   env.ORIGIN_VERIFY_SECRET = origin.SecretString;
+  env.ALEXA_SKILL_COMMAND_SECRET = command.SecretString;
 
   const parsed = JSON.parse(clients.SecretString) as { clients?: unknown; m2mSecret?: unknown };
   if (!Array.isArray(parsed.clients) || typeof parsed.m2mSecret !== "string") {

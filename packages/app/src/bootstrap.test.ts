@@ -42,7 +42,16 @@ describe("bootstrap", () => {
       OAUTH_CLIENTS: JSON.stringify([{ clientId: "simulator", redirectUris: ["https://alexa.spokenletter.com/demo/callback"], grants: ["authorization_code"] }]),
       OAUTH_M2M_SECRET: "y".repeat(32),
     });
-    const { app, generated } = await bootstrap(complete, { allowGenerated: false });
+    await expect(bootstrap(complete, { allowGenerated: false })).rejects.toThrow(/ALEXA_SKILL_COMMAND_SECRET/);
+    const withCommand = readServerEnv({
+      ...BASE,
+      PUBLIC_BASE_URL: "https://alexa.spokenletter.com",
+      ALEXA_BRIDGE_SECRET: "x".repeat(32),
+      OAUTH_CLIENTS: JSON.stringify([{ clientId: "simulator", redirectUris: ["https://alexa.spokenletter.com/demo/callback"], grants: ["authorization_code"] }]),
+      OAUTH_M2M_SECRET: "y".repeat(32),
+      ALEXA_SKILL_COMMAND_SECRET: "z".repeat(32),
+    });
+    const { app, generated } = await bootstrap(withCommand, { allowGenerated: false });
     expect(generated).toEqual({});
     expect((await app.request("/dev/start")).status).toBe(404);
     expect((await app.request("/healthz")).status).toBe(200);

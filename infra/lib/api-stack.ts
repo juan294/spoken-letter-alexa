@@ -70,6 +70,7 @@ export class ApiStack extends Stack {
       SECRETS_BRIDGE_ARN: props.core.bridgeSecret.secretArn,
       SECRETS_OAUTH_CLIENTS_ARN: props.core.oauthClientsSecret.secretArn,
       SECRETS_ORIGIN_VERIFY_ARN: props.core.originVerifySecret.secretArn,
+      SECRETS_SKILL_COMMAND_ARN: props.core.skillCommandSecret.secretArn,
       LOG_LEVEL: "info",
     };
 
@@ -105,7 +106,7 @@ export class ApiStack extends Stack {
     this.fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["secretsmanager:GetSecretValue"],
-        resources: [props.core.bridgeSecret.secretArn, props.core.oauthClientsSecret.secretArn, props.core.originVerifySecret.secretArn],
+        resources: [props.core.bridgeSecret.secretArn, props.core.oauthClientsSecret.secretArn, props.core.originVerifySecret.secretArn, props.core.skillCommandSecret.secretArn],
       }),
     );
     this.fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["kms:Sign", "kms:GetPublicKey"], resources: [props.core.jwtKey.keyArn] }));

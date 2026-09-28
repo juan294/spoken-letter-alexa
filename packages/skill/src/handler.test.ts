@@ -38,6 +38,93 @@ afterEach(() => {
 });
 
 describe("skill handler", () => {
+  test("starts a newest playlist through the authenticated command route and plays the server token", async () => {
+    const playlist = vi.fn().mockResolvedValue({ say: "Playing your new demo stories.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
+    const agent = fakeAgent({ playlist });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("PlayNewStoriesIntent"));
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "start", order: "newest" });
+    expect(agent.turn).not.toHaveBeenCalled();
+    expect(response.response.directives?.[0]).toMatchObject({ audioItem: { stream: { token: "server-token" } } });
+  });
+
+  test("a nearly finished callback enqueues only the controller's fresh next recording", async () => {
+    const playlist = vi.fn().mockResolvedValue({ say: null, action: "play", play: PLAY, token: "next-token", playBehavior: "ENQUEUE", expectedPreviousToken: "current-token" });
+    const agent = fakeAgent({ playlist });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(envelope({ type: "AudioPlayer.PlaybackNearlyFinished", token: "current-token", requestId: "event-1" }));
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "nearlyFinished", observedToken: "current-token", eventId: "event-1" });
+    expect(response.response.outputSpeech).toBeUndefined();
+    expect(response.response.directives?.[0]).toMatchObject({ playBehavior: "ENQUEUE", audioItem: { stream: { token: "next-token", expectedPreviousToken: "current-token" } } });
+  });
+
+  test("a finished callback records completion with no speech or playback", async () => {
+    const playlist = vi.fn().mockResolvedValue({ say: null, action: "none" });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) })(envelope({ type: "AudioPlayer.PlaybackFinished", token: "current-token", requestId: "event-2" }));
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "finished", observedToken: "current-token", eventId: "event-2" });
+    expect(response.response).toEqual({});
+  });
+
+  test("a failed playlist command tells the parent to retry without claiming playback", async () => {
+    const playlist = vi.fn().mockRejectedValue(new Error("unavailable"));
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) })(intent("PlayAllIntent"));
+    expect(ssml(response)).toMatch(/ask again/i);
+    expect(response.response.directives).toBeUndefined();
+  });
+
+  test("stale next does not ask the model to suggest another story", async () => {
+    const agent = fakeAgent({ playlist: vi.fn().mockResolvedValue({ action: "none", say: null }) });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("NextStoryIntent"));
+    expect(response.response).toEqual({});
+    expect(agent.turn).not.toHaveBeenCalled();
+  });
+
+  test("play again restarts the active recording instead of starting a new playlist", async () => {
+    const playlist = vi.fn().mockResolvedValue({ action: "play", say: null, play: PLAY, token: "restart-token", playBehavior: "REPLACE_ALL" });
+    const agent = fakeAgent({ playlist });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("PlayAgainIntent"));
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "restart" });
+    expect(response.response.directives?.[0]).toMatchObject({ audioItem: { stream: { offsetInMilliseconds: 0 } } });
+    expect(agent.turn).not.toHaveBeenCalled();
+  });
+
+  test("resume without a stream token asks for a story before calling the controller", async () => {
+    const playlist = vi.fn();
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) })(intent("AMAZON.ResumeIntent"));
+    expect(ssml(response)).toMatch(/nothing to resume/i);
+    expect(playlist).not.toHaveBeenCalled();
+  });
+
+  test("a play-oriented model reply without audio never claims playback", async () => {
+    const agent = fakeAgent({ turn: vi.fn().mockResolvedValue({ say: "Here it is, playing now.", play: null, toolCalls: [] }) });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("PlayStoryIntent"));
+    expect(ssml(response)).not.toMatch(/playing now/i);
+    expect(response.response.directives).toBeUndefined();
+  });
+
+  test("an explicit needsAnswer reply preserves a specific clarification without punctuation", async () => {
+    const agent = fakeAgent({ turn: vi.fn().mockResolvedValue({ say: "Which Aunt Whitney title did you mean", needsAnswer: true, play: null, toolCalls: [] }) });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("PlayStoryIntent"));
+    expect(ssml(response)).toContain("Which Aunt Whitney title did you mean");
+  });
+
+  test("a suggestion with no audio falls back to the newest delivered catalog story", async () => {
+    const playlist = vi.fn()
+      .mockResolvedValueOnce({ action: "none", say: null, fallbackToSuggestion: true })
+      .mockResolvedValueOnce({ action: "play", say: "Playing Moon.", play: PLAY, token: "fallback-token", playBehavior: "REPLACE_ALL" });
+    const agent = fakeAgent({ playlist, turn: vi.fn().mockResolvedValue({ say: "Here it is.", play: null, toolCalls: [] }) });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("NextStoryIntent"));
+    expect(playlist).toHaveBeenLastCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "start", order: "newest" });
+    expect(response.response.directives?.[0]).toMatchObject({ audioItem: { stream: { token: "fallback-token" } } });
+  });
+
+  test("catch-all playback wording cannot turn model prose into a false playback claim", async () => {
+    const playlist = vi.fn().mockResolvedValue({ action: "none", say: "I couldn't find that delivered story. You can ask for Moon." });
+    const agent = fakeAgent({ playlist, turn: vi.fn().mockResolvedValue({ say: "Playing it now.", play: null, toolCalls: [] }) });
+    const response = await createHandler({ skillId: SKILL_ID, agent })(intent("CatchAllIntent", { text: "play the lighthouse one" }));
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "title", title: "lighthouse" });
+    expect(ssml(response)).not.toMatch(/playing it now/i);
+    expect(ssml(response)).toMatch(/ask for Moon/i);
+    expect(response.response.directives).toBeUndefined();
+  });
   test("rejects a wrong or missing application id before touching the agent", async () => {
     const agent = fakeAgent();
     const handler = createHandler({ skillId: SKILL_ID, agent });
@@ -181,7 +268,8 @@ describe("skill handler", () => {
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
     for (const name of ["AMAZON.HelpIntent", "AMAZON.FallbackIntent"]) {
       const response = await handler(envelope({ type: "IntentRequest", intent: { name } }));
-      expect(ssml(response)).toMatch(/play the story|what is new/i);
+      expect(ssml(response)).toMatch(/play my stories|what is new/i);
+      expect(ssml(response)).not.toMatch(/grandpa/i);
       expect(response.response.reprompt).toBeDefined();
       expect(response.response.shouldEndSession).toBe(false);
     }
@@ -195,13 +283,12 @@ describe("skill handler", () => {
     expect(response.response.shouldEndSession).toBe(false);
   });
 
-  test("recording mode logs catch-all phrasings and nothing else", async () => {
+  test("recording mode never records raw catch-all speech that may contain a child name", async () => {
     const record = vi.fn();
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent(), recordUtterance: record });
-    await handler(intent("CatchAllIntent", { text: "let's hear grandpa" }));
+    await handler(intent("CatchAllIntent", { text: "create a story for Lily" }));
     await handler(intent("WhatIsNewIntent"));
-    expect(record).toHaveBeenCalledTimes(1);
-    expect(record).toHaveBeenCalledWith({ locale: "en-US", text: "let's hear grandpa" });
+    expect(JSON.stringify(record.mock.calls)).not.toContain("Lily");
   });
 });
 
@@ -246,7 +333,8 @@ describe("skill_turn telemetry (phase-1.md)", () => {
     await handler(envelope({ type: "SessionEndedRequest", reason: "ERROR", error: { type: "INTERNAL_SERVICE_ERROR", message: "boom" } }));
     await handler(envelope({ type: "AudioPlayer.PlaybackNearlyFinished" }));
     const [ended, audio] = loggedSkillTurns(info);
-    expect(ended).toMatchObject({ reason: "ERROR", error: { type: "INTERNAL_SERVICE_ERROR", message: "boom" } });
+    expect(ended).toMatchObject({ reason: "ERROR", error: "INTERNAL_SERVICE_ERROR" });
+    expect(JSON.stringify(ended)).not.toContain("boom");
     expect(audio && "reason" in audio).toBe(false);
   });
 
@@ -260,11 +348,11 @@ describe("skill_turn telemetry (phase-1.md)", () => {
     await handler(intent("PlayStoryIntent", { title: "the owl" }));
     await handler(intent("WhatIsNewIntent"));
     const [played, notPlayed] = loggedSkillTurns(info);
-    expect(played).toMatchObject({ intent: "PlayStoryIntent", slots: { title: "the owl" }, played: true, storyId: PLAY.id, outcome: "ok" });
+    expect(played).toMatchObject({ intent: "PlayStoryIntent", slots: { title: null }, played: true, storyId: PLAY.id, outcome: "ok" });
     expect(notPlayed).toMatchObject({ intent: "WhatIsNewIntent", slots: {}, played: false, storyId: null });
   });
 
-  test("say is absent when logSay is unset and present, truncated to 120 chars, when set", async () => {
+  test("model speech is not logged even when logSay is requested", async () => {
     const longSay = "x".repeat(200);
     const agent = fakeAgent({ turn: vi.fn().mockResolvedValue({ say: longSay, play: null, toolCalls: [] }) });
 
@@ -275,7 +363,7 @@ describe("skill_turn telemetry (phase-1.md)", () => {
 
     const withFlag = vi.spyOn(log, "info");
     await createHandler({ skillId: SKILL_ID, agent, logSay: true })(intent("WhatIsNewIntent"));
-    expect(loggedSkillTurns(withFlag)[0]?.say).toBe(longSay.slice(0, 120));
+    expect(loggedSkillTurns(withFlag)[0]?.say).toBeUndefined();
   });
 
   test("an agent HTTP rejection is classified rejected, with the AgentHttpError code", async () => {

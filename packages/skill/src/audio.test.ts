@@ -31,6 +31,15 @@ describe("artSource", () => {
 });
 
 describe("playDirective", () => {
+  test("enqueues a fresh next stream against the observed token", () => {
+    const directive = playDirective(PLAY, 0, { expectedPreviousToken: "observed-token" });
+    expect(directive.playBehavior).toBe("ENQUEUE");
+    expect(directive.audioItem.stream).toMatchObject({
+      url: PLAY.url,
+      offsetInMilliseconds: 0,
+      expectedPreviousToken: "observed-token",
+    });
+  });
   test("carries the artwork card when the story has one", () => {
     const directive = playDirective(PLAY);
     expect(directive.audioItem.metadata.art).toEqual({

@@ -15,6 +15,7 @@
     "record:pull": "node scripts/record-pull.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "3.1127.0",
     "@spoken-letter-alexa/mcp-server": "workspace:*",
     "@spoken-letter-alexa/shared": "workspace:*",
     "zod": "4.5.4"

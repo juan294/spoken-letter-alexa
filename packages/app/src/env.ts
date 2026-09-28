@@ -23,6 +23,8 @@ export const serverEnvShape = {
   SPOKEN_LETTER_ORIGIN: z.url().default("http://localhost:3007"),
   /** Shared with the private Spoken Letter API. Generated at startup when absent (local only). */
   ALEXA_BRIDGE_SECRET: z.string().min(16).optional(),
+  /** Shared with the classic skill Lambda; required for production playlist commands. */
+  ALEXA_SKILL_COMMAND_SECRET: z.string().min(16).optional(),
   /** JSON array of static clients (see packages/oauth/src/clients.ts). Local dev clients when absent. */
   OAUTH_CLIENTS: z.string().optional(),
   /** Secret of the `alexa-m2m` client the agent uses for the demo subject. Generated locally when absent. */

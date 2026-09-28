@@ -89,10 +89,11 @@ describe("Phase 6 stacks", () => {
     test("secrets are read at cold start from Secrets Manager, not baked into the environment", () => {
       const [fn] = resources(t.api, "AWS::Lambda::Function");
       const variables = (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
-      expect(JSON.stringify(variables)).not.toMatch(/ALEXA_BRIDGE_SECRET|OAUTH_M2M_SECRET/);
+      expect(JSON.stringify(variables)).not.toMatch(/ALEXA_BRIDGE_SECRET|OAUTH_M2M_SECRET|ALEXA_SKILL_COMMAND_SECRET/);
       expect(variables.SECRETS_BRIDGE_ARN).toBeDefined();
       expect(variables.SECRETS_OAUTH_CLIENTS_ARN).toBeDefined();
       expect(variables.SECRETS_ORIGIN_VERIFY_ARN).toBeDefined();
+      expect(variables.SECRETS_SKILL_COMMAND_ARN).toBeDefined();
     });
 
     test("IAM stays narrow: only Transcribe and Polly use Resource *", () => {

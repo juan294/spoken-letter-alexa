@@ -71,5 +71,5 @@ if (deployGateway) {
   if (edge) gateway.addStackDependency(edge);
 }
 new ObservabilityStack(app, "SpokenLetterAlexaObservability", { env, api, alertEmail });
-new SkillStack(app, "SpokenLetterAlexaSkill", { env, publicBaseUrl: PUBLIC_BASE_URL, recordUtterances, logSay, skillPermissionOpen, ...(skillId && { skillId }) });
+new SkillStack(app, "SpokenLetterAlexaSkill", { env, core, publicBaseUrl: PUBLIC_BASE_URL, recordUtterances, logSay, skillPermissionOpen, ...(skillId && { skillId }) });
 // The Phase 7 LegacyStack (infra/lib/legacy-stack.ts) is intentionally not instantiated.

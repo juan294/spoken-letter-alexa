@@ -1,6 +1,6 @@
 import { emfEnvelope, log } from "@spoken-letter-alexa/shared";
 
-import { AgentHttpError, type AgentClient } from "./agent-client.ts";
+import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 
@@ -60,21 +60,20 @@ export type HandlerOptions = {
 
 export type SkillHandler = (event: AlexaRequestEnvelope) => Promise<AlexaResponseEnvelope>;
 
-const REPROMPT = "You can say: play the story Grandpa sent, or ask what is new.";
+const REPROMPT = "You can say: play my stories, or ask what is new.";
 const LAUNCH = "Spoken Letter. Which family story would you like?";
-const HELP = "You can say: play the story Grandpa sent, or ask what is new. Which would you like?";
+const HELP = "You can say: play my stories, or ask what is new. Which would you like?";
 const RETRY = "I'm still looking for that one. Ask again in a moment.";
 const NOTHING_TO_RESUME = "There is nothing to resume. Ask for a family story first.";
-const NOTHING_TO_PLAY = "Which family story would you like? You can say: play the story Grandpa sent.";
+const NOTHING_TO_PLAY = "Which family story would you like? You can say: play my stories.";
 const NOTHING_TO_GO_BACK_TO = "That was the first one. Ask for another story instead.";
 const ONE_AT_A_TIME = "I play family stories one at a time.";
+const NO_PLAY = "Which delivered story would you like? You can name a title, or say play my stories.";
 
 /** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
 function progressiveText(playOriented: boolean): string {
   return playOriented ? "Looking for that one." : "Checking what's new.";
 }
-
-const SAY_LOG_LIMIT = 120;
 
 function escapeSsml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -118,11 +117,21 @@ function slotValue(event: AlexaRequestEnvelope, name: string): string | undefine
   return value === undefined || value === "" ? undefined : value;
 }
 
+/** Best-effort title from a play request that Alexa routed through CatchAllIntent. */
+function catchAllTitle(text: string): string | undefined {
+  const stripped = text
+    .replace(/^(?:please\s+)?(?:play|put on|listen to|hear)\s+/i, "")
+    .replace(/^(?:(?:the|a)\s+)?(?:story\s+)?(?:called\s+)?/i, "")
+    .replace(/\s+one$/i, "")
+    .trim();
+  return stripped && stripped !== text && stripped.length <= 200 ? stripped : undefined;
+}
+
 /** `slots` as `skill_turn` logs it: names to values, `{}` when the intent carries none, absent for non-intent requests. */
 function loggedSlots(event: AlexaRequestEnvelope): Record<string, string | null> | undefined {
   const slots = event.request.intent?.slots;
   if (slots === undefined) return undefined;
-  return Object.fromEntries(Object.entries(slots).map(([name, slot]) => [name, slot.value ?? null]));
+  return Object.fromEntries(Object.keys(slots).map((name) => [name, null]));
 }
 
 type IntentText = {
@@ -152,7 +161,10 @@ function textForIntent(event: AlexaRequestEnvelope): IntentText | null {
       return { text: "play the next family story", playOriented: true };
     case "CatchAllIntent": {
       const text = slotValue(event, "text");
-      return text === undefined ? null : { text, playOriented: false };
+      return text === undefined ? null : {
+        text,
+        playOriented: /\b(play|hear|listen|put on)\b/i.test(text) && !/\b(what|which|list|new|available)\b/i.test(text),
+      };
     }
     default:
       return null;
@@ -191,16 +203,56 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       throw new Error(`Rejected request for application id ${JSON.stringify(applicationId)}`);
     }
     const { type } = event.request;
-    const locale = event.request.locale ?? "en-US";
     const started = performance.now();
     const telemetry: Telemetry = { played: false, playOriented: false, tools: [], outcome: "ok" };
 
     async function respond(): Promise<AlexaResponseEnvelope> {
       if (type === "LaunchRequest") return ask(LAUNCH);
-      if (type === "SessionEndedRequest" || type.startsWith("AudioPlayer.") || type.startsWith("PlaybackController.")) return EMPTY;
+      const deviceUserId = event.context.System.user.userId;
+      const playlist = options.agent.playlist;
+      const playlistResult = (reply: PlaylistReply): AlexaResponseEnvelope => {
+        if (reply.action === "play" && reply.play && reply.token) {
+          telemetry.played = true;
+          telemetry.storyId = reply.play.id;
+          const directive = playDirective(reply.play, reply.offsetInMilliseconds ?? 0, {
+            token: reply.token,
+            ...(reply.playBehavior === "ENQUEUE" && reply.expectedPreviousToken && { expectedPreviousToken: reply.expectedPreviousToken }),
+          });
+          return reply.say ? tell(reply.say, [directive]) : control([directive]);
+        }
+        return reply.say ? ask(reply.say) : EMPTY;
+      };
+      const command = async (input: Omit<PlaylistCommand, "deviceUserId">): Promise<AlexaResponseEnvelope> => {
+        if (!playlist) return ask(NO_PLAY);
+        try {
+          return playlistResult(await playlist({ deviceUserId, ...input }));
+        } catch (error) {
+          const { outcome, errorClass } = classifyError(error);
+          telemetry.outcome = outcome;
+          telemetry.errorClass = errorClass;
+          return type.startsWith("AudioPlayer.") ? EMPTY : ask(RETRY);
+        }
+      };
+      if (type === "SessionEndedRequest") return EMPTY;
+      if (type === "AudioPlayer.PlaybackNearlyFinished" || type === "AudioPlayer.PlaybackFinished") {
+        if (!playlist || !event.request.token) return EMPTY;
+        try {
+          return await command({
+            command: type === "AudioPlayer.PlaybackNearlyFinished" ? "nearlyFinished" : "finished",
+            observedToken: event.request.token,
+            eventId: event.request.requestId,
+          });
+        } catch (error) {
+          log.warn("playlist_event_failed", { event: type, errorClass: error instanceof Error ? error.constructor.name : "UnknownError" });
+          return EMPTY;
+        }
+      }
+      if (type.startsWith("AudioPlayer.") || type.startsWith("PlaybackController.")) return EMPTY;
       if (type !== "IntentRequest") return ask(HELP);
 
       const intent = event.request.intent?.name ?? "";
+      const observed = event.context.AudioPlayer?.token;
+      const tokenInput = observed ? { observedToken: observed } : {};
       telemetry.intent = intent;
       const slots = loggedSlots(event);
       if (slots !== undefined) telemetry.slots = slots;
@@ -211,12 +263,18 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         case "AMAZON.CancelIntent":
           return control([STOP_DIRECTIVE]);
         case "AMAZON.ResumeIntent":
+          if (playlist) {
+            if (!observed) return ask(NOTHING_TO_RESUME);
+            return command({ command: "resume", observedToken: observed, offsetInMilliseconds: event.context.AudioPlayer?.offsetInMilliseconds ?? 0 });
+          }
           return resumablePlay(event, event.context.AudioPlayer?.offsetInMilliseconds ?? 0);
         case "AMAZON.StartOverIntent":
         case "AMAZON.RepeatIntent":
+        case "PlayAgainIntent":
+          if (playlist) return command({ command: "restart", ...tokenInput });
           return resumablePlay(event, 0);
         case "AMAZON.PreviousIntent":
-          // No session history of prior stories is kept; always the honest fallback.
+          if (playlist) return command({ command: "previous", ...tokenInput });
           return ask(NOTHING_TO_GO_BACK_TO);
         case "AMAZON.LoopOnIntent":
         case "AMAZON.LoopOffIntent":
@@ -231,11 +289,39 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           break;
       }
 
+      if (playlist) {
+        if (intent === "PlayAllIntent") return command({ command: "start", order: "shuffle" });
+        if (intent === "PlayNewStoriesIntent") return command({ command: "start", order: "newest" });
+        if (intent === "PlayCreatorStoriesIntent") {
+          const storyteller = slotValue(event, "storyteller");
+          return storyteller ? command({ command: "start", order: "shuffle", storyteller }) : ask("Which adult storyteller do you mean?");
+        }
+        if (intent === "StartPlaylistOverIntent") return command({ command: "reset", ...tokenInput });
+        if (intent === "PlayStoryIntent") {
+          const title = slotValue(event, "title");
+          const storyteller = slotValue(event, "storyteller");
+          if (title) return command({ command: "title", title, ...(storyteller && { storyteller }) });
+          return command({ command: "start", order: "shuffle", ...(storyteller && { storyteller }) });
+        }
+        if (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent") {
+          try {
+            const reply = await playlist({ deviceUserId, command: "next", ...tokenInput });
+            if (!reply.fallbackToSuggestion) return playlistResult(reply);
+          } catch (error) {
+            const { outcome, errorClass } = classifyError(error);
+            telemetry.outcome = outcome;
+            telemetry.errorClass = errorClass;
+            return ask(RETRY);
+          }
+          // Without an active playlist, preserve the existing suggestion behavior.
+        }
+      }
+
       const intentText = textForIntent(event);
       if (intentText === null) return ask(NOTHING_TO_PLAY);
       const { text, playOriented } = intentText;
       telemetry.playOriented = playOriented;
-      if (intent === "CatchAllIntent") options.recordUtterance?.({ locale, text });
+      // Catch-all text can include a child's name. Keep it out of recording telemetry.
 
       const { apiEndpoint, apiAccessToken } = event.context.System;
       const progressive =
@@ -249,14 +335,27 @@ export function createHandler(options: HandlerOptions): SkillHandler {
             })
           : undefined;
 
-      const deviceUserId = event.context.System.user.userId;
       try {
         const reply = await options.agent.turn({ deviceUserId, text });
-        telemetry.say = reply.say;
         telemetry.tools = reply.toolCalls.map((call) => `${call.name}:${call.ms}ms`);
         telemetry.played = Boolean(reply.play);
         telemetry.storyId = reply.play?.id ?? null;
-        return reply.play ? tell(reply.say, [playDirective(reply.play)]) : ask(reply.say);
+        if (reply.play) return tell(reply.say, [playDirective(reply.play)]);
+        if (playOriented && reply.needsAnswer !== true && playlist && intent === "CatchAllIntent") {
+          const title = catchAllTitle(text);
+          return await command(title ? { command: "title", title } : { command: "start", order: "newest" });
+        }
+        if (playOriented && reply.needsAnswer !== true && playlist && (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent")) {
+          try {
+            return playlistResult(await playlist({ deviceUserId, command: "start", order: "newest" }));
+          } catch (error) {
+            const { outcome, errorClass } = classifyError(error);
+            telemetry.outcome = outcome;
+            telemetry.errorClass = errorClass;
+            return ask(RETRY);
+          }
+        }
+        return ask(playOriented && reply.needsAnswer !== true ? NO_PLAY : reply.say);
       } catch (error) {
         const { outcome, errorClass } = classifyError(error);
         telemetry.outcome = outcome;
@@ -281,12 +380,11 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         requestType: type,
         ...(telemetry.intent !== undefined && { intent: telemetry.intent }),
         ...(telemetry.slots !== undefined && { slots: telemetry.slots }),
-        ...(type === "SessionEndedRequest" && { reason: event.request.reason, error: event.request.error }),
+        ...(type === "SessionEndedRequest" && { reason: event.request.reason, error: event.request.error?.type }),
         ms,
         played: telemetry.played,
         ...(telemetry.storyId !== undefined && { storyId: telemetry.storyId }),
         tools: telemetry.tools,
-        ...(options.logSay && telemetry.say !== undefined && { say: telemetry.say.slice(0, SAY_LOG_LIMIT) }),
         outcome: telemetry.outcome,
         ...(telemetry.errorClass !== undefined && { errorClass: telemetry.errorClass }),
         ...envelope,

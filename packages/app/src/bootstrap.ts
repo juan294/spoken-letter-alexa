@@ -13,7 +13,9 @@ import {
   createTranscriber,
   DataUrlSpeechStore,
   DynamoSessionStore,
+  DynamoPlaylistStore,
   MemorySessionStore,
+  MemoryPlaylistStore,
   PollySpeech,
   S3SpeechStore,
   type AgentDeps,
@@ -105,6 +107,10 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
     generated.devToken = devToken;
   }
 
+  if (!options.allowGenerated && !env.ALEXA_SKILL_COMMAND_SECRET) {
+    throw new Error("ALEXA_SKILL_COMMAND_SECRET is required");
+  }
+
   const stories = await loadFixtureCatalog(env.FIXTURES_PATH).catch((error: unknown) => {
     log.warn("fixtures_missing", { path: env.FIXTURES_PATH, message: error instanceof Error ? error.message : String(error) });
     return [];
@@ -161,6 +167,15 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
           demoToken,
           offline: false,
         };
+
+  if (env.ALEXA_SKILL_COMMAND_SECRET) {
+    agentDeps.playlist = {
+      store: env.AGENT_SESSIONS_STORE === "dynamo"
+        ? new DynamoPlaylistStore({ client: documentClient(env), tableName: env.AGENT_SESSIONS_TABLE })
+        : new MemoryPlaylistStore(),
+      secret: env.ALEXA_SKILL_COMMAND_SECRET,
+    };
+  }
 
   const app = await createServerApp({
     issuer,

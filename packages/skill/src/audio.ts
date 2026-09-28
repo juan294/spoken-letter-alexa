@@ -21,9 +21,9 @@ export type ArtSource = { url: string; size: "X_SMALL"; widthPixels: number; hei
 
 export type PlayDirective = {
   type: "AudioPlayer.Play";
-  playBehavior: "REPLACE_ALL";
+  playBehavior: "REPLACE_ALL" | "ENQUEUE";
   audioItem: {
-    stream: { url: string; token: string; offsetInMilliseconds: number };
+    stream: { url: string; token: string; offsetInMilliseconds: number; expectedPreviousToken?: string };
     metadata: { title: string; subtitle: string; art?: { sources: ArtSource[] } };
   };
 };
@@ -86,13 +86,22 @@ export function artSource(artUrl: string | null | undefined): ArtSource | null {
   return { url: parsed.href, size: "X_SMALL", widthPixels: ART_PIXELS, heightPixels: ART_PIXELS };
 }
 
-export function playDirective(play: Play, offsetInMilliseconds = 0): PlayDirective {
+export function playDirective(
+  play: Play,
+  offsetInMilliseconds = 0,
+  options: { expectedPreviousToken?: string; token?: string } = {},
+): PlayDirective {
   const art = artSource(play.artUrl);
   return {
     type: "AudioPlayer.Play",
-    playBehavior: "REPLACE_ALL",
+    playBehavior: options.expectedPreviousToken === undefined ? "REPLACE_ALL" : "ENQUEUE",
     audioItem: {
-      stream: { url: play.url, token: encodeStreamToken(play), offsetInMilliseconds },
+      stream: {
+        url: play.url,
+        token: options.token ?? encodeStreamToken(play),
+        offsetInMilliseconds,
+        ...(options.expectedPreviousToken !== undefined && { expectedPreviousToken: options.expectedPreviousToken }),
+      },
       metadata: {
         title: play.title,
         subtitle: `read by ${play.storyteller}`,

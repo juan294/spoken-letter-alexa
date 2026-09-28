@@ -1,6 +1,7 @@
 // The skill Lambda entry (infra/lib/skill-stack.ts, bundled by infra/scripts/bundle-lambda.mjs).
 // Alexa invokes it directly with the request envelope; there is no HTTP layer.
 import { log } from "@spoken-letter-alexa/shared";
+import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 
 import { createAgentClient } from "./agent-client.ts";
 import { type AlexaRequestEnvelope, type AlexaResponseEnvelope, createHandler } from "./handler.ts";
@@ -16,6 +17,10 @@ const publicBaseUrl = process.env.PUBLIC_BASE_URL;
 const skillId = process.env.SKILL_ID;
 if (!publicBaseUrl) throw new Error("PUBLIC_BASE_URL is required");
 if (!skillId) throw new Error("SKILL_ID is required: deploy the skill (pnpm -F skill deploy) and redeploy the stack with -c sla:skillId=<id>");
+const commandArn = process.env.SECRETS_SKILL_COMMAND_ARN;
+if (!commandArn) throw new Error("SECRETS_SKILL_COMMAND_ARN is required");
+const command = await new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" }).send(new GetSecretValueCommand({ SecretId: commandArn }));
+if (!command.SecretString) throw new Error("sla/skill-command has no value");
 
 const recording = process.env.RECORD_UTTERANCES === "1";
 if (recording) log.warn("utterance_recording_on", { hint: "RECORD_UTTERANCES=1: catch-all phrasings are logged for pnpm -F skill record:pull" });
@@ -25,7 +30,7 @@ if (logSay) log.warn("say_logging_on", { hint: "LOG_SAY=1: spoken replies are lo
 
 const skill = createHandler({
   skillId,
-  agent: createAgentClient({ baseUrl: publicBaseUrl, timeoutMs: AGENT_BUDGET_MS }),
+  agent: createAgentClient({ baseUrl: publicBaseUrl, timeoutMs: AGENT_BUDGET_MS, skillSecret: command.SecretString }),
   recordUtterance: recording
     ? (utterance) => {
         log.info("utterance_recorded", utterance);

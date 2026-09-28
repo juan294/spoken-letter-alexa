@@ -33,6 +33,7 @@ export type TurnOptions = {
 export type TurnResult = {
   say: string;
   play: Play | null;
+  needsAnswer?: boolean;
   toolCalls: ToolTrace[];
   history: MessageData[];
 };
@@ -129,7 +130,7 @@ export async function runTurn(options: TurnOptions, text: string): Promise<TurnR
       log.warn("agent_output_invalid", { issues: parsed.error.issues.length });
       return { say: FALLBACK_SAY, play: null, toolCalls, history };
     }
-    return { say: parsed.data.say, play: parsed.data.play, toolCalls, history };
+    return { say: parsed.data.say, play: parsed.data.play, needsAnswer: parsed.data.needsAnswer ?? false, toolCalls, history };
   } catch (error) {
     log.warn("agent_turn_failed", { message: error instanceof Error ? error.message : String(error), toolCalls: toolCalls.length });
     return { say: FALLBACK_SAY, play: null, toolCalls, history: options.history ?? [] };

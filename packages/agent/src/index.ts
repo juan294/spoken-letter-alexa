@@ -1,4 +1,6 @@
 export { createAgentApp, type AgentDeps } from "./routes.ts";
+export { DynamoPlaylistStore, MemoryPlaylistStore, PlaylistController, PLAYLIST_LIMIT, PLAYLIST_TTL_SECONDS,
+  type PlaylistCatalog, type PlaylistCommand, type PlaylistResult, type PlaylistState, type PlaylistStore } from "./playlist.ts";
 export { createOfflineDeps, OFFLINE_UTTERANCE } from "./offline.ts";
 export { createSigV4Fetch } from "./sigv4-fetch.ts";
 export { runTurn, CLIENT_ERA, type TurnOptions, type TurnResult } from "./turn.ts";

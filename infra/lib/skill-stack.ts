@@ -7,11 +7,13 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import { type Construct } from "constructs";
 
 import { bundledCode } from "./lambda-code.ts";
+import { type CoreStack } from "./core-stack.ts";
 import { METRIC_NAMESPACE } from "./observability-stack.ts";
 
 const SKILL_FUNCTION_NAME = "sla-alexa-skill";
 
 export type SkillStackProps = StackProps & {
+  core: CoreStack;
   /** The Alexa+ host; the skill's agent client calls `${publicBaseUrl}/agent/*`. */
   publicBaseUrl: string;
   /** Set once `pnpm -F skill deploy` has created the skill; gates the invoke permission. */
@@ -36,8 +38,8 @@ export type SkillStackProps = StackProps & {
  * Phase 9: the classic-skill front end for real-device footage. One small Lambda
  * (Node 24, arm64, 256 MB) bundled from `packages/skill/src/lambda.ts` answers the
  * Alexa custom-skill JSON envelope by calling the public agent endpoint, so the story
- * path, the tools and the child-safety filter are the same as on Alexa+. The role holds
- * nothing beyond logs and X-Ray: every family resource stays behind the API. Until the
+ * path, the tools and the child-safety filter are the same as on Alexa+. The role reads
+ * only its command secret; every family resource stays behind the API. Until the
  * skill id is known nothing may invoke the function.
  */
 export class SkillStack extends Stack {
@@ -72,10 +74,16 @@ export class SkillStack extends Stack {
         LOG_SAY: props.logSay ? "1" : "0",
         EMF_NAMESPACE: METRIC_NAMESPACE,
         LOG_LEVEL: "info",
+        SECRETS_SKILL_COMMAND_ARN: props.core.skillCommandSecret.secretArn,
       },
       handler: "index.handler",
       code: bundle.code,
     });
+
+    this.fn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["secretsmanager:GetSecretValue"],
+      resources: [props.core.skillCommandSecret.secretArn],
+    }));
 
     if (props.skillId) {
       this.fn.addPermission("AlexaInvoke", {
