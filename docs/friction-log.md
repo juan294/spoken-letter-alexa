@@ -514,7 +514,7 @@ No session recorded yet; see the Phase 0 entry above.
 
 ## 2026-09-28: local use-case rehearsal for the Alexa demo
 
-This is an offline simulator rehearsal of the four-phase use-case plan, using local code commit `cc92a9b76b47f1f30adcf5510b2124e4a27383b6`. The simulator uses the `en-US` fixture catalog and in-app mock. No ASK skill version, development-stage skill ID, current AWS stack output, Echo model or device locale was measured in this rehearsal. Alexa intent and slot recognition are N/A for each row because these turns use the simulator's text parser. No Amazon playback token, notification receipt, recipient delivery, or payment was observed. `mock-N-*` tokens below are local simulation tokens, and `mock-reaction-*` and `mock-wish-*` are page-session receipts.
+This is an offline simulator rehearsal of the four-phase use-case plan, first implemented in local code commit `cc92a9b76b47f1f30adcf5510b2124e4a27383b6`. The final tested commit is identified in `.rpi/local/verification.json`. The simulator uses the `en-US` fixture catalog and in-app mock. No ASK skill version, development-stage skill ID, current AWS stack output, Echo model or device locale was measured in this rehearsal. Alexa intent and slot recognition are N/A for each row because these turns use the simulator's text parser. No Amazon playback token, notification receipt, recipient delivery, or payment was observed. `mock-N-*` tokens below are local simulation tokens, and `mock-reaction-*` and `mock-wish-*` are page-session receipts.
 
 | Scene and exact input | Offline response and state observation | Result |
 | --- | --- | --- |

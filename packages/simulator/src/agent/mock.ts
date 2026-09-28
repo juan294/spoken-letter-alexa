@@ -13,6 +13,7 @@ import type { AgentTransport, Play, SessionRequest, SessionResponse, TurnRespons
 export const FIXTURE_STORIES = catalog.stories;
 const firstFixture = FIXTURE_STORIES[0];
 if (!firstFixture) throw new Error("The offline demo needs a delivered fixture story.");
+const defaultStoryteller = firstFixture.storyteller;
 export const FIXTURE_STORY = firstFixture;
 export const MOCK_TRANSCRIPT = "Alexa, play my stories";
 
@@ -189,7 +190,7 @@ export function createMockTransport(): AgentTransport {
         if (!topic) return Promise.resolve(noPlay("Choose a general topic for a demo wish, such as mermaids or space."));
         const askedCreator = /\bask (.+?) for another\b/.exec(utterance)?.[1];
         if (askedCreator && !FIXTURE_STORIES.some((story) => normalize(story.storyteller) === askedCreator)) {
-          return Promise.resolve(noPlay(`Which adult storyteller do you mean? I can use ${firstFixture.storyteller} from the delivered fixtures.`));
+          return Promise.resolve(noPlay(`Which adult storyteller do you mean? I can use ${defaultStoryteller} from the delivered fixtures.`));
         }
         const storyteller = FIXTURE_STORIES.find((story) => utterance.includes(normalize(story.storyteller)))?.storyteller ?? null;
         pendingWish = { topic, storyteller };
