@@ -295,6 +295,17 @@ export function generateInteractionModel(input: { training: string[]; stories: C
       samples: ["help with {topic}", "how do i {topic}", "tell me about {topic}"],
     },
     { name: "ReadDemoDraftIntent", samples: ["read my demo draft", "what is in my demo draft", "what is my demo draft"] },
+    {
+      name: "WishStoryIntent",
+      slots: [{ name: "topic", type: "AMAZON.SearchQuery" }, { name: "storyteller", type: "StorytellerName" }],
+      samples: ["i want a story about {topic}", "i wish for a story about {topic}", "ask {storyteller} for another {topic} story", "i wish for another {topic} story from {storyteller}"],
+    },
+    {
+      name: "ReactToStoryIntent",
+      slots: [{ name: "choice", type: "ReactionChoice" }],
+      samples: ["i {choice} that story", "i {choice} it", "that story was {choice}"],
+    },
+    { name: "UpdatesIntent", samples: ["show my demo updates", "tell me my demo updates", "any demo updates", "what are my demo updates"] },
     { name: "PlayAllIntent", samples: ["play my stories", "play all my stories", "play the whole playlist", "shuffle my stories"] },
     { name: "PlayAgainIntent", samples: ["play it again", "play that again", "play the current story again"] },
     { name: "PlayNewStoriesIntent", samples: ["play my new stories", "play the new stories", "play my newest stories"] },
@@ -314,7 +325,7 @@ export function generateInteractionModel(input: { training: string[]; stories: C
 
   return {
     interactionModel: {
-      languageModel: { invocationName: INVOCATION_NAME, intents, types: [storytellerSlotType(input.stories)] },
+      languageModel: { invocationName: INVOCATION_NAME, intents, types: [storytellerSlotType(input.stories), { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] }] },
     },
   };
 }

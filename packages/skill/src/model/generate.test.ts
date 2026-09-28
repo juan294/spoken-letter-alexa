@@ -36,6 +36,9 @@ describe("generateInteractionModel", () => {
         "ThemeIntent",
         "HelpTopicIntent",
         "ReadDemoDraftIntent",
+        "WishStoryIntent",
+        "ReactToStoryIntent",
+        "UpdatesIntent",
         "NextStoryIntent",
         "PlayAllIntent",
         "PlayAgainIntent",
@@ -65,6 +68,19 @@ describe("generateInteractionModel", () => {
     expect(byName.HelpTopicIntent?.samples).toContain("help with {topic}");
     expect(byName.HelpTopicIntent?.slots).toEqual([{ name: "topic", type: "AMAZON.SearchQuery" }]);
     expect(byName.ReadDemoDraftIntent?.samples).toContain("read my demo draft");
+  });
+
+  test("fixture wishes, reactions, and updates have dedicated safe intents", () => {
+    expect(byName.WishStoryIntent?.slots).toEqual([
+      { name: "topic", type: "AMAZON.SearchQuery" },
+      { name: "storyteller", type: "StorytellerName" },
+    ]);
+    expect(byName.WishStoryIntent?.samples).toContain("i want a story about {topic}");
+    expect(byName.WishStoryIntent?.samples).toContain("ask {storyteller} for another {topic} story");
+    expect(byName.ReactToStoryIntent?.slots).toEqual([{ name: "choice", type: "ReactionChoice" }]);
+    expect(byName.ReactToStoryIntent?.samples).toContain("i {choice} that story");
+    expect(model.interactionModel.languageModel.types.find((type) => type.name === "ReactionChoice")?.values.map((value) => value.name.value)).toEqual(["like", "love"]);
+    expect(byName.UpdatesIntent?.samples).toContain("show my demo updates");
   });
 
   test("the catch-all carries a single AMAZON.SearchQuery slot and utterances that route free text", () => {

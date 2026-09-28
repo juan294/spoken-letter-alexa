@@ -1,12 +1,13 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import { decodeJwtClaims, log } from "@spoken-letter-alexa/shared";
+import { decodeJwtClaims, log, sha256Hex } from "@spoken-letter-alexa/shared";
 import { type MessageData, type Model } from "@strands-agents/sdk";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 
 import { type SpeechSynthesizer } from "./polly.ts";
 import { createModelDraftGenerator, DemoDraftController, DemoDraftError, type DemoDraftStore, type DraftGenerator } from "./demo-drafts.ts";
+import { DemoUpdateController, DemoUpdateError, type DemoUpdateStore, type DemoStory, type FixtureEvent } from "./demo-updates.ts";
 import { PlaylistController, type PlaylistCatalog, type PlaylistStore } from "./playlist.ts";
 import { isCatalogStale, type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
@@ -32,6 +33,7 @@ export type AgentDeps = {
   offline: boolean;
   playlist?: { store: PlaylistStore; secret: string } | undefined;
   drafts?: { store: DemoDraftStore; generator?: DraftGenerator | undefined } | undefined;
+  updates?: { store: DemoUpdateStore; stories: DemoStory[]; seed: FixtureEvent[] } | undefined;
   now?: (() => number) | undefined;
 };
 
@@ -46,6 +48,12 @@ const turnBodySchema = z.object({ sessionId: z.string().min(1).max(128), text: z
 const draftBodySchema = z.object({ deviceUserId: z.string().min(1).max(256), requestId: z.string().min(1).max(256),
   theme: z.string().trim().min(1).max(160) });
 const draftLatestBodySchema = z.object({ deviceUserId: z.string().min(1).max(256) });
+const updateDeviceSchema = z.object({ deviceUserId: z.string().min(1).max(256) });
+const legacyFinishedBodySchema = updateDeviceSchema.extend({ observedToken: z.string().min(1).max(4096), eventId: z.string().min(1).max(256) });
+const reactionBodySchema = updateDeviceSchema.extend({ requestId: z.string().min(1).max(256), choice: z.enum(["like", "love", "dismiss"]) });
+const wishBodySchema = updateDeviceSchema.extend({ requestId: z.string().min(1).max(256), topic: z.string().trim().min(1).max(160),
+  storyteller: z.string().trim().min(1).max(80).optional(), confirmed: z.literal(true) });
+const eventBodySchema = updateDeviceSchema.extend({ eventId: z.string().min(1).max(80), action: z.enum(["read", "dismiss"]) });
 const playlistBodySchema = z.discriminatedUnion("command", [
   z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("start"), order: z.enum(["shuffle", "newest"]).optional(), storyteller: z.string().trim().min(1).max(80).optional() }),
   z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("title"), title: z.string().trim().min(1).max(200), storyteller: z.string().trim().min(1).max(80).optional() }),
@@ -163,6 +171,22 @@ export function createAgentApp(deps: AgentDeps): Hono {
   const demoDrafts = deps.drafts ? new DemoDraftController({
     store: deps.drafts.store, generator: deps.drafts.generator ?? createModelDraftGenerator(deps.model), now,
   }) : null;
+  const demoUpdates = deps.updates ? new DemoUpdateController({ ...deps.updates, now }) : null;
+
+  function updateError(error: unknown, c: Context) {
+    if (error instanceof DemoUpdateError) {
+      if (error.code === "confirmation_required") return c.json({ error: error.code, message: "Confirm the general topic before I save a demo wish." }, 422);
+      if (error.code === "unsupported_topic") return c.json({ error: error.code, message: "Try a topic like mermaids, space, ocean, forest, animals, or friendship." }, 422);
+      if (error.code === "unknown_storyteller" || error.code === "ambiguous_storyteller") {
+        const names = [...new Set(deps.updates?.stories.map((story) => story.storyteller) ?? [])];
+        return c.json({ error: error.code, message: `Which adult storyteller do you mean? Available storytellers: ${names.join(", ")}.` }, 422);
+      }
+      if (error.code === "no_pending_reaction") return c.json({ error: error.code, message: "There is no completed story waiting for a demo reaction." }, 409);
+      if (error.code === "event_not_found") return c.json({ error: error.code, message: "That demo update is unavailable. Ask for your updates again." }, 404);
+      if (error.code === "update_limit_reached") return c.json({ error: error.code, message: "Nothing new was saved. Try again later." }, 429);
+    }
+    return c.json({ error: "update_unavailable", message: "Nothing new was saved. Try again in a moment." }, 503);
+  }
 
   const playlistCatalog: PlaylistCatalog = {
     async list() {
@@ -202,8 +226,78 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const parsed = playlistBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A valid playlist command is required");
     const { deviceUserId, ...command } = parsed.data;
+    const deviceKey = deviceSessionId(deviceUserId);
     const controller = new PlaylistController({ store: deps.playlist.store, catalog: playlistCatalog, now });
-    return c.json(await controller.command(deviceSessionId(deviceUserId), command));
+    const result = await controller.command(deviceKey, command);
+    if (command.command === "finished" && demoUpdates) {
+      try {
+        const playlist = await deps.playlist.store.get(deviceKey);
+        if (playlist?.lastFinishedTokenDigest === sha256Hex(command.observedToken)) {
+          const match = /^pl_\d+_(\d+)_[A-Za-z0-9_-]+$/u.exec(command.observedToken);
+          const position = match ? Number(match[1]) : NaN;
+          const storyId = playlist.ids[position];
+          if (storyId) await demoUpdates.recordFinished(deviceKey, storyId, command.eventId);
+        }
+      } catch (error) {
+        return updateError(error, c);
+      }
+    }
+    return c.json(result);
+  });
+
+  app.post("/agent/demo/next", async (c) => {
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
+    try { return c.json(await demoUpdates.next(deviceSessionId(parsed.data.deviceUserId))); }
+    catch (error) { return updateError(error, c); }
+  });
+
+  app.post("/agent/demo/playback-finished", async (c) => {
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = legacyFinishedBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, stream token, and event ID are required");
+    try { return c.json(await demoUpdates.recordLegacyFinished(deviceSessionId(parsed.data.deviceUserId), parsed.data.observedToken, parsed.data.eventId)); }
+    catch (error) { return updateError(error, c); }
+  });
+
+  app.post("/agent/demo/reaction", async (c) => {
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = reactionBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, request ID, and reaction are required");
+    try { return c.json(await demoUpdates.react(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId, parsed.data.choice)); }
+    catch (error) { return updateError(error, c); }
+  });
+
+  app.post("/agent/demo/wish", async (c) => {
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = wishBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "confirmation_required", message: "Confirm the general topic before I save a demo wish." }, 422);
+    try { return c.json(await demoUpdates.wish(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId,
+      parsed.data.topic, parsed.data.storyteller, parsed.data.confirmed)); }
+    catch (error) { return updateError(error, c); }
+  });
+
+  app.post("/agent/demo/inbox", async (c) => {
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
+    try { return c.json(await demoUpdates.inbox(deviceSessionId(parsed.data.deviceUserId))); }
+    catch (error) { return updateError(error, c); }
+  });
+
+  app.post("/agent/demo/event", async (c) => {
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = eventBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, event, and action are required");
+    try { return c.json(await demoUpdates.markEvent(deviceSessionId(parsed.data.deviceUserId), parsed.data.eventId, parsed.data.action)); }
+    catch (error) { return updateError(error, c); }
   });
 
   app.post("/agent/demo/draft", async (c) => {

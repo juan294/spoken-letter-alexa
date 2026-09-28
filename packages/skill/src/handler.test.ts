@@ -38,6 +38,121 @@ afterEach(() => {
 });
 
 describe("skill handler", () => {
+  test("a completed story asks for a reaction on the next launch, then saves one demo reaction", async () => {
+    const demoNext = vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_martina_the_mermaid", title: "Martina the music loving mermaid", storyteller: "Aunt Whitney" } });
+    const demoReact = vi.fn().mockResolvedValue({ status: "saved" });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoReact }) });
+    const launch = await handler(envelope({ type: "LaunchRequest" }));
+    expect(ssml(launch)).toMatch(/did you like or love/i);
+    expect(launch.sessionAttributes).toEqual({ demoFlow: "reaction" });
+    const reply = intent("ReactToStoryIntent", { choice: "love" });
+    reply.session = { ...reply.session!, attributes: { demoFlow: "reaction" } };
+    const saved = await handler(reply);
+    expect(demoReact).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", requestId: "amzn1.echo-api.request.1", choice: "love" });
+    expect(ssml(saved)).toMatch(/saved.*demo/i);
+    expect(ssml(saved)).not.toMatch(/sent.*creator|creator.*received/i);
+  });
+
+  test("a legacy direct-play token records completion through the demo route without speech", async () => {
+    const demoPlaybackFinished = vi.fn().mockResolvedValue({ status: "recorded" });
+    const token = encodeStreamToken(PLAY);
+    const event = envelope({ type: "AudioPlayer.PlaybackFinished", token, requestId: "finished-1" });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoPlaybackFinished }) })(event);
+    expect(demoPlaybackFinished).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", observedToken: token, eventId: "finished-1" });
+    expect(response.response.outputSpeech).toBeUndefined();
+  });
+
+  test("reaction cancellation dismisses without a saved reaction and failure stays retryable", async () => {
+    const demoReact = vi.fn().mockResolvedValue({ status: "dismissed" });
+    const agent = fakeAgent({ demoReact });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const no = intent("AMAZON.NoIntent");
+    no.session = { ...no.session!, attributes: { demoFlow: "reaction" } };
+    const dismissed = await handler(no);
+    expect(demoReact).toHaveBeenCalledWith(expect.objectContaining({ choice: "dismiss" }));
+    expect(ssml(dismissed)).not.toMatch(/saved/i);
+    demoReact.mockRejectedValueOnce(new AgentHttpError(503, "update_unavailable", "down"));
+    const loved = intent("ReactToStoryIntent", { choice: "love" });
+    loved.session = { ...loved.session!, attributes: { demoFlow: "reaction" } };
+    const failed = await handler(loved);
+    expect(ssml(failed)).toMatch(/no demo reaction was saved/i);
+    expect(failed.sessionAttributes).toEqual({ demoFlow: "reaction" });
+  });
+
+  test("a reaction can recover on a later invocation after the prompt session closes", async () => {
+    const demoReact = vi.fn().mockResolvedValue({ status: "saved" });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "liked" }));
+    expect(demoReact).toHaveBeenCalledWith(expect.objectContaining({ choice: "like" }));
+    expect(ssml(response)).toMatch(/saved.*demo reaction/i);
+  });
+
+  test("a confirmed adult wish saves only a canonical topic and a canceled wish does not write", async () => {
+    const demoWish = vi.fn().mockResolvedValue({ status: "saved", wishId: "wish-1", topic: "mermaids", storyteller: "Aunt Whitney" });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
+    const proposed = await handler(intent("WishStoryIntent", { topic: "mermaids", storyteller: "Aunt Whitney" }));
+    expect(ssml(proposed)).toMatch(/save a demo wish/i);
+    expect(proposed.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
+    expect(demoWish).not.toHaveBeenCalled();
+    const yes = intent("AMAZON.YesIntent");
+    yes.session = { ...yes.session!, attributes: proposed.sessionAttributes! };
+    const saved = await handler(yes);
+    expect(demoWish).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", requestId: "amzn1.echo-api.request.1", topic: "mermaids", storyteller: "Aunt Whitney", confirmed: true });
+    expect(ssml(saved)).toMatch(/saved.*demo wish/i);
+    const no = intent("AMAZON.NoIntent");
+    no.session = { ...no.session!, attributes: proposed.sessionAttributes! };
+    const canceled = await handler(no);
+    expect(ssml(canceled)).toMatch(/no demo wish was saved/i);
+    expect(demoWish).toHaveBeenCalledTimes(1);
+  });
+
+  test("missing or unknown wish details do not write or repeat an unknown name", async () => {
+    const demoWish = vi.fn();
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
+    const missing = await handler(intent("WishStoryIntent"));
+    expect(ssml(missing)).toMatch(/what general topic/i);
+    const unknown = await handler(intent("WishStoryIntent", { topic: "mermaids", storyteller: "Lily" }));
+    expect(ssml(unknown)).toMatch(/which adult storyteller/i);
+    expect(ssml(unknown)).not.toContain("Lily");
+    expect(demoWish).not.toHaveBeenCalled();
+    const childOrigin = await handler(intent("CatchAllIntent", { text: "Lily wants a story about mermaids" }));
+    expect(childOrigin.sessionAttributes?.demoFlow).not.toBe("wish");
+    expect(demoWish).not.toHaveBeenCalled();
+  });
+
+  test("catch-all adult creator request resolves the fixture alias before asking to save", async () => {
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("CatchAllIntent", { text: "ask Aunt Whitney for another mermaid story" }));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
+    const unknown = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("CatchAllIntent", { text: "ask Lily for another mermaid story" }));
+    expect(ssml(unknown)).toMatch(/which adult storyteller/i);
+    expect(ssml(unknown)).not.toContain("Lily");
+  });
+
+  test("a failed wish save keeps the safe confirmed request retryable", async () => {
+    const demoWish = vi.fn().mockRejectedValue(new AgentHttpError(503, "update_unavailable", "down"));
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
+    const yes = intent("AMAZON.YesIntent");
+    yes.session = { ...yes.session!, attributes: { demoFlow: "wish", demoTopic: "mermaids" } };
+    const response = await handler(yes);
+    expect(ssml(response)).toMatch(/no demo wish was saved/i);
+    expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids" });
+  });
+
+  test("an unread fixture update is spoken and marked read; no update stays truthful", async () => {
+    const demoNext = vi.fn().mockResolvedValue({ event: { eventId: "evt-1", type: "family-occasion", detail: "A family birthday is coming up in this demo.", occurredAt: "2026-09-28T10:00:00Z" } });
+    const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoEvent }) });
+    const launch = await handler(envelope({ type: "LaunchRequest" }));
+    expect(ssml(launch)).toContain("A family birthday is coming up in this demo.");
+    expect(demoEvent).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", eventId: "evt-1", action: "read" });
+    expect(ssml(launch)).not.toMatch(/child|birthday of/i);
+  });
+  test("updates read the validated fixture story title and mark only that event", async () => {
+    const demoInbox = vi.fn().mockResolvedValue({ events: [{ eventId: "evt-story", type: "new_story", occurredAt: "2026-08-03T00:03:24Z", storyId: "st_martina_the_mermaid", detail: "A new demo story is ready. Martina the music loving mermaid by Aunt Whitney." }] });
+    const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoInbox, demoEvent }) })(intent("UpdatesIntent"));
+    expect(ssml(response)).toContain("Martina the music loving mermaid");
+    expect(demoEvent).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", eventId: "evt-story", action: "read" });
+  });
   test("creation asks for a theme, then saves one name-free demo draft on the follow-up", async () => {
     const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "draft-1", theme: "mermaids", outline: "A gentle mermaid helps a friend." });
     const agent = fakeAgent({ saveDraft });

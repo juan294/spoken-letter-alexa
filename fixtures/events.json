@@ -1,0 +1,17 @@
+{
+  "events": [
+    {
+      "eventId": "fixture_new_mermaid_story",
+      "type": "new_story",
+      "occurredAt": "2026-08-03T00:03:24.000Z",
+      "storyId": "st_martina_the_mermaid",
+      "detail": "A new demo story is ready."
+    },
+    {
+      "eventId": "fixture_family_birthday",
+      "type": "occasion",
+      "occurredAt": "2026-09-28T08:00:00.000Z",
+      "detail": "A family birthday is coming up. You can prepare a demo story draft."
+    }
+  ]
+}

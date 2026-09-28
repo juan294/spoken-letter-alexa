@@ -161,6 +161,48 @@
           ]
         },
         {
+          "name": "WishStoryIntent",
+          "slots": [
+            {
+              "name": "topic",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "storyteller",
+              "type": "StorytellerName"
+            }
+          ],
+          "samples": [
+            "i want a story about {topic}",
+            "i wish for a story about {topic}",
+            "ask {storyteller} for another {topic} story",
+            "i wish for another {topic} story from {storyteller}"
+          ]
+        },
+        {
+          "name": "ReactToStoryIntent",
+          "slots": [
+            {
+              "name": "choice",
+              "type": "ReactionChoice"
+            }
+          ],
+          "samples": [
+            "i {choice} that story",
+            "i {choice} it",
+            "that story was {choice}"
+          ]
+        },
+        {
+          "name": "UpdatesIntent",
+          "samples": [
+            "show my demo updates",
+            "tell me my demo updates",
+            "any demo updates",
+            "what are my demo updates"
+          ]
+        },
+        {
           "name": "PlayAllIntent",
           "samples": [
             "play my stories",
@@ -282,6 +324,27 @@
                 "synonyms": [
                   "Auntie Whitney",
                   "Whitney"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ReactionChoice",
+          "values": [
+            {
+              "name": {
+                "value": "like",
+                "synonyms": [
+                  "liked"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "love",
+                "synonyms": [
+                  "loved"
                 ]
               }
             }

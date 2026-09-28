@@ -1,5 +1,7 @@
 // Builds the whole server from the environment: OAuth + JWT-gated MCP (packages/mcp-server)
 // and the agent API (packages/agent) on one Hono app. Shared by the local server and Lambda.
+import path from "node:path";
+
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { KMSClient } from "@aws-sdk/client-kms";
 import { PollyClient } from "@aws-sdk/client-polly";
@@ -13,14 +15,17 @@ import {
   createTranscriber,
   DataUrlSpeechStore,
   DynamoDemoDraftStore,
+  DynamoDemoUpdateStore,
   DynamoSessionStore,
   DynamoPlaylistStore,
   MemoryDemoDraftStore,
+  MemoryDemoUpdateStore,
   MemorySessionStore,
   MemoryPlaylistStore,
   PollySpeech,
   S3SpeechStore,
   type AgentDeps,
+  loadFixtureEvents,
 } from "@spoken-letter-alexa/agent";
 import { createServerApp, FixtureProvider, loadFixtureCatalog } from "@spoken-letter-alexa/mcp-server";
 import {
@@ -117,6 +122,10 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
     log.warn("fixtures_missing", { path: env.FIXTURES_PATH, message: error instanceof Error ? error.message : String(error) });
     return [];
   });
+  const demoStories = stories.map((story) => ({ ...story, audioUrl: `${issuer.replace(/\/$/, "")}/fixtures/audio/${story.file}` }));
+  const fixtureEvents = stories.length > 0
+    ? await loadFixtureEvents(path.join(path.dirname(env.FIXTURES_PATH), "events.json"), demoStories)
+    : [];
 
   // The agent reaches this same app in-process when MCP_URL is our own /mcp (local and the
   // single-Lambda topology); the AgentCore Gateway URL (Phase 6) goes over the network.
@@ -183,6 +192,13 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
     store: env.DEMO_STATE_STORE === "dynamo"
       ? new DynamoDemoDraftStore({ client: documentClient(env), tableName: env.DEMO_STATE_TABLE })
       : new MemoryDemoDraftStore(),
+  };
+  agentDeps.updates = {
+    store: env.DEMO_STATE_STORE === "dynamo"
+      ? new DynamoDemoUpdateStore({ client: documentClient(env), tableName: env.DEMO_STATE_TABLE })
+      : new MemoryDemoUpdateStore(),
+    stories: demoStories,
+    seed: fixtureEvents,
   };
 
   const app = await createServerApp({

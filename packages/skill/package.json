@@ -15,13 +15,17 @@
     "record:pull": "node scripts/record-pull.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1127.0",
+    "@aws-sdk/client-kms": "3.1127.0",
     "@aws-sdk/client-secrets-manager": "3.1127.0",
+    "@aws-sdk/lib-dynamodb": "3.1127.0",
     "@spoken-letter-alexa/mcp-server": "workspace:*",
     "@spoken-letter-alexa/shared": "workspace:*",
     "zod": "4.5.4"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "3.1127.0",
+    "aws-sdk-client-mock": "4.1.0",
     "tsx": "4.23.13",
     "typescript": "6.0.3",
     "vitest": "5.0.0"

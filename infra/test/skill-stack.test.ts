@@ -53,15 +53,58 @@ describe("SkillStack", () => {
   });
 
   test("the skill reads only its command secret at cold start", () => {
-    const [fn] = Object.values(withId.findResources("AWS::Lambda::Function") as Record<string, { Properties: { Environment: { Variables: Record<string, unknown> } } }>);
+    const fn = Object.values(withId.findResources("AWS::Lambda::Function") as Record<string, { Properties: { FunctionName: string; Environment: { Variables: Record<string, unknown> } } }>).find((resource) => resource.Properties.FunctionName === "sla-alexa-skill");
     expect(fn?.Properties.Environment.Variables.SECRETS_SKILL_COMMAND_ARN).toBeDefined();
     expect(fn?.Properties.Environment.Variables.ALEXA_SKILL_COMMAND_SECRET).toBeUndefined();
-    const policies = Object.values(withId.findResources("AWS::IAM::Policy") as Record<string, { Properties: { PolicyDocument: { Statement: { Action: string | string[]; Resource: unknown }[] } } }>);
+    const policies = Object.entries(withId.findResources("AWS::IAM::Policy") as Record<string, { Properties: { PolicyDocument: { Statement: { Action: string | string[]; Resource: unknown }[] } } }>).filter(([id]) => id.startsWith("SkillServiceRole")).map(([, policy]) => policy);
     const statements = policies.flatMap((policy) => policy.Properties.PolicyDocument.Statement);
     const actions = statements.flatMap((statement) => ([] as string[]).concat(statement.Action));
     for (const action of actions) expect(action).toMatch(/^(logs|xray):|^secretsmanager:GetSecretValue$/);
     expect(actions.filter((action) => action === "secretsmanager:GetSecretValue")).toHaveLength(1);
     const [read] = statements.filter((statement) => ([] as string[]).concat(statement.Action).includes("secretsmanager:GetSecretValue"));
     expect(read?.Resource).toEqual(fn?.Properties.Environment.Variables.SECRETS_SKILL_COMMAND_ARN);
+  });
+
+  test("a separate events worker alone owns encrypted notification subscriptions", () => {
+    withId.hasResourceProperties("AWS::Lambda::Function", {
+      FunctionName: "sla-alexa-notifications",
+      Environment: { Variables: Match.objectLike({ SKILL_ID, SUBSCRIPTIONS_TABLE: Match.anyValue(), USER_ID_KMS_KEY_ID: Match.anyValue() }) },
+    });
+    withId.hasResourceProperties("AWS::DynamoDB::Table", {
+      TableName: "sla-notification-subscriptions",
+      KeySchema: [{ AttributeName: "deviceKey", KeyType: "HASH" }],
+      TimeToLiveSpecification: { AttributeName: "expiresAt", Enabled: true },
+    });
+    withId.hasResourceProperties("AWS::Lambda::Permission", {
+      Principal: "alexa-appkit.amazon.com",
+      EventSourceToken: SKILL_ID,
+    });
+    const policies = Object.values(withId.findResources("AWS::IAM::Policy") as Record<string, { Properties: { PolicyDocument: { Statement: { Action: string | string[]; Resource: unknown }[] } } }>);
+    const actions = policies.flatMap((policy) => policy.Properties.PolicyDocument.Statement.flatMap((statement) => ([] as string[]).concat(statement.Action)));
+    expect(actions).toContain("kms:Encrypt");
+    expect(actions).toContain("kms:Decrypt");
+    expect(actions).toContain("dynamodb:PutItem");
+    expect(actions).toContain("dynamodb:GetItem");
+    expect(actions).not.toContain("dynamodb:Scan");
+  });
+
+  test("an IAM-only development sender reads opted-in IDs and external skill credentials", () => {
+    withId.hasResourceProperties("AWS::Lambda::Function", {
+      FunctionName: "sla-alexa-notification-send-dev",
+      Handler: "index.sendHandler",
+      Environment: { Variables: Match.objectLike({
+        SKILL_CREDENTIALS_SECRET_ID: "sla/skill-credentials",
+        SUBSCRIPTIONS_TABLE: Match.anyValue(),
+        USER_ID_KMS_KEY_ID: Match.anyValue(),
+      }) },
+    });
+    const permissions = Object.values(withId.findResources("AWS::Lambda::Permission") as Record<string, { Properties: { FunctionName: unknown } }>);
+    expect(JSON.stringify(permissions)).not.toContain("NotificationSender");
+    const policies = withId.findResources("AWS::IAM::Policy") as Record<string, { Properties: { PolicyDocument: { Statement: { Action: string | string[] }[] } } }>;
+    const sender = Object.entries(policies).filter(([id]) => id.startsWith("NotificationSenderServiceRole"));
+    expect(sender).toHaveLength(1);
+    const actions = sender.flatMap(([, policy]) => policy.Properties.PolicyDocument.Statement.flatMap((statement) => ([] as string[]).concat(statement.Action)));
+    expect(actions).toEqual(expect.arrayContaining(["dynamodb:GetItem", "kms:Decrypt", "secretsmanager:GetSecretValue"]));
+    expect(actions).not.toContain("dynamodb:PutItem");
   });
 });

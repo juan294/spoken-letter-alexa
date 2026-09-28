@@ -28,6 +28,14 @@ export type PlaylistReply = {
 
 export type DraftReceipt = { status: "saved"; draftId: string; theme: string; outline: string };
 export type LatestDraft = DraftReceipt | { status: "none" };
+export type DemoNext = {
+  pendingReaction?: { storyId: string; title: string; storyteller: string };
+  event?: { eventId: string; type: string; detail: string; occurredAt: string; storyId?: string };
+};
+export type DemoReaction = { status: "saved" | "dismissed" };
+export type DemoWish = { status: "saved"; wishId: string; topic: string; storyteller?: string };
+export type DemoEvent = { status: "read" | "dismissed" };
+export type DemoInbox = { events: { eventId: string; type: string; detail: string; occurredAt: string; storyId?: string }[] };
 
 export type AgentClient = {
   /** One line of text for the device user; the agent keeps the conversation per user. */
@@ -35,6 +43,12 @@ export type AgentClient = {
   playlist?: (input: PlaylistCommand) => Promise<PlaylistReply>;
   saveDraft?: (input: { deviceUserId: string; requestId: string; theme: string }) => Promise<DraftReceipt>;
   latestDraft?: (input: { deviceUserId: string }) => Promise<LatestDraft>;
+  demoNext?: (input: { deviceUserId: string }) => Promise<DemoNext>;
+  demoReact?: (input: { deviceUserId: string; requestId: string; choice: "like" | "love" | "dismiss" }) => Promise<DemoReaction>;
+  demoWish?: (input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true }) => Promise<DemoWish>;
+  demoEvent?: (input: { deviceUserId: string; eventId: string; action: "read" | "dismiss" }) => Promise<DemoEvent>;
+  demoInbox?: (input: { deviceUserId: string }) => Promise<DemoInbox>;
+  demoPlaybackFinished?: (input: { deviceUserId: string; observedToken: string; eventId: string }) => Promise<{ status: "recorded" | "duplicate" | "ignored" }>;
 };
 
 export type AgentClientOptions = {
@@ -101,49 +115,47 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   }
 
   const skillSecret = options.skillSecret;
+  async function skillPost<T>(path: string, body: unknown): Promise<T> {
+    if (!skillSecret) throw new AgentHttpError(503, "skill_secret_missing", "The skill action is unavailable");
+    const controller = new AbortController();
+    const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
+    try {
+      return await post<T>(path, body, controller.signal, { "x-alexa-skill-secret": skillSecret });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   return {
     ...(skillSecret && {
+      demoNext: (input: { deviceUserId: string }): Promise<DemoNext> => skillPost("/agent/demo/next", input),
+      demoReact: (input: { deviceUserId: string; requestId: string; choice: "like" | "love" | "dismiss" }): Promise<DemoReaction> => skillPost("/agent/demo/reaction", input),
+      demoWish: (input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true }): Promise<DemoWish> => skillPost("/agent/demo/wish", input),
+      demoEvent: (input: { deviceUserId: string; eventId: string; action: "read" | "dismiss" }): Promise<DemoEvent> => skillPost("/agent/demo/event", input),
+      demoInbox: (input: { deviceUserId: string }): Promise<DemoInbox> => skillPost("/agent/demo/inbox", input),
+      demoPlaybackFinished: (input: { deviceUserId: string; observedToken: string; eventId: string }): Promise<{ status: "recorded" | "duplicate" | "ignored" }> => skillPost("/agent/demo/playback-finished", input),
       async saveDraft(input: { deviceUserId: string; requestId: string; theme: string }): Promise<DraftReceipt> {
-        const controller = new AbortController();
-        const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
-        try {
-          const reply: unknown = await post("/agent/demo/draft", input, controller.signal, { "x-alexa-skill-secret": skillSecret });
-          if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved" || !("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string") {
-            throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
-          }
-          return reply as DraftReceipt;
-        } finally {
-          clearTimeout(timer);
+        const reply: unknown = await skillPost("/agent/demo/draft", input);
+        if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved" || !("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string") {
+          throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
         }
+        return reply as DraftReceipt;
       },
       async latestDraft(input: { deviceUserId: string }): Promise<LatestDraft> {
-        const controller = new AbortController();
-        const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
-        try {
-          const reply: unknown = await post("/agent/demo/draft/latest", input, controller.signal, { "x-alexa-skill-secret": skillSecret });
-          if (!reply || typeof reply !== "object" || !("status" in reply) || (reply.status !== "none" && reply.status !== "saved")) {
-            throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
-          }
-          if (reply.status === "saved" && (!("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string")) {
-            throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
-          }
-          return reply as LatestDraft;
-        } finally {
-          clearTimeout(timer);
+        const reply: unknown = await skillPost("/agent/demo/draft/latest", input);
+        if (!reply || typeof reply !== "object" || !("status" in reply) || (reply.status !== "none" && reply.status !== "saved")) {
+          throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
         }
+        if (reply.status === "saved" && (!("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string")) {
+          throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
+        }
+        return reply as LatestDraft;
       },
       async playlist(input: PlaylistCommand): Promise<PlaylistReply> {
-        const controller = new AbortController();
-        const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
-        try {
-          const reply = await post<PlaylistReply>("/agent/playlist", input, controller.signal, { "x-alexa-skill-secret": skillSecret });
-          if (reply.action === "play" && (!reply.play || !reply.token)) {
-            throw new AgentHttpError(200, "malformed", "agent playlist reply is incomplete");
-          }
-          return reply;
-        } finally {
-          clearTimeout(timer);
+        const reply = await skillPost<PlaylistReply>("/agent/playlist", input);
+        if (reply.action === "play" && (!reply.play || !reply.token)) {
+          throw new AgentHttpError(200, "malformed", "agent playlist reply is incomplete");
         }
+        return reply;
       },
     }),
     async turn({ deviceUserId, text }) {

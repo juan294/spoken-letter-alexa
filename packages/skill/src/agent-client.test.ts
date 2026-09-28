@@ -12,6 +12,23 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("createAgentClient", () => {
+  test("demo update calls use the authenticated skill routes and a confirmed wish", async () => {
+    const paths: string[] = [];
+    const fetchImpl = vi.fn<typeof fetch>((input, init) => {
+      expect(new Headers(init?.headers).get("x-alexa-skill-secret")).toBe("skill-secret");
+      const path = new URL(urlOf(input)).pathname;
+      paths.push(path);
+      if (path.endsWith("/wish")) expect(bodyOf(init)).toEqual({ deviceUserId: "owner", requestId: "r1", topic: "mermaids", confirmed: true });
+      return Promise.resolve(jsonResponse(path.endsWith("/inbox") ? { events: [] } : {}));
+    });
+    const client = createAgentClient({ baseUrl: BASE, fetch: fetchImpl, timeoutMs: 6_000, skillSecret: "skill-secret" });
+    await client.demoNext!({ deviceUserId: "owner" });
+    await client.demoReact!({ deviceUserId: "owner", requestId: "r1", choice: "like" });
+    await client.demoWish!({ deviceUserId: "owner", requestId: "r1", topic: "mermaids", confirmed: true });
+    await client.demoEvent!({ deviceUserId: "owner", eventId: "e1", action: "read" });
+    await client.demoInbox!({ deviceUserId: "owner" });
+    expect(paths).toEqual(["/agent/demo/next", "/agent/demo/reaction", "/agent/demo/wish", "/agent/demo/event", "/agent/demo/inbox"]);
+  });
   test("saves and reads a demo draft through authenticated routes", async () => {
     const fetchImpl = vi.fn<typeof fetch>((input, init) => {
       expect(new Headers(init?.headers).get("x-alexa-skill-secret")).toBe("skill-secret");

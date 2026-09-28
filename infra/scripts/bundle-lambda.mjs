@@ -40,10 +40,13 @@ async function bundle(name, entryFile, dir, external = []) {
 // binaries and no fixtures.
 const skillOutDir = path.resolve(here, "../dist/skill");
 const skillEntry = path.join(repoRoot, "packages/skill/src/lambda.ts");
+const notificationOutDir = path.resolve(here, "../dist/notifications");
+const notificationEntry = path.join(repoRoot, "packages/skill/src/notification-worker.ts");
 await Promise.all([
   // The ffmpeg binary is installed below for linux/arm64; everything else is inlined.
   bundle("sla-lambda", entry, outDir, ["ffmpeg-static"]),
   bundle("sla-skill-lambda", skillEntry, skillOutDir),
+  bundle("sla-notification-worker", notificationEntry, notificationOutDir),
 ]);
 
 // ffmpeg-static downloads the binary for npm_config_platform/arch at install time.
@@ -56,6 +59,9 @@ execFileSync("npm", ["install", "--no-save", "--no-package-lock", "--no-audit", 
 const fixtures = path.join(repoRoot, "fixtures");
 mkdirSync(path.join(outDir, "fixtures"), { recursive: true });
 if (existsSync(path.join(fixtures, "stories.json"))) cpSync(path.join(fixtures, "stories.json"), path.join(outDir, "fixtures/stories.json"));
+if (existsSync(path.join(fixtures, "events.json"))) cpSync(path.join(fixtures, "events.json"), path.join(outDir, "fixtures/events.json"));
+mkdirSync(path.join(notificationOutDir, "fixtures"), { recursive: true });
+if (existsSync(path.join(fixtures, "events.json"))) cpSync(path.join(fixtures, "events.json"), path.join(notificationOutDir, "fixtures/events.json"));
 
 console.log(
   JSON.stringify({
@@ -64,5 +70,6 @@ console.log(
     entry: path.relative(repoRoot, entry),
     ffmpeg: existsSync(path.join(outDir, "node_modules/ffmpeg-static/ffmpeg")),
     skill: { outDir: skillOutDir, entry: path.relative(repoRoot, skillEntry) },
+    notifications: { outDir: notificationOutDir, entry: path.relative(repoRoot, notificationEntry) },
   }),
 );
