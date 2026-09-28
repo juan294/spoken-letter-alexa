@@ -3,7 +3,9 @@ packages:
   - infra
   - amazon
 allowBuilds:
+  ask-cli: false
   better-sqlite3: false
+  dtrace-provider: false
   esbuild: true
   ffmpeg-static: true
   node-llama-cpp: false

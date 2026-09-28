@@ -99,7 +99,7 @@ describe("skill handler", () => {
   test("a confirmed adult wish saves only a canonical topic and a canceled wish does not write", async () => {
     const demoWish = vi.fn().mockResolvedValue({ status: "saved", wishId: "wish-1", topic: "mermaids", storyteller: "Aunt Whitney" });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
-    const proposed = await handler(intent("WishStoryIntent", { topic: "mermaids", storyteller: "Aunt Whitney" }));
+    const proposed = await handler(intent("WishStoryIntent", { wishtopic: "mermaids", storyteller: "Aunt Whitney" }));
     expect(ssml(proposed)).toMatch(/save a demo wish/i);
     expect(proposed.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
     expect(demoWish).not.toHaveBeenCalled();
@@ -120,7 +120,7 @@ describe("skill handler", () => {
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
     const missing = await handler(intent("WishStoryIntent"));
     expect(ssml(missing)).toMatch(/what general topic/i);
-    const unknown = await handler(intent("WishStoryIntent", { topic: "mermaids", storyteller: "Lily" }));
+    const unknown = await handler(intent("WishStoryIntent", { wishtopic: "mermaids", storyteller: "Lily" }));
     expect(ssml(unknown)).toMatch(/which adult storyteller/i);
     expect(ssml(unknown)).not.toContain("Lily");
     expect(demoWish).not.toHaveBeenCalled();

@@ -297,8 +297,9 @@ export function generateInteractionModel(input: { training: string[]; stories: C
     { name: "ReadDemoDraftIntent", samples: ["read my demo draft", "what is in my demo draft", "what is my demo draft"] },
     {
       name: "WishStoryIntent",
-      slots: [{ name: "topic", type: "AMAZON.SearchQuery" }, { name: "storyteller", type: "StorytellerName" }],
-      samples: ["i want a story about {topic}", "i wish for a story about {topic}", "ask {storyteller} for another {topic} story", "i wish for another {topic} story from {storyteller}"],
+      // Alexa requires a slot name to keep one type across intents; HelpTopicIntent uses `topic` for SearchQuery.
+      slots: [{ name: "wishtopic", type: "DemoTopic" }, { name: "storyteller", type: "StorytellerName" }],
+      samples: ["i want a story about {wishtopic}", "i wish for a story about {wishtopic}", "ask {storyteller} for another {wishtopic} story", "i wish for another {wishtopic} story from {storyteller}"],
     },
     {
       name: "ReactToStoryIntent",
@@ -325,7 +326,19 @@ export function generateInteractionModel(input: { training: string[]; stories: C
 
   return {
     interactionModel: {
-      languageModel: { invocationName: INVOCATION_NAME, intents, types: [storytellerSlotType(input.stories), { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] }] },
+      languageModel: { invocationName: INVOCATION_NAME, intents, types: [
+        storytellerSlotType(input.stories),
+        { name: "DemoTopic", values: [
+          { name: { value: "mermaids", synonyms: ["mermaid"] } },
+          { name: { value: "space", synonyms: ["star", "stars", "planet", "planets"] } },
+          { name: { value: "ocean", synonyms: ["sea", "beach"] } },
+          { name: { value: "forest", synonyms: ["wood", "woods"] } },
+          { name: { value: "animals", synonyms: ["animal", "cat", "cats", "dog", "dogs"] } },
+          { name: { value: "friendship", synonyms: ["friend", "friends"] } },
+          { name: { value: "bedtime", synonyms: ["sleep"] } },
+        ] },
+        { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] },
+      ] },
     },
   };
 }

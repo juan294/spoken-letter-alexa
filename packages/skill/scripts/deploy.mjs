@@ -55,8 +55,11 @@ for (const key of ["smallIconUri", "largeIconUri"]) {
 console.log("ok: 108 px and 512 px locale icons present");
 
 const version = spawnSync("ask", ["--version"], { encoding: "utf8" });
-if (version.status !== 0) fail("ASK CLI not found: npm i -g ask-cli, then `ask configure` (Owner gate)");
-console.log(`ok: ask-cli ${version.stdout.trim()}`);
+const askVersion = version.stdout?.trim() ?? "";
+if (version.status !== 0 || !/^2\./.test(askVersion)) {
+  fail(`ASK CLI 2.x required for --target skill-metadata; found ${askVersion || "none"}`);
+}
+console.log(`ok: ask-cli ${askVersion}`);
 
 const fn = spawnSync("aws", ["lambda", "get-function", "--function-name", FUNCTION_NAME, "--region", region, "--profile", profile, "--query", "Configuration.FunctionArn", "--output", "text"], { encoding: "utf8" });
 if (fn.status !== 0) fail(`${FUNCTION_NAME} not found in ${region} with profile ${profile}: run pnpm deploy first (SkillStack)`);

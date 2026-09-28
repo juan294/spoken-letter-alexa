@@ -166,10 +166,12 @@ describe("Phase 6 stacks", () => {
       expect(policies).toHaveLength(1);
       const orp = policies[0]?.Properties.OriginRequestPolicyConfig as { HeadersConfig: { HeaderBehavior: string; Headers: string[] }; QueryStringsConfig: { QueryStringBehavior: string } };
       expect(orp.HeadersConfig.HeaderBehavior).toBe("whitelist");
-      for (const header of ["X-Forwarded-Authorization", "CloudFront-Viewer-Address", "MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id", "Accept", "Content-Type"]) {
+      for (const header of ["X-Forwarded-Authorization", "X-Alexa-Skill-Secret", "CloudFront-Viewer-Address", "MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id", "Accept", "Content-Type"]) {
         expect(orp.HeadersConfig.Headers).toContain(header);
       }
       expect(orp.HeadersConfig.Headers).not.toContain("Authorization");
+      expect(orp.HeadersConfig.Headers).not.toContain("Last-Event-ID");
+      expect(orp.HeadersConfig.Headers).toHaveLength(10);
       expect(orp.QueryStringsConfig.QueryStringBehavior).toBe("all");
       // The viewer's bearer survives the OAC signature through a viewer-request function.
       t.edge.hasResourceProperties("AWS::CloudFront::Function", {

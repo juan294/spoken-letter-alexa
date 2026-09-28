@@ -72,15 +72,40 @@ describe("generateInteractionModel", () => {
 
   test("fixture wishes, reactions, and updates have dedicated safe intents", () => {
     expect(byName.WishStoryIntent?.slots).toEqual([
-      { name: "topic", type: "AMAZON.SearchQuery" },
+      { name: "wishtopic", type: "DemoTopic" },
       { name: "storyteller", type: "StorytellerName" },
     ]);
-    expect(byName.WishStoryIntent?.samples).toContain("i want a story about {topic}");
-    expect(byName.WishStoryIntent?.samples).toContain("ask {storyteller} for another {topic} story");
+    expect(byName.WishStoryIntent?.samples).toContain("i want a story about {wishtopic}");
+    expect(byName.WishStoryIntent?.samples).toContain("ask {storyteller} for another {wishtopic} story");
+    expect(model.interactionModel.languageModel.types.find((type) => type.name === "DemoTopic")?.values.map((value) => value.name.value)).toEqual([
+      "mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime",
+    ]);
     expect(byName.ReactToStoryIntent?.slots).toEqual([{ name: "choice", type: "ReactionChoice" }]);
     expect(byName.ReactToStoryIntent?.samples).toContain("i {choice} that story");
     expect(model.interactionModel.languageModel.types.find((type) => type.name === "ReactionChoice")?.values.map((value) => value.name.value)).toEqual(["like", "love"]);
     expect(byName.UpdatesIntent?.samples).toContain("show my demo updates");
+  });
+
+  test("a phrase slot never shares one sample with another slot", () => {
+    for (const intent of intents) {
+      for (const sample of intent.samples) {
+        const used = [...sample.matchAll(/\{([a-zA-Z0-9_]+)\}/g)].map((match) => match[1]);
+        if (used.length < 2) continue;
+        const phraseSlots = intent.slots?.filter((slot) => used.includes(slot.name) && slot.type === "AMAZON.SearchQuery") ?? [];
+        expect(phraseSlots, `${intent.name}: ${sample}`).toEqual([]);
+      }
+    }
+  });
+
+  test("a slot name keeps the same type across intents", () => {
+    const types = new Map<string, string>();
+    for (const intent of intents) {
+      for (const slot of intent.slots ?? []) {
+        const existing = types.get(slot.name);
+        if (existing) expect(slot.type, `${intent.name}: ${slot.name}`).toBe(existing);
+        types.set(slot.name, slot.type);
+      }
+    }
   });
 
   test("the catch-all carries a single AMAZON.SearchQuery slot and utterances that route free text", () => {

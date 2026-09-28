@@ -790,3 +790,16 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
   for every origin response.
 - Why: MCP clients (Alexa+, the Inspector, the agent) discover the authorization server
   from that header; nothing else in the stack can rename it.
+
+### D25. Skill command header takes the unused event header slot (2026-09-28)
+
+- Found: the live skill reached `StartStoryIntent`, but saving a demo draft returned 401.
+  CloudFront's API origin request policy did not forward `X-Alexa-Skill-Secret`.
+  Adding it as an eleventh allow-listed header failed at the CloudFront policy limit.
+- Chose: forward `X-Alexa-Skill-Secret` and remove `Last-Event-ID` from the ten-header
+  allowlist. The server has no event replay store, so it cannot resume an SSE stream
+  from an event ID. The infrastructure test enforces the ten-header limit and the
+  command header.
+- Verified: the public draft API saved a synthetic forest draft, and the ASK
+  development dialog completed `open spoken letter` → `let's create a story` →
+  `about forest` with a saved demo draft response. Echo hardware remains unmeasured.

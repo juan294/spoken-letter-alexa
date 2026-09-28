@@ -526,4 +526,23 @@ This is an offline simulator rehearsal of the four-phase use-case plan, first im
 | Notification: `check demo notification`; `what is new?` | The mock states “This offline simulator did not send a device notification.” It names `fixture_new_mermaid_story`, which matches the in-skill Martina event. No proactive send ran. | In-skill fixture path passed offline; opt-in, Amazon receipt and device observation unmeasured. |
 | Occasion, help and credits: `any family occasions?`; `how do I create a story?`; `how do I add credits?`; `buy credits` | The birthday is called a synthetic fixture. Creation guidance hands off delivery to Spoken Letter. Credit guidance says Alexa cannot charge or change credits. | Passed offline; no entitlement write or charge attempted. |
 
-The code and test review found and repaired four simulator issues: the next-invocation reaction prompt, bounded reaction and wish receipt readback, an obsolete storyteller example, and saved draft outline readback. The skill also checks wish and reaction receipts before claiming a save. The independent local source review passed after these repairs. ASK validation needs an authorized published development skill; Echo playback and a generic development notification need a separately authorized deployed run. Those observations remain unmeasured.
+The code and test review found and repaired four simulator issues: the next-invocation reaction prompt, bounded reaction and wish receipt readback, an obsolete storyteller example, and saved draft outline readback. The skill also checks wish and reaction receipts before claiming a save. The independent local source review passed after these repairs. At the time of this offline rehearsal, ASK routing needed a development skill test; the run below covers the story-start path. Echo playback and a generic development notification remain unmeasured.
+
+## 2026-09-28: development skill story-start recovery
+
+- The deployed interaction model did not contain `StartStoryIntent`, so the owner's
+  “Let's create a story” attempt failed. The globally installed ASK CLI was v1.4.2:
+  it printed `Target not recognized` for a deploy command but exited zero. A pinned
+  ASK CLI v2 and a deploy-script version check now prevent that false success.
+- The first model import rejected an `AMAZON.SearchQuery` sample containing a second
+  slot. The next import rejected the same slot name with different slot types in two
+  intents. The wish theme now uses a custom `DemoTopic` slot named `wishtopic`.
+- After the model built, ASK dialog routed `let's create a story` to
+  `StartStoryIntent`, but `about forest` could not save. The API returned 401 because
+  CloudFront dropped `X-Alexa-Skill-Secret`. Adding an eleventh forwarded header
+  exceeded CloudFront's policy limit, so the unused `Last-Event-ID` was replaced.
+- The final local gate passed: typecheck, lint, 505 tests, CDK synth, and 8
+  Playwright tests. The public draft API returned 200 for a synthetic forest draft.
+  ASK development dialog then answered “What general theme should the demo draft
+  have?” and “I saved a demo draft. Open Spoken Letter to choose the listener and
+  finish it.” Echo hardware was not tested in this recovery.

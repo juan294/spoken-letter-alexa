@@ -400,7 +400,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const catchAllAsk = catchAll ? /^ask\s+(.+?)\s+for\b.*\bstory\b/i.exec(catchAll) : null;
       const catchAllWish = catchAll && /^i\s+(?:want|wish)\b.*\bstory\b.*\babout\b/i.test(catchAll);
       if (intent === "WishStoryIntent" || catchAllWish || catchAllAsk) {
-        const topic = safeDemoTopic(slotValue(event, "topic") ?? catchAll);
+        const topic = safeDemoTopic(slotValue(event, "wishtopic") ?? catchAll);
         if (!topic) return ask("What general topic should the demo wish have? Try mermaids or space.");
         const rawStoryteller = slotValue(event, "storyteller") ?? catchAllAsk?.[1];
         const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(rawStoryteller.toLocaleLowerCase("en-US")) : undefined;

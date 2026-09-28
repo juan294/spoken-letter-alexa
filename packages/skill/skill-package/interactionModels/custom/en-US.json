@@ -164,8 +164,8 @@
           "name": "WishStoryIntent",
           "slots": [
             {
-              "name": "topic",
-              "type": "AMAZON.SearchQuery"
+              "name": "wishtopic",
+              "type": "DemoTopic"
             },
             {
               "name": "storyteller",
@@ -173,10 +173,10 @@
             }
           ],
           "samples": [
-            "i want a story about {topic}",
-            "i wish for a story about {topic}",
-            "ask {storyteller} for another {topic} story",
-            "i wish for another {topic} story from {storyteller}"
+            "i want a story about {wishtopic}",
+            "i wish for a story about {wishtopic}",
+            "ask {storyteller} for another {wishtopic} story",
+            "i wish for another {wishtopic} story from {storyteller}"
           ]
         },
         {
@@ -324,6 +324,77 @@
                 "synonyms": [
                   "Auntie Whitney",
                   "Whitney"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DemoTopic",
+          "values": [
+            {
+              "name": {
+                "value": "mermaids",
+                "synonyms": [
+                  "mermaid"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "space",
+                "synonyms": [
+                  "star",
+                  "stars",
+                  "planet",
+                  "planets"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "ocean",
+                "synonyms": [
+                  "sea",
+                  "beach"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "forest",
+                "synonyms": [
+                  "wood",
+                  "woods"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "animals",
+                "synonyms": [
+                  "animal",
+                  "cat",
+                  "cats",
+                  "dog",
+                  "dogs"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "friendship",
+                "synonyms": [
+                  "friend",
+                  "friends"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bedtime",
+                "synonyms": [
+                  "sleep"
                 ]
               }
             }

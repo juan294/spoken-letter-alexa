@@ -32,8 +32,9 @@ export type EdgeStackProps = StackProps & {
  * DELETE, and the viewer-request function below also carries it as
  * `X-Forwarded-Authorization` so a GET with a bearer survives too (the Lambda entry maps
  * it back: packages/app/src/forwarded-auth.ts). `CloudFront-Viewer-Address` is the real
- * client address for the OAuth rate limiter. CloudFront allow-lists exact names, not a
- * prefix, so every `Mcp-*` header the server reads is listed.
+ * client address for the OAuth rate limiter. The skill command secret must reach
+ * the API's agent routes. CloudFront allow-lists exact names, not a prefix, so
+ * every `Mcp-*` header the server reads is listed.
  */
 export const FORWARDED_AUTHORIZATION_HEADER = "x-forwarded-authorization";
 export const ORIGIN_VERIFY_HEADER = "x-origin-verify";
@@ -44,9 +45,9 @@ export const FORWARDED_HEADERS = [
   "Mcp-Method",
   "Mcp-Name",
   "Mcp-Session-Id",
-  "Last-Event-ID",
   "Origin",
   "X-Forwarded-Authorization",
+  "X-Alexa-Skill-Secret",
   "CloudFront-Viewer-Address",
 ];
 
