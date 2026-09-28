@@ -9,8 +9,10 @@ import { UnderTheHood } from "./components/UnderTheHood.tsx";
 import { beginConnect } from "./oauth/connect.ts";
 import { Callback } from "./pages/Callback.tsx";
 import { useAlexa } from "./state/useAlexa.ts";
+import catalog from "../../../fixtures/stories.json" with { type: "json" };
 
-export const SAMPLE_UTTERANCE = "Alexa, play the story Grandpa sent";
+export const SAMPLE_UTTERANCE = "Alexa, play my stories";
+const HERO_STORYTELLER = catalog.stories[0]?.storyteller ?? "your family";
 
 /** `replace` swaps the address without a reload (after the callback); default is a real navigation. */
 export type Navigate = (url: string, mode?: "replace") => void;
@@ -40,7 +42,7 @@ export function App({
   const [route, setRoute] = useState<"main" | "callback">(path.replace(/\/$/, "").endsWith("/demo/callback") ? "callback" : "main");
   // Tokens live here and nowhere else (never localStorage).
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const { state, dispatch, send, sendAudio } = useAlexa(transport, accessToken);
+  const { state, dispatch, send, sendAudio, storyEnded } = useAlexa(transport, accessToken);
 
   const onLinked = useCallback(
     (token: string) => {
@@ -83,7 +85,7 @@ export function App({
       <section className="hero">
         <Eyebrow>Simulated Alexa+ client</Eyebrow>
         <h1 className="headline headline-display">
-          Ask for the story <span className="accent">Grandpa sent.</span>
+          Ask for a story <span className="accent">by {HERO_STORYTELLER}.</span>
         </h1>
         <p className="lead">
           A parent asks; Alexa+ finds the story the family delivered through the Spoken Letter MCP add-on and plays it in the
@@ -91,7 +93,8 @@ export function App({
         </p>
         <p className="notice" data-testid="simulation-notice">
           This is a simulation of an Alexa+ device: press the Alexa button to talk (push-to-talk, no wake word), or type what you
-          would say. In demo mode it plays the Owner's recorded sample; connect your Spoken Letter to hear a story you delivered.
+          would say. Demo mode plays delivered fixture stories and does not deliver a story to anyone. Connect your Spoken Letter
+          to hear a story you delivered. Demo receipts last only while this simulator page stays open.
         </p>
       </section>
 
@@ -143,7 +146,7 @@ export function App({
           onReplyEnded={() => { dispatch({ type: "reply-ended" }); }}
           onPause={() => { dispatch({ type: "pause" }); }}
           onResume={() => { dispatch({ type: "resume" }); }}
-          onStoryEnded={() => { dispatch({ type: "story-ended" }); }}
+          onStoryEnded={() => void storyEnded()}
         />
       </div>
 

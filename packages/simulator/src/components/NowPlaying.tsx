@@ -50,7 +50,9 @@ export function NowPlaying({ status, play, playKey, speechUrl, sampleUtterance, 
   const progress = duration && duration > 0 ? Math.min(100, Math.round((position / duration) * 100)) : 0;
 
   return (
-    <section className="ink-panel on-ink" data-testid="now-playing" aria-label="Now playing">
+    <section className="ink-panel on-ink" data-testid="now-playing" aria-label="Now playing"
+      data-story-id={play?.id} data-play-token={play?.token?.startsWith("mock-") ? play.token : undefined}
+      data-offset-ms={play?.offsetInMilliseconds}>
       <div className="panel-head">
         <div>
           <Eyebrow tone="amber-on-dark">Now playing</Eyebrow>

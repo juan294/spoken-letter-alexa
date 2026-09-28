@@ -12,13 +12,13 @@ test("the parent asks by keyboard and the fixture story reaches the Now Playing 
   await expect(page.getByRole("img", { name: "Crescent moon" })).toBeVisible();
   await expect(page.locator(".mode-chip")).toHaveText("Demo mode");
 
-  await page.getByRole("textbox", { name: "Ask Alexa by keyboard" }).fill("Alexa, play the story Grandpa sent");
+  await page.getByRole("textbox", { name: "Ask Alexa by keyboard" }).fill("Alexa, play my stories");
   await page.getByRole("button", { name: "Send", exact: true }).click();
 
   const panel = page.getByTestId("now-playing");
-  await expect(page.getByTestId("now-playing-title")).toHaveText("The owl who forgot how to hoot");
-  await expect(panel).toContainText("Grandpa Juan");
-  await expect(panel).toContainText("3:04");
+  await expect(page.getByTestId("now-playing-title")).toHaveText("Ignacio the snail");
+  await expect(panel).toContainText("Aunt Whitney");
+  await expect(panel).toContainText("4:48");
   // The story's artwork takes the brand mark's slot, and the file really resolves.
   const art = page.getByTestId("now-playing-art");
   await expect(art).toBeVisible();

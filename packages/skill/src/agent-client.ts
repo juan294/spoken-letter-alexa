@@ -32,7 +32,7 @@ export type DemoNext = {
   pendingReaction?: { storyId: string; title: string; storyteller: string };
   event?: { eventId: string; type: string; detail: string; occurredAt: string; storyId?: string };
 };
-export type DemoReaction = { status: "saved" | "dismissed" };
+export type DemoReaction = { status: "saved"; reactionId: string; storyId: string; choice: "like" | "love" } | { status: "dismissed" };
 export type DemoWish = { status: "saved"; wishId: string; topic: string; storyteller?: string };
 export type DemoEvent = { status: "read" | "dismissed" };
 export type DemoInbox = { events: { eventId: string; type: string; detail: string; occurredAt: string; storyId?: string }[] };
@@ -128,8 +128,23 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   return {
     ...(skillSecret && {
       demoNext: (input: { deviceUserId: string }): Promise<DemoNext> => skillPost("/agent/demo/next", input),
-      demoReact: (input: { deviceUserId: string; requestId: string; choice: "like" | "love" | "dismiss" }): Promise<DemoReaction> => skillPost("/agent/demo/reaction", input),
-      demoWish: (input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true }): Promise<DemoWish> => skillPost("/agent/demo/wish", input),
+      async demoReact(input: { deviceUserId: string; requestId: string; choice: "like" | "love" | "dismiss" }): Promise<DemoReaction> {
+        const reply: unknown = await skillPost("/agent/demo/reaction", input);
+        if (!reply || typeof reply !== "object" || !("status" in reply) || (reply.status !== "saved" && reply.status !== "dismissed")) {
+          throw new AgentHttpError(200, "malformed", "agent reaction reply is incomplete");
+        }
+        if (reply.status === "saved" && (!("reactionId" in reply) || typeof reply.reactionId !== "string" || !reply.reactionId || !("storyId" in reply) || typeof reply.storyId !== "string" || !reply.storyId || !("choice" in reply) || reply.choice !== input.choice)) {
+          throw new AgentHttpError(200, "malformed", "agent reaction reply is incomplete");
+        }
+        return reply as DemoReaction;
+      },
+      async demoWish(input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true }): Promise<DemoWish> {
+        const reply: unknown = await skillPost("/agent/demo/wish", input);
+        if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved" || !("wishId" in reply) || typeof reply.wishId !== "string" || !("topic" in reply) || typeof reply.topic !== "string") {
+          throw new AgentHttpError(200, "malformed", "agent wish reply is incomplete");
+        }
+        return reply as DemoWish;
+      },
       demoEvent: (input: { deviceUserId: string; eventId: string; action: "read" | "dismiss" }): Promise<DemoEvent> => skillPost("/agent/demo/event", input),
       demoInbox: (input: { deviceUserId: string }): Promise<DemoInbox> => skillPost("/agent/demo/inbox", input),
       demoPlaybackFinished: (input: { deviceUserId: string; observedToken: string; eventId: string }): Promise<{ status: "recorded" | "duplicate" | "ignored" }> => skillPost("/agent/demo/playback-finished", input),

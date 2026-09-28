@@ -31,6 +31,7 @@ export type AlexaEvent =
   | { type: "listen" }
   | { type: "turn-start" }
   | { type: "turn-ok"; you: string; response: TurnResponse }
+  | { type: "playback-next"; response: TurnResponse }
   | { type: "turn-fail"; message: string }
   | { type: "reply-ended" }
   | { type: "pause" }
@@ -73,6 +74,9 @@ export function reduce(state: AlexaState, event: AlexaEvent): AlexaState {
         playKey: response.play ? state.playKey + 1 : state.playKey,
       };
     }
+    case "playback-next":
+      return { ...state, status: "playing", play: event.response.play, speechUrl: null,
+        toolCalls: [...state.toolCalls, ...event.response.toolCalls], playKey: state.playKey + 1 };
     case "turn-fail":
       return { ...state, status: "idle", error: event.message };
     case "reply-ended":

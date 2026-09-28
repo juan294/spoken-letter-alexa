@@ -51,7 +51,16 @@ describe("simulated Alexa+ client", () => {
     expect(notice).toHaveTextContent(/simulation/i);
     expect(notice).toHaveTextContent(/push-to-talk/i);
     expect(notice).toHaveTextContent(/no wake word/i);
+    expect(notice).toHaveTextContent(/delivered fixture stories/i);
+    expect(notice).toHaveTextContent(/does not deliver/i);
+    expect(notice).toHaveTextContent(/page stays open/i);
     expect(screen.getByRole("button", { name: /^alexa$/i })).toBeInTheDocument();
+  });
+
+  it("uses a storyteller from the delivered fixture catalog in the hero", () => {
+    renderApp({});
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Aunt Whitney/);
+    expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent(/Grandpa/);
   });
 
   it("renders the wordmark with an italic Letter and a mono eyebrow above every heading", () => {
@@ -71,7 +80,7 @@ describe("simulated Alexa+ client", () => {
     renderApp({});
     expect(chip()).toHaveTextContent("Idle");
     expect(screen.getByRole("img", { name: /crescent moon/i })).toBeInTheDocument();
-    expect(screen.getByText(/Say 'Alexa, play the story Grandpa sent'/)).toBeInTheDocument();
+    expect(screen.getByText(/Say 'Alexa, play my stories'/)).toBeInTheDocument();
     expect(await screen.findByTestId("mode-chip")).toHaveTextContent("Demo mode");
   });
 

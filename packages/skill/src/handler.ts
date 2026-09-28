@@ -290,8 +290,10 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const saveReaction = async (choice: "like" | "love" | "dismiss"): Promise<AlexaResponseEnvelope> => {
         if (!options.agent.demoReact) return { ...ask(REACTION_UNAVAILABLE), sessionAttributes: { demoFlow: "reaction" } };
         try {
-          const reply = await options.agent.demoReact({ deviceUserId, requestId: event.request.requestId, choice });
-          return reply.status === "dismissed" ? tell("Okay. I dismissed that demo reaction prompt.") : tell(`I saved your ${choice} as a demo reaction. It was not sent to the storyteller.`);
+          const reply: unknown = await options.agent.demoReact({ deviceUserId, requestId: event.request.requestId, choice });
+          if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== (choice === "dismiss" ? "dismissed" : "saved")) throw new Error("incomplete demo reaction receipt");
+          if (choice !== "dismiss" && (!("reactionId" in reply) || typeof reply.reactionId !== "string" || !reply.reactionId || !("storyId" in reply) || typeof reply.storyId !== "string" || !reply.storyId || !("choice" in reply) || reply.choice !== choice)) throw new Error("incomplete demo reaction receipt");
+          return choice === "dismiss" ? tell("Okay. I dismissed that demo reaction prompt.") : tell(`I saved your ${choice} as a demo reaction. It was not sent to the storyteller.`);
         } catch (error) {
           if (error instanceof AgentHttpError && error.code === "no_pending_reaction") return tell("There is no completed demo story waiting for a reaction.");
           return { ...ask(REACTION_UNAVAILABLE), sessionAttributes: { demoFlow: "reaction" } };
@@ -300,7 +302,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const saveWish = async (topic: string, storyteller?: string): Promise<AlexaResponseEnvelope> => {
         if (!options.agent.demoWish) return ask(WISH_UNAVAILABLE);
         try {
-          await options.agent.demoWish({ deviceUserId, requestId: event.request.requestId, topic, ...(storyteller && { storyteller }), confirmed: true });
+          const receipt: unknown = await options.agent.demoWish({ deviceUserId, requestId: event.request.requestId, topic, ...(storyteller && { storyteller }), confirmed: true });
+          if (!receipt || typeof receipt !== "object" || !("status" in receipt) || receipt.status !== "saved" || !("wishId" in receipt) || typeof receipt.wishId !== "string" || !receipt.wishId) throw new Error("incomplete demo wish receipt");
           return tell("I saved a demo wish. It was not sent to the storyteller.");
         } catch {
           return { ...ask(WISH_UNAVAILABLE), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } };

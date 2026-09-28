@@ -16,6 +16,9 @@ export const toolCallSchema = z.object({
 });
 
 export const playSchema = z.object({
+  id: z.string().optional(),
+  token: z.string().optional(),
+  offsetInMilliseconds: z.number().optional(),
   url: z.string(),
   title: z.string(),
   storyteller: z.string(),
@@ -55,6 +58,8 @@ export type AgentTransport = {
   turn(sessionId: string, text: string): Promise<TurnResponse>;
   transcribe(audio: Blob): Promise<{ text: string }>;
   health(): Promise<HealthResponse>;
+  /** In-app mock only: model AudioPlayer finishing without an Amazon device. */
+  playbackFinished?(sessionId: string): Promise<TurnResponse | null>;
 };
 
 export class AgentError extends Error {

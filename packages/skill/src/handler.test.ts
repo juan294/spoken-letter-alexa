@@ -40,7 +40,7 @@ afterEach(() => {
 describe("skill handler", () => {
   test("a completed story asks for a reaction on the next launch, then saves one demo reaction", async () => {
     const demoNext = vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_martina_the_mermaid", title: "Martina the music loving mermaid", storyteller: "Aunt Whitney" } });
-    const demoReact = vi.fn().mockResolvedValue({ status: "saved" });
+    const demoReact = vi.fn().mockResolvedValue({ status: "saved", reactionId: "reaction-1", storyId: "st_martina_the_mermaid", choice: "love" });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoReact }) });
     const launch = await handler(envelope({ type: "LaunchRequest" }));
     expect(ssml(launch)).toMatch(/did you like or love/i);
@@ -80,10 +80,20 @@ describe("skill handler", () => {
   });
 
   test("a reaction can recover on a later invocation after the prompt session closes", async () => {
-    const demoReact = vi.fn().mockResolvedValue({ status: "saved" });
+    const demoReact = vi.fn().mockResolvedValue({ status: "saved", reactionId: "reaction-2", storyId: "st_martina_the_mermaid", choice: "like" });
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "liked" }));
     expect(demoReact).toHaveBeenCalledWith(expect.objectContaining({ choice: "like" }));
     expect(ssml(response)).toMatch(/saved.*demo reaction/i);
+  });
+  test("an incomplete reaction receipt never becomes a saved claim", async () => {
+    const demoReact = vi.fn().mockResolvedValue({});
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "love" }));
+    expect(ssml(response)).toMatch(/no demo reaction was saved/i);
+  });
+  test("a status-only reaction receipt never becomes a saved claim", async () => {
+    const demoReact = vi.fn().mockResolvedValue({ status: "saved" });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "love" }));
+    expect(ssml(response)).toMatch(/no demo reaction was saved/i);
   });
 
   test("a confirmed adult wish saves only a canonical topic and a canceled wish does not write", async () => {
@@ -135,6 +145,13 @@ describe("skill handler", () => {
     const response = await handler(yes);
     expect(ssml(response)).toMatch(/no demo wish was saved/i);
     expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids" });
+  });
+  test("an incomplete wish receipt never becomes a saved claim", async () => {
+    const demoWish = vi.fn().mockResolvedValue({});
+    const yes = intent("AMAZON.YesIntent");
+    yes.session = { ...yes.session!, attributes: { demoFlow: "wish", demoTopic: "mermaids" } };
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) })(yes);
+    expect(ssml(response)).toMatch(/no demo wish was saved/i);
   });
 
   test("an unread fixture update is spoken and marked read; no update stays truthful", async () => {

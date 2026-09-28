@@ -52,12 +52,12 @@ describe("mock transport", () => {
     const transport = createMockTransport();
     const session = await transport.createSession({ mode: "demo" });
     expect(session.mode).toBe("demo");
-    const turn = await transport.turn(session.sessionId, "Alexa, play the story Grandpa sent");
+    const turn = await transport.turn(session.sessionId, "Alexa, play my stories");
     expect(turn.play?.title).toBe(FIXTURE_STORY.title);
-    expect(turn.play?.storyteller).toBe("Grandpa Juan");
-    expect(turn.play?.durationSeconds).toBe(184);
+    expect(turn.play?.storyteller).toBe("Aunt Whitney");
+    expect(turn.play?.durationSeconds).toBe(288);
     expect(turn.speechUrl).toBeNull();
     expect(turn.toolCalls.map((call) => call.name)).toEqual(["spoken-letter___list_family_stories", "spoken-letter___get_family_story"]);
-    await expect(transport.transcribe(new Blob())).resolves.toEqual({ text: "Alexa, play the story Grandpa sent" });
+    await expect(transport.transcribe(new Blob())).resolves.toEqual({ text: "Alexa, play my stories" });
   });
 });

@@ -19,7 +19,11 @@ describe("createAgentClient", () => {
       const path = new URL(urlOf(input)).pathname;
       paths.push(path);
       if (path.endsWith("/wish")) expect(bodyOf(init)).toEqual({ deviceUserId: "owner", requestId: "r1", topic: "mermaids", confirmed: true });
-      return Promise.resolve(jsonResponse(path.endsWith("/inbox") ? { events: [] } : {}));
+      const reply = path.endsWith("/inbox") ? { events: [] }
+        : path.endsWith("/reaction") ? { status: "saved", reactionId: "reaction-1", storyId: "story-1", choice: "like" }
+          : path.endsWith("/wish") ? { status: "saved", wishId: "wish-1", topic: "mermaids" }
+            : path.endsWith("/event") ? { status: "read" } : {};
+      return Promise.resolve(jsonResponse(reply));
     });
     const client = createAgentClient({ baseUrl: BASE, fetch: fetchImpl, timeoutMs: 6_000, skillSecret: "skill-secret" });
     await client.demoNext!({ deviceUserId: "owner" });
@@ -28,6 +32,15 @@ describe("createAgentClient", () => {
     await client.demoEvent!({ deviceUserId: "owner", eventId: "e1", action: "read" });
     await client.demoInbox!({ deviceUserId: "owner" });
     expect(paths).toEqual(["/agent/demo/next", "/agent/demo/reaction", "/agent/demo/wish", "/agent/demo/event", "/agent/demo/inbox"]);
+  });
+  test("a malformed success body cannot become a spoken saved wish or reaction", async () => {
+    const client = createAgentClient({ baseUrl: BASE, fetch: () => Promise.resolve(jsonResponse({})), timeoutMs: 6_000, skillSecret: "skill-secret" });
+    await expect(client.demoWish!({ deviceUserId: "owner", requestId: "r1", topic: "mermaids", confirmed: true })).rejects.toMatchObject({ code: "malformed" });
+    await expect(client.demoReact!({ deviceUserId: "owner", requestId: "r2", choice: "love" })).rejects.toMatchObject({ code: "malformed" });
+  });
+  test("a status-only reaction response is incomplete", async () => {
+    const client = createAgentClient({ baseUrl: BASE, fetch: () => Promise.resolve(jsonResponse({ status: "saved" })), timeoutMs: 6_000, skillSecret: "skill-secret" });
+    await expect(client.demoReact!({ deviceUserId: "owner", requestId: "r3", choice: "love" })).rejects.toMatchObject({ code: "malformed" });
   });
   test("saves and reads a demo draft through authenticated routes", async () => {
     const fetchImpl = vi.fn<typeof fetch>((input, init) => {

@@ -81,5 +81,17 @@ export function useAlexa(transport: AgentTransport, accessToken: string | null) 
     [transport, send],
   );
 
-  return { state, dispatch, send, sendAudio };
+  const storyEnded = useCallback(async () => {
+    dispatch({ type: "story-ended" });
+    const sessionId = sessionRef.current;
+    if (!sessionId || !transport.playbackFinished) return;
+    try {
+      const next = await transport.playbackFinished(sessionId);
+      if (next?.play) dispatch({ type: "playback-next", response: next });
+    } catch (error) {
+      dispatch({ type: "turn-fail", message: describe(error) });
+    }
+  }, [transport]);
+
+  return { state, dispatch, send, sendAudio, storyEnded };
 }
