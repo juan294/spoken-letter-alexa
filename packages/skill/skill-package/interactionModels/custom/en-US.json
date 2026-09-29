@@ -155,9 +155,9 @@
         {
           "name": "ReadDemoDraftIntent",
           "samples": [
-            "read my demo draft",
-            "what is in my demo draft",
-            "what is my demo draft"
+            "read my draft",
+            "what is in my draft",
+            "what is my draft"
           ]
         },
         {
@@ -196,10 +196,10 @@
         {
           "name": "UpdatesIntent",
           "samples": [
-            "show my demo updates",
-            "tell me my demo updates",
-            "any demo updates",
-            "what are my demo updates"
+            "show my updates",
+            "tell me my updates",
+            "any updates",
+            "what are my updates"
           ]
         },
         {

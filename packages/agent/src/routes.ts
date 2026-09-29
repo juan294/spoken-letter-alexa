@@ -175,14 +175,14 @@ export function createAgentApp(deps: AgentDeps): Hono {
 
   function updateError(error: unknown, c: Context) {
     if (error instanceof DemoUpdateError) {
-      if (error.code === "confirmation_required") return c.json({ error: error.code, message: "Confirm the general topic before I save a demo wish." }, 422);
+      if (error.code === "confirmation_required") return c.json({ error: error.code, message: "Confirm the general topic before I save your wish." }, 422);
       if (error.code === "unsupported_topic") return c.json({ error: error.code, message: "Try a topic like mermaids, space, ocean, forest, animals, or friendship." }, 422);
       if (error.code === "unknown_storyteller" || error.code === "ambiguous_storyteller") {
         const names = [...new Set(deps.updates?.stories.map((story) => story.storyteller) ?? [])];
-        return c.json({ error: error.code, message: `Which adult storyteller do you mean? Available storytellers: ${names.join(", ")}.` }, 422);
+        return c.json({ error: error.code, message: `Who would you like a story from? Available storytellers: ${names.join(", ")}.` }, 422);
       }
-      if (error.code === "no_pending_reaction") return c.json({ error: error.code, message: "There is no completed story waiting for a demo reaction." }, 409);
-      if (error.code === "event_not_found") return c.json({ error: error.code, message: "That demo update is unavailable. Ask for your updates again." }, 404);
+      if (error.code === "no_pending_reaction") return c.json({ error: error.code, message: "There is no completed story waiting for a reaction." }, 409);
+      if (error.code === "event_not_found") return c.json({ error: error.code, message: "That update is unavailable. Ask for your updates again." }, 404);
       if (error.code === "update_limit_reached") return c.json({ error: error.code, message: "Nothing new was saved. Try again later." }, 429);
     }
     return c.json({ error: "update_unavailable", message: "Nothing new was saved. Try again in a moment." }, 503);
@@ -246,7 +246,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
   });
 
   app.post("/agent/demo/next", async (c) => {
-    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
@@ -255,7 +255,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
   });
 
   app.post("/agent/demo/playback-finished", async (c) => {
-    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     const parsed = legacyFinishedBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, stream token, and event ID are required");
@@ -264,7 +264,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
   });
 
   app.post("/agent/demo/reaction", async (c) => {
-    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     const parsed = reactionBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, request ID, and reaction are required");
@@ -273,17 +273,17 @@ export function createAgentApp(deps: AgentDeps): Hono {
   });
 
   app.post("/agent/demo/wish", async (c) => {
-    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     const parsed = wishBodySchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: "confirmation_required", message: "Confirm the general topic before I save a demo wish." }, 422);
+    if (!parsed.success) return c.json({ error: "confirmation_required", message: "Confirm the general topic before I save your wish." }, 422);
     try { return c.json(await demoUpdates.wish(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId,
       parsed.data.topic, parsed.data.storyteller, parsed.data.confirmed)); }
     catch (error) { return updateError(error, c); }
   });
 
   app.post("/agent/demo/inbox", async (c) => {
-    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
@@ -292,7 +292,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
   });
 
   app.post("/agent/demo/event", async (c) => {
-    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Demo updates are unavailable." }, 503);
+    if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     const parsed = eventBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, event, and action are required");
@@ -301,7 +301,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
   });
 
   app.post("/agent/demo/draft", async (c) => {
-    if (!demoDrafts || !deps.playlist) return c.json({ error: "draft_unavailable", message: "No demo draft was saved. Try again in a moment." }, 503);
+    if (!demoDrafts || !deps.playlist) return c.json({ error: "draft_unavailable", message: "No draft was saved. Try again in a moment." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) {
       return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     }
@@ -314,14 +314,14 @@ export function createAgentApp(deps: AgentDeps): Hono {
         return c.json({ error: "unsupported_theme", message: "Try a theme like bedtime, space, ocean, forest, animals, friendship, or mermaids." }, 422);
       }
       if (error instanceof DemoDraftError && error.code === "draft_limit_reached") {
-        return c.json({ error: "draft_limit_reached", message: "No demo draft was saved. Try again later." }, 429);
+        return c.json({ error: "draft_limit_reached", message: "No draft was saved. Try again later." }, 429);
       }
-      return c.json({ error: "draft_unavailable", message: "No demo draft was saved. Try again in a moment." }, 503);
+      return c.json({ error: "draft_unavailable", message: "No draft was saved. Try again in a moment." }, 503);
     }
   });
 
   app.post("/agent/demo/draft/latest", async (c) => {
-    if (!demoDrafts || !deps.playlist) return c.json({ error: "draft_unavailable", message: "The demo draft is unavailable. Try again in a moment." }, 503);
+    if (!demoDrafts || !deps.playlist) return c.json({ error: "draft_unavailable", message: "Your story draft is unavailable. Try again in a moment." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) {
       return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
     }
@@ -331,7 +331,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
       const receipt = await demoDrafts.latest(deviceSessionId(parsed.data.deviceUserId));
       return c.json(receipt ?? { status: "none" });
     } catch {
-      return c.json({ error: "draft_unavailable", message: "The demo draft is unavailable. Try again in a moment." }, 503);
+      return c.json({ error: "draft_unavailable", message: "Your story draft is unavailable. Try again in a moment." }, 503);
     }
   });
 

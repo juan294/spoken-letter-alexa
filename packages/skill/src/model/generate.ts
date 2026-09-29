@@ -294,7 +294,7 @@ export function generateInteractionModel(input: { training: string[]; stories: C
       slots: [{ name: "topic", type: "AMAZON.SearchQuery" }],
       samples: ["help with {topic}", "how do i {topic}", "tell me about {topic}"],
     },
-    { name: "ReadDemoDraftIntent", samples: ["read my demo draft", "what is in my demo draft", "what is my demo draft"] },
+    { name: "ReadDemoDraftIntent", samples: ["read my draft", "what is in my draft", "what is my draft"] },
     {
       name: "WishStoryIntent",
       // Alexa requires a slot name to keep one type across intents; HelpTopicIntent uses `topic` for SearchQuery.
@@ -306,7 +306,7 @@ export function generateInteractionModel(input: { training: string[]; stories: C
       slots: [{ name: "choice", type: "ReactionChoice" }],
       samples: ["i {choice} that story", "i {choice} it", "that story was {choice}"],
     },
-    { name: "UpdatesIntent", samples: ["show my demo updates", "tell me my demo updates", "any demo updates", "what are my demo updates"] },
+    { name: "UpdatesIntent", samples: ["show my updates", "tell me my updates", "any updates", "what are my updates"] },
     { name: "PlayAllIntent", samples: ["play my stories", "play all my stories", "play the whole playlist", "shuffle my stories"] },
     { name: "PlayAgainIntent", samples: ["play it again", "play that again", "play the current story again"] },
     { name: "PlayNewStoriesIntent", samples: ["play my new stories", "play the new stories", "play my newest stories"] },

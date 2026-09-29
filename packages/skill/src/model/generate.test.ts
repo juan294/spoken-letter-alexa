@@ -67,7 +67,7 @@ describe("generateInteractionModel", () => {
     expect(byName.ThemeIntent?.slots).toEqual([{ name: "theme", type: "AMAZON.SearchQuery" }]);
     expect(byName.HelpTopicIntent?.samples).toContain("help with {topic}");
     expect(byName.HelpTopicIntent?.slots).toEqual([{ name: "topic", type: "AMAZON.SearchQuery" }]);
-    expect(byName.ReadDemoDraftIntent?.samples).toContain("read my demo draft");
+    expect(byName.ReadDemoDraftIntent?.samples).toContain("read my draft");
   });
 
   test("fixture wishes, reactions, and updates have dedicated safe intents", () => {
@@ -83,7 +83,7 @@ describe("generateInteractionModel", () => {
     expect(byName.ReactToStoryIntent?.slots).toEqual([{ name: "choice", type: "ReactionChoice" }]);
     expect(byName.ReactToStoryIntent?.samples).toContain("i {choice} that story");
     expect(model.interactionModel.languageModel.types.find((type) => type.name === "ReactionChoice")?.values.map((value) => value.name.value)).toEqual(["like", "love"]);
-    expect(byName.UpdatesIntent?.samples).toContain("show my demo updates");
+    expect(byName.UpdatesIntent?.samples).toContain("show my updates");
   });
 
   test("a phrase slot never shares one sample with another slot", () => {
@@ -151,6 +151,7 @@ describe("generateInteractionModel", () => {
       // The generator's own filter for recorded phrasings must accept every fixed sample too.
       expect(utteranceAllowed(sample)).toBe(true);
       expect(sample).toMatch(/^[a-z0-9 {}']+$/);
+      expect(sample).not.toMatch(/\b(?:demo|fixture)\b/i);
       for (const denied of CLASS_C_DENYLIST) {
         if (denied.fragment === "record" || denied.fragment === "audio") continue; // never appear either; asserted below
         expect(sample.includes(denied.fragment)).toBe(false);

@@ -8,7 +8,7 @@
           "smallIconUri": "file://assets/images/en-US_smallIconUri.png",
           "largeIconUri": "file://assets/images/en-US_largeIconUri.png",
           "summary": "Play the family stories delivered to your Spoken Letter account on your Echo.",
-          "description": "Spoken Letter plays family stories already delivered to your account. Ask for the newest story, a story from a storyteller, or the next one. You can prepare a name-free demo story outline, save fixture wishes and reactions, and hear fixture updates inside the skill. Choose a listener, finish delivery, and manage credits in the Spoken Letter app. An opt-in development notification uses Amazon's generic message alert and points back to the fixture inbox. Development stage only: this skill is tested on the Owner's devices and is not submitted for certification.",
+          "description": "Spoken Letter brings your family's stories to your Echo. Ask for the newest story, a story from your favorite storyteller, or the next one. Start a story draft, save a wish for a new story, share what you liked or loved, and catch up on your updates. Choose a listener, finish your story, and manage credits in the Spoken Letter app. Turn on notifications to know when you have an update, then open Spoken Letter to hear it.",
           "examplePhrases": [
             "Alexa, open spoken letter",
             "Alexa, ask spoken letter to play the story Aunt Whitney sent",
@@ -25,7 +25,7 @@
       "distributionCountries": [
         "US"
       ],
-      "testingInstructions": "Development stage. Say: open spoken letter; play the story Aunt Whitney sent; what is new; next; start over; shuffle on; pause; resume; let's create a story; about mermaids; read my demo draft; I want a story about mermaids; how do I add credits. Playback uses fixture recordings. Drafts are saved only for the demo and are not delivered. Fixture wishes, reactions, and updates remain in the demo inbox. On the Owner's opted-in test device, a separately authorized development notification uses Amazon's generic MessageAlert wording; open the skill to hear fixture detail.",
+      "testingInstructions": "Development stage. Say: open spoken letter; play the story Aunt Whitney sent; what is new; next; start over; shuffle on; pause; resume; let's create a story; about mermaids; read my draft; I want a story about mermaids; how do I add credits. Playback uses fixture recordings. Drafts are saved only for the demo and are not delivered. Fixture wishes, reactions, and updates remain in the demo inbox. On the Owner's opted-in test device, a separately authorized development notification uses Amazon's generic MessageAlert wording; open the skill to hear fixture detail.",
       "category": "COMMUNICATION"
     },
     "apis": {

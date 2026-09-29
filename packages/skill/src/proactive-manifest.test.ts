@@ -15,10 +15,10 @@ describe("Proactive Events manifest", () => {
     });
   });
 
-  test("labels wishes, reactions, updates and opt-in notifications as fixture development features", () => {
+  test("uses customer wording in the listing and preserves accurate developer testing instructions", () => {
     const publishing = manifest.manifest.publishingInformation as { locales: { "en-US": { description: string } }; testingInstructions: string };
-    expect(publishing.locales["en-US"].description).toMatch(/fixture wishes and reactions/i);
-    expect(publishing.locales["en-US"].description).toMatch(/opt-in development notification/i);
+    expect(publishing.locales["en-US"].description).not.toMatch(/\b(?:demo|fixture|simulation|prototype|name-free)\b/i);
+    expect(publishing.locales["en-US"].description).toMatch(/turn on notifications/i);
     expect(publishing.testingInstructions).toMatch(/fixture wishes, reactions, and updates/i);
     expect(publishing.testingInstructions).not.toMatch(/live delivery/i);
   });

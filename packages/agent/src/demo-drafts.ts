@@ -114,7 +114,7 @@ export function createModelDraftGenerator(model: Model): DraftGenerator {
       model,
       tools: [],
       structuredOutputSchema: choicesSchema,
-      systemPrompt: "Choose a short, gentle adult-owned demo story outline. Select only the allowed place, challenge, and ending values. Do not include a person's name, a recipient, delivery, or payment.",
+      systemPrompt: "Choose a short, gentle story outline. Select only the allowed place, challenge, and ending values. Do not include a person's name, a recipient, delivery, or payment.",
       printer: false,
     });
     const result = await agent.invoke(`Theme: ${theme}. Choose three outline components.`);

@@ -7,8 +7,8 @@ const stories: DemoStory[] = [
   { id: "st_owl", title: "The owl", storyteller: "Grandpa Juan", deliveredAt: "2026-08-04T00:00:00Z", audioUrl: "https://example.test/fixtures/audio/st_owl.mp3" },
 ];
 const seed = [
-  { eventId: "new_owl", type: "new_story" as const, occurredAt: "2026-08-04T00:00:00Z", storyId: "st_owl", detail: "A new demo story is ready." },
-  { eventId: "birthday", type: "occasion" as const, occurredAt: "2026-09-28T00:00:00Z", detail: "A family birthday is coming up. You can prepare a demo story draft." },
+  { eventId: "new_owl", type: "new_story" as const, occurredAt: "2026-08-04T00:00:00Z", storyId: "st_owl", detail: "A new story is ready." },
+  { eventId: "birthday", type: "occasion" as const, occurredAt: "2026-09-28T00:00:00Z", detail: "A family birthday is coming up. You can create a story for the occasion." },
 ];
 
 function harness() {
@@ -27,6 +27,30 @@ describe("fixture event seed", () => {
 });
 
 describe("demo updates", () => {
+  test("renders existing stored updates in customer language without rewriting their state", async () => {
+    const { controller, store } = harness();
+    const legacy = {
+      completions: [], reactions: [], dismissals: [],
+      wishes: [{ wishId: "old", topic: "mermaids" as const, storyteller: null, requestDigest: "digest", createdAt: 900 }],
+      events: [
+        { eventId: "new_owl", type: "new_story" as const, occurredAt: "2026-09-29T00:00:00Z", storyId: "st_owl", detail: "A new demo story is ready.", readAt: null, dismissed: false },
+        { eventId: "birthday", type: "occasion" as const, occurredAt: "2026-09-28T00:00:00Z", detail: "A family birthday is coming up. You can prepare a demo story draft.", readAt: null, dismissed: false },
+        { eventId: "reaction_old", type: "reaction_update" as const, occurredAt: "2026-09-27T00:00:00Z", detail: "Your demo reaction was saved.", readAt: null, dismissed: false },
+        { eventId: "wish_old", type: "wish_update" as const, occurredAt: "2026-09-26T00:00:00Z", detail: "Your demo wish about mermaids is in the fixture inbox.", readAt: null, dismissed: false },
+      ], version: 1, expiresAt: 2_000,
+    };
+    await store.compareAndSet("dev_hash", null, legacy);
+    const inbox = await controller.inbox("dev_hash");
+    expect(inbox.events.map((item) => item.detail)).toEqual([
+      'A new story is ready. "The owl" by Grandpa Juan.',
+      "A family birthday is coming up. You can create a story for the occasion.",
+      "Your reaction was saved.",
+      "Your wish for a story about mermaids was saved.",
+    ]);
+    expect((await controller.next("dev_hash")).event).toEqual(inbox.events[0]);
+    expect(await store.get("dev_hash")).toEqual(legacy);
+  });
+
   test("records the first finished play, prompts on only the next invocation, and saves one demo reaction", async () => {
     const { store, controller } = harness();
     expect(await controller.recordFinished("dev_hash", "st_mermaid", "event-1")).toEqual({ status: "recorded" });

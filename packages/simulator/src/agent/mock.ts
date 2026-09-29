@@ -53,7 +53,7 @@ export function createMockTransport(): AgentTransport {
   const newStoryEvent = eventCatalog.events.find((event) => event.type === "new_story");
   const newStory = FIXTURE_STORIES.find((story) => story.id === newStoryEvent?.storyId);
   const unreadUpdates = newStory
-    ? [`A new demo story is ready. "${newStory.title}" by ${newStory.storyteller}. This is a fixture update.`]
+    ? [`A new story is ready. "${newStory.title}" by ${newStory.storyteller}.`]
     : [];
   let sessionCounter = 0;
   let tokenCounter = 0;
@@ -72,7 +72,7 @@ export function createMockTransport(): AgentTransport {
     const story = FIXTURE_STORIES.find((candidate) => candidate.id === id);
     if (!story) return noPlay("I couldn't find that delivered story. Ask for your stories to hear what is available.");
     const asset = ASSETS[story.id];
-    if (!asset) return noPlay("That delivered demo recording is unavailable right now.");
+    if (!asset) return noPlay("That recording is unavailable right now.");
     currentId = id;
     tokenCounter += 1;
     const play: Play = {
@@ -85,7 +85,7 @@ export function createMockTransport(): AgentTransport {
       durationSeconds: story.durationSeconds,
       artUrl: asset.art,
     };
-    return { say: `Playing ${story.title} by ${story.storyteller}. This is a delivered demo fixture.`, play, speechUrl: null, toolCalls: TOOL_CALLS };
+    return { say: `Playing ${story.title} by ${story.storyteller}.`, play, speechUrl: null, toolCalls: TOOL_CALLS };
   }
 
   function start(ids: string[]): TurnResponse {
@@ -97,7 +97,7 @@ export function createMockTransport(): AgentTransport {
 
   function playAt(indexToPlay: number): TurnResponse {
     const id = playlist[indexToPlay];
-    return id ? playStory(id) : noPlay("That delivered demo recording is unavailable right now.");
+    return id ? playStory(id) : noPlay("That recording is unavailable right now.");
   }
 
   return {
@@ -112,16 +112,16 @@ export function createMockTransport(): AgentTransport {
         const { topic, storyteller } = pendingWish;
         pendingWish = null;
         const existing = wishes.find((wish) => wish.topic === topic && wish.storyteller === storyteller);
-        if (existing) return Promise.resolve(noPlay(`Receipt ${existing.id} was already saved in this simulation. No creator was contacted.`));
-        if (wishes.length >= RECEIPT_LIMIT) return Promise.resolve(noPlay("The simulator's demo wish receipt limit is full. No new wish was saved."));
+        if (existing) return Promise.resolve(noPlay("Your wish was already saved."));
+        if (wishes.length >= RECEIPT_LIMIT) return Promise.resolve(noPlay("No new wish was saved. Try again later."));
         const id = `mock-wish-${wishes.length + 1}`;
         wishes.push({ id, topic, storyteller });
-        unreadUpdates.push(`Your demo wish about ${topic} was saved.`);
-        return Promise.resolve(noPlay(`Your demo wish about ${topic}${storyteller ? ` with ${storyteller}` : ""} was saved in this simulation. Receipt ${id}. It has not been sent to a creator.`));
+        unreadUpdates.push(`Your wish about ${topic} was saved.`);
+        return Promise.resolve(noPlay(`Your wish about ${topic}${storyteller ? ` with ${storyteller}` : ""} was saved.`));
       }
       if (pendingWish && /^(?:no|cancel)$/.test(utterance)) {
         pendingWish = null;
-        return Promise.resolve(noPlay("No demo wish was saved."));
+        return Promise.resolve(noPlay("No wish was saved."));
       }
       // Confirmation applies only to the immediately preceding wish request.
       pendingWish = null;
@@ -130,94 +130,94 @@ export function createMockTransport(): AgentTransport {
           reactionPrompted = true;
           return Promise.resolve(noPlay("Did you like or love that story?"));
         }
-        return Promise.resolve(noPlay("Spoken Letter. You can ask for your delivered demo stories or check what is new."));
+        return Promise.resolve(noPlay("Spoken Letter. You can ask for your stories or check what is new."));
       }
       if (/\b(?:send|deliver)\b/.test(utterance)) {
-        return Promise.resolve(noPlay("I can prepare a name-free demo outline. Please choose the listener in Spoken Letter and finish delivery there."));
+        return Promise.resolve(noPlay("I can help you start a story. Open Spoken Letter to choose the listener and send it."));
       }
       if (/\b(?:create|make) (?:a )?story for\b/.test(utterance)) {
         awaitingTheme = false;
-        return Promise.resolve(noPlay("I can prepare a name-free demo outline. Please choose the listener in Spoken Letter and finish delivery there."));
+        return Promise.resolve(noPlay("I can help you start a story. Open Spoken Letter to choose the listener and send it."));
       }
-      if (/\b(?:check|show) (?:my )?demo notification\b/.test(utterance)) {
-        return Promise.resolve(noPlay(`This offline simulator did not send a device notification. The matching fixture inbox event is ${newStoryEvent?.eventId ?? "unavailable"}. Ask what is new for its in-skill detail.`));
+      if (/\b(?:check|show) (?:my )?(?:demo )?notification\b/.test(utterance)) {
+        return Promise.resolve(noPlay("Ask what is new to hear your latest updates."));
       }
       if (/\bcredits\b/.test(utterance)) {
-        return Promise.resolve(noPlay("Open Spoken Letter to add story credits. Alexa cannot charge you or change credits."));
+        return Promise.resolve(noPlay("You can add story credits in Spoken Letter."));
       }
       if (/\b(?:how.*create|how.*make|help.*creat)\b/.test(utterance)) {
-        return Promise.resolve(noPlay("Open Spoken Letter, choose a listener, make or record a story, and finish delivery there. Here I can save a name-free demo draft."));
+        return Promise.resolve(noPlay("To get started here, say let's create a story. You can finish your draft, record a story, and choose who to send it to in Spoken Letter."));
       }
       if (/\b(?:latest|read)\b.*\bdraft\b/.test(utterance)) {
         return Promise.resolve(noPlay(latestDraft
-          ? `Your latest saved demo draft is about ${latestDraft.theme}. ${latestDraft.outline} This is an outline, not a delivered story.`
-          : "No demo draft has been saved yet."));
+          ? `Your latest saved story draft is about ${latestDraft.theme}. ${latestDraft.outline}`
+          : "No story draft has been saved yet."));
       }
-      if (/\bread my demo reactions\b/.test(utterance)) {
+      if (/\bread my (?:demo )?reactions\b/.test(utterance)) {
         const count = reactions.length;
         const entries = reactions.map((reaction) => {
           const story = FIXTURE_STORIES.find((candidate) => candidate.id === reaction.storyId);
-          return `${reaction.id}: ${reaction.choice} for ${story?.title ?? "a delivered fixture"}`;
+          return `${reaction.choice} for ${story?.title ?? "a story"}`;
         });
-        return Promise.resolve(noPlay(count === 0 ? "No demo reaction receipts in this page session." :
-          `${count} demo reaction receipt${count === 1 ? "" : "s"} in this page session: ${entries.join("; ")}.`));
+        return Promise.resolve(noPlay(count === 0 ? "No saved reactions." :
+          `${count} saved reaction${count === 1 ? "" : "s"}: ${entries.join("; ")}.`));
       }
-      if (/\bread my demo wishes\b/.test(utterance)) {
+      if (/\bread my (?:demo )?wishes\b/.test(utterance)) {
         const count = wishes.length;
-        const entries = wishes.map((wish) => `${wish.id}: ${wish.topic}${wish.storyteller ? ` with ${wish.storyteller}` : ""}`);
-        return Promise.resolve(noPlay(count === 0 ? "No demo wish receipts in this page session." :
-          `${count} demo wish receipt${count === 1 ? "" : "s"} in this page session: ${entries.join("; ")}.`));
+        const entries = wishes.map((wish) => `${wish.topic}${wish.storyteller ? ` with ${wish.storyteller}` : ""}`);
+        return Promise.resolve(noPlay(count === 0 ? "No saved wishes." :
+          `${count} saved wish${count === 1 ? "" : "es"}: ${entries.join("; ")}.`));
       }
       if (/\b(?:create|make|draft)\b/.test(utterance) && /\b(?:story|draft)\b/.test(utterance)) {
         awaitingTheme = true;
-        return Promise.resolve(noPlay("What general theme should the demo draft have? Say about mermaids or about space."));
+        return Promise.resolve(noPlay("What would you like your story to be about? You can say mermaids or space."));
       }
       if (awaitingTheme) {
         const themeAnswer = /^(?:about\b|the theme is\b)/.test(utterance) || TOPICS.some(([topic]) => utterance === topic);
         if (themeAnswer) {
           const theme = topicIn(text);
-          if (!theme) return Promise.resolve(noPlay("I can save a demo draft about mermaids, space, ocean, forest, animals, friendship, or bedtime. Which theme?"));
+          if (!theme) return Promise.resolve(noPlay("I can save a story draft about mermaids, space, ocean, forest, animals, friendship, or bedtime. Which theme?"));
           const outline = DRAFT_OUTLINES[theme];
-          if (!outline) return Promise.resolve(noPlay("That demo draft theme is unavailable right now."));
+          if (!outline) return Promise.resolve(noPlay("That story theme is unavailable right now."));
           latestDraft = { theme, outline };
           awaitingTheme = false;
-          return Promise.resolve(noPlay(`Saved a name-free demo draft about ${theme}. Choose the listener in Spoken Letter and finish delivery there.`));
+          return Promise.resolve(noPlay(`Saved a story draft about ${theme}. Open Spoken Letter to choose the listener and finish it.`));
         }
         awaitingTheme = false;
       }
       if (/\b(?:wish|request)\b|\bi want a story\b|\bask\b.*\bfor another\b.*\bstory\b/.test(utterance)) {
         const topic = topicIn(text);
-        if (!topic) return Promise.resolve(noPlay("Choose a general topic for a demo wish, such as mermaids or space."));
+        if (!topic) return Promise.resolve(noPlay("What would you like your story to be about? Try mermaids or space."));
         const askedCreator = /\bask (.+?) for another\b/.exec(utterance)?.[1];
         if (askedCreator && !FIXTURE_STORIES.some((story) => normalize(story.storyteller) === askedCreator)) {
-          return Promise.resolve(noPlay(`Which adult storyteller do you mean? I can use ${defaultStoryteller} from the delivered fixtures.`));
+          return Promise.resolve(noPlay(`Who would you like a story from? You can ask for ${defaultStoryteller}.`));
         }
         const storyteller = FIXTURE_STORIES.find((story) => utterance.includes(normalize(story.storyteller)))?.storyteller ?? null;
         pendingWish = { topic, storyteller };
-        return Promise.resolve(noPlay(`Confirm a demo wish about ${topic}${storyteller ? ` with ${storyteller}` : ""}? This will save a simulation receipt only; it will not send anything to a creator.`));
+        return Promise.resolve(noPlay(`Confirm a wish about ${topic}${storyteller ? ` with ${storyteller}` : ""}? Say yes or no.`));
       }
       if (/\b(?:birthday|occasions?)\b/.test(utterance)) {
-        return Promise.resolve(noPlay("A family birthday is coming up in this synthetic fixture. You can prepare a demo story draft."));
+        return Promise.resolve(noPlay("A family birthday is coming up. You can create a story for the occasion."));
       }
       if (/\b(?:what.*new|new stories|updates|inbox)\b/.test(utterance)) {
-        return Promise.resolve(noPlay(unreadUpdates.shift() ?? "No unread demo updates. Ask for your delivered stories or a demo draft."));
+        return Promise.resolve(noPlay(unreadUpdates.shift() ?? "No unread updates. Ask for your stories or a story draft."));
       }
       if (/\b(?:like|love)\b/.test(utterance)) {
-        if (!pendingReactionId) return Promise.resolve(noPlay("Finish a delivered demo story before saving a reaction."));
+        if (!pendingReactionId) return Promise.resolve(noPlay("Finish a story before saving a reaction."));
         const choice = /\blove\b/.test(utterance) ? "love" : "like";
         const storyId = pendingReactionId;
         pendingReactionId = null;
         reactionPrompted = false;
         const existing = reactions.find((reaction) => reaction.storyId === storyId && reaction.choice === choice);
-        if (existing) return Promise.resolve(noPlay(`Receipt ${existing.id} was already saved in this simulation. No creator was contacted.`));
-        if (reactions.length >= RECEIPT_LIMIT) return Promise.resolve(noPlay("The simulator's demo reaction receipt limit is full. No new reaction was saved."));
+        if (existing) return Promise.resolve(noPlay("Your reaction was already saved."));
+        if (reactions.length >= RECEIPT_LIMIT) return Promise.resolve(noPlay("No new reaction was saved. Try again later."));
         const id = `mock-reaction-${reactions.length + 1}`;
         reactions.push({ id, storyId, choice });
-        unreadUpdates.push("Your demo reaction was saved.");
-        return Promise.resolve(noPlay(`Your ${choice} demo reaction was saved in this simulation. Receipt ${id}. It was not sent to a creator.`));
+        unreadUpdates.push("Your reaction was saved.");
+        return Promise.resolve(noPlay(`Your ${choice} reaction was saved.`));
       }
       if (/\b(?:next|skip)\b/.test(utterance)) {
-        if (index < 0 || index + 1 >= playlist.length) return Promise.resolve(noPlay("There is no next delivered story in this demo playlist."));
+        if (index < 0 || index + 1 >= playlist.length) return Promise.resolve(noPlay("There is no next story in your playlist."));
         index += 1;
         return Promise.resolve(playAt(index));
       }
@@ -243,7 +243,7 @@ export function createMockTransport(): AgentTransport {
         }
         return Promise.resolve(start(FIXTURE_STORIES.map((story) => story.id)));
       }
-      return Promise.resolve(noPlay("I can play delivered demo fixtures. Try saying play my stories."));
+      return Promise.resolve(noPlay("I can play your stories. Try saying play my stories."));
     },
     playbackFinished(_sessionId): Promise<TurnResponse | null> {
       pendingReactionId = currentId;

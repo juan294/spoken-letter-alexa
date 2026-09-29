@@ -51,7 +51,7 @@ describe("authenticated demo draft routes", () => {
     expect(unavailable.status).toBe(503);
     const failure = await unavailable.json() as { error: string; message: string };
     expect(failure.error).toBe("draft_unavailable");
-    expect(failure.message).toMatch(/no demo draft was saved/i);
+    expect(failure.message).toMatch(/no draft was saved/i);
     expect(await (await failed.post("/agent/demo/draft/latest", { deviceUserId: "owner" })).json()).toEqual({ status: "none" });
   });
 });

@@ -31,7 +31,14 @@ function fakeAgent(overrides: Partial<AgentClient> = {}): AgentClient & { turn: 
   return { turn, ...overrides } as AgentClient & { turn: ReturnType<typeof vi.fn> };
 }
 
-const ssml = (r: AlexaResponseEnvelope) => (r.response.outputSpeech as { ssml?: string } | undefined)?.ssml ?? "";
+const ssml = (r: AlexaResponseEnvelope) => {
+  const speech = (r.response.outputSpeech as { ssml?: string } | undefined)?.ssml ?? "";
+  for (const text of [speech, r.response.reprompt?.outputSpeech.ssml ?? ""]) {
+    expect(text).not.toMatch(/\b(?:demo|fixture|simulation|prototype|name-free)\b/i);
+    expect(text).not.toMatch(/not sent|not contact anyone|not a real/i);
+  }
+  return speech;
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -49,7 +56,7 @@ describe("skill handler", () => {
     reply.session = { ...reply.session!, attributes: { demoFlow: "reaction" } };
     const saved = await handler(reply);
     expect(demoReact).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", requestId: "amzn1.echo-api.request.1", choice: "love" });
-    expect(ssml(saved)).toMatch(/saved.*demo/i);
+    expect(ssml(saved)).toMatch(/saved.*reaction|saved that you loved/i);
     expect(ssml(saved)).not.toMatch(/sent.*creator|creator.*received/i);
   });
 
@@ -75,7 +82,7 @@ describe("skill handler", () => {
     const loved = intent("ReactToStoryIntent", { choice: "love" });
     loved.session = { ...loved.session!, attributes: { demoFlow: "reaction" } };
     const failed = await handler(loved);
-    expect(ssml(failed)).toMatch(/no demo reaction was saved/i);
+    expect(ssml(failed)).toMatch(/no reaction was saved/i);
     expect(failed.sessionAttributes).toEqual({ demoFlow: "reaction" });
   });
 
@@ -83,35 +90,35 @@ describe("skill handler", () => {
     const demoReact = vi.fn().mockResolvedValue({ status: "saved", reactionId: "reaction-2", storyId: "st_martina_the_mermaid", choice: "like" });
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "liked" }));
     expect(demoReact).toHaveBeenCalledWith(expect.objectContaining({ choice: "like" }));
-    expect(ssml(response)).toMatch(/saved.*demo reaction/i);
+    expect(ssml(response)).toMatch(/saved.*reaction|saved that you liked/i);
   });
   test("an incomplete reaction receipt never becomes a saved claim", async () => {
     const demoReact = vi.fn().mockResolvedValue({});
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "love" }));
-    expect(ssml(response)).toMatch(/no demo reaction was saved/i);
+    expect(ssml(response)).toMatch(/no reaction was saved/i);
   });
   test("a status-only reaction receipt never becomes a saved claim", async () => {
     const demoReact = vi.fn().mockResolvedValue({ status: "saved" });
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) })(intent("ReactToStoryIntent", { choice: "love" }));
-    expect(ssml(response)).toMatch(/no demo reaction was saved/i);
+    expect(ssml(response)).toMatch(/no reaction was saved/i);
   });
 
   test("a confirmed adult wish saves only a canonical topic and a canceled wish does not write", async () => {
     const demoWish = vi.fn().mockResolvedValue({ status: "saved", wishId: "wish-1", topic: "mermaids", storyteller: "Aunt Whitney" });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
     const proposed = await handler(intent("WishStoryIntent", { wishtopic: "mermaids", storyteller: "Aunt Whitney" }));
-    expect(ssml(proposed)).toMatch(/save a demo wish/i);
+    expect(ssml(proposed)).toMatch(/save a wish/i);
     expect(proposed.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
     expect(demoWish).not.toHaveBeenCalled();
     const yes = intent("AMAZON.YesIntent");
     yes.session = { ...yes.session!, attributes: proposed.sessionAttributes! };
     const saved = await handler(yes);
     expect(demoWish).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", requestId: "amzn1.echo-api.request.1", topic: "mermaids", storyteller: "Aunt Whitney", confirmed: true });
-    expect(ssml(saved)).toMatch(/saved.*demo wish/i);
+    expect(ssml(saved)).toMatch(/saved.*wish/i);
     const no = intent("AMAZON.NoIntent");
     no.session = { ...no.session!, attributes: proposed.sessionAttributes! };
     const canceled = await handler(no);
-    expect(ssml(canceled)).toMatch(/no demo wish was saved/i);
+    expect(ssml(canceled)).toMatch(/no wish was saved/i);
     expect(demoWish).toHaveBeenCalledTimes(1);
   });
 
@@ -119,9 +126,9 @@ describe("skill handler", () => {
     const demoWish = vi.fn();
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
     const missing = await handler(intent("WishStoryIntent"));
-    expect(ssml(missing)).toMatch(/what general topic/i);
+    expect(ssml(missing)).toMatch(/what.*story.*about/i);
     const unknown = await handler(intent("WishStoryIntent", { wishtopic: "mermaids", storyteller: "Lily" }));
-    expect(ssml(unknown)).toMatch(/which adult storyteller/i);
+    expect(ssml(unknown)).toMatch(/who would you like a story from/i);
     expect(ssml(unknown)).not.toContain("Lily");
     expect(demoWish).not.toHaveBeenCalled();
     const childOrigin = await handler(intent("CatchAllIntent", { text: "Lily wants a story about mermaids" }));
@@ -133,7 +140,7 @@ describe("skill handler", () => {
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("CatchAllIntent", { text: "ask Aunt Whitney for another mermaid story" }));
     expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
     const unknown = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("CatchAllIntent", { text: "ask Lily for another mermaid story" }));
-    expect(ssml(unknown)).toMatch(/which adult storyteller/i);
+    expect(ssml(unknown)).toMatch(/who would you like a story from/i);
     expect(ssml(unknown)).not.toContain("Lily");
   });
 
@@ -143,7 +150,7 @@ describe("skill handler", () => {
     const yes = intent("AMAZON.YesIntent");
     yes.session = { ...yes.session!, attributes: { demoFlow: "wish", demoTopic: "mermaids" } };
     const response = await handler(yes);
-    expect(ssml(response)).toMatch(/no demo wish was saved/i);
+    expect(ssml(response)).toMatch(/no wish was saved/i);
     expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids" });
   });
   test("an incomplete wish receipt never becomes a saved claim", async () => {
@@ -151,20 +158,20 @@ describe("skill handler", () => {
     const yes = intent("AMAZON.YesIntent");
     yes.session = { ...yes.session!, attributes: { demoFlow: "wish", demoTopic: "mermaids" } };
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) })(yes);
-    expect(ssml(response)).toMatch(/no demo wish was saved/i);
+    expect(ssml(response)).toMatch(/no wish was saved/i);
   });
 
   test("an unread fixture update is spoken and marked read; no update stays truthful", async () => {
-    const demoNext = vi.fn().mockResolvedValue({ event: { eventId: "evt-1", type: "family-occasion", detail: "A family birthday is coming up in this demo.", occurredAt: "2026-09-28T10:00:00Z" } });
+    const demoNext = vi.fn().mockResolvedValue({ event: { eventId: "evt-1", type: "family-occasion", detail: "A family birthday is coming up.", occurredAt: "2026-09-28T10:00:00Z" } });
     const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoEvent }) });
     const launch = await handler(envelope({ type: "LaunchRequest" }));
-    expect(ssml(launch)).toContain("A family birthday is coming up in this demo.");
+    expect(ssml(launch)).toContain("A family birthday is coming up.");
     expect(demoEvent).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", eventId: "evt-1", action: "read" });
     expect(ssml(launch)).not.toMatch(/child|birthday of/i);
   });
   test("updates read the validated fixture story title and mark only that event", async () => {
-    const demoInbox = vi.fn().mockResolvedValue({ events: [{ eventId: "evt-story", type: "new_story", occurredAt: "2026-08-03T00:03:24Z", storyId: "st_martina_the_mermaid", detail: "A new demo story is ready. Martina the music loving mermaid by Aunt Whitney." }] });
+    const demoInbox = vi.fn().mockResolvedValue({ events: [{ eventId: "evt-story", type: "new_story", occurredAt: "2026-08-03T00:03:24Z", storyId: "st_martina_the_mermaid", detail: "A new story is ready. Martina the music loving mermaid by Aunt Whitney." }] });
     const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoInbox, demoEvent }) })(intent("UpdatesIntent"));
     expect(ssml(response)).toContain("Martina the music loving mermaid");
@@ -175,14 +182,14 @@ describe("skill handler", () => {
     const agent = fakeAgent({ saveDraft });
     const handler = createHandler({ skillId: SKILL_ID, agent });
     const start = await handler(intent("StartStoryIntent"));
-    expect(ssml(start)).toMatch(/what general theme/i);
+    expect(ssml(start)).toMatch(/what.*story.*about/i);
     expect(start.sessionAttributes).toEqual({ demoFlow: "draft" });
     expect(saveDraft).not.toHaveBeenCalled();
     const followup = intent("ThemeIntent", { theme: "mermaids" });
     followup.session = { ...followup.session!, attributes: { demoFlow: "draft" } };
     const saved = await handler(followup);
     expect(saveDraft).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", requestId: "amzn1.echo-api.request.1", theme: "mermaids" });
-    expect(ssml(saved)).toMatch(/saved a demo draft/i);
+    expect(ssml(saved)).toMatch(/saved.*draft/i);
     expect(ssml(saved)).toMatch(/private app|open Spoken Letter/i);
     expect(ssml(saved)).not.toMatch(/sent|delivered/i);
   });
@@ -192,10 +199,10 @@ describe("skill handler", () => {
     const agent = fakeAgent({ saveDraft });
     const handler = createHandler({ skillId: SKILL_ID, agent });
     const named = await handler(intent("CatchAllIntent", { text: "create a story for Lily" }));
-    expect(ssml(named)).toMatch(/choose the listener in Spoken Letter/i);
+    expect(ssml(named)).toMatch(/Spoken Letter to choose the listener/i);
     expect(ssml(named)).not.toContain("Lily");
     const credits = await handler(intent("HelpTopicIntent", { topic: "add credits" }));
-    expect(ssml(credits)).toMatch(/cannot charge|can't charge/i);
+    expect(ssml(credits)).toMatch(/add story credits.*Spoken Letter/i);
     expect(ssml(credits)).not.toMatch(/charged|added credits/i);
     expect(saveDraft).not.toHaveBeenCalled();
     expect(agent.turn).not.toHaveBeenCalled();
@@ -207,7 +214,7 @@ describe("skill handler", () => {
     const handler = createHandler({ skillId: SKILL_ID, agent });
     const event = intent("StartStoryIntent", { theme: "space" });
     const response = await handler(event);
-    expect(ssml(response)).toMatch(/no demo draft was saved/i);
+    expect(ssml(response)).toMatch(/no draft was saved/i);
     expect(response.sessionAttributes).toEqual({ demoFlow: "draft" });
     expect(response.response.shouldEndSession).toBe(false);
   });
@@ -217,7 +224,7 @@ describe("skill handler", () => {
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ latestDraft }) })(intent("ReadDemoDraftIntent"));
     expect(latestDraft).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER" });
     expect(ssml(response)).toContain("A gentle trip through the stars.");
-    expect(ssml(response)).toMatch(/demo draft/i);
+    expect(ssml(response)).toMatch(/story draft/i);
   });
   test("a pending draft does not turn a playback request into a saved draft", async () => {
     const saveDraft = vi.fn();
@@ -226,17 +233,17 @@ describe("skill handler", () => {
     event.session = { ...event.session!, attributes: { demoFlow: "draft" } };
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft, playlist }) })(event);
     expect(saveDraft).not.toHaveBeenCalled();
-    expect(ssml(response)).not.toMatch(/saved a demo draft/i);
+    expect(ssml(response)).not.toMatch(/saved.*draft/i);
   });
 
   test("catch-all creation help gives private app steps", async () => {
     const saveDraft = vi.fn();
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) })(intent("CatchAllIntent", { text: "how do I create a story" }));
-    expect(ssml(response)).toMatch(/open Spoken Letter.*choose a listener/i);
+    expect(ssml(response)).toMatch(/choose who to send it to in Spoken Letter/i);
     expect(saveDraft).not.toHaveBeenCalled();
   });
   test("starts a newest playlist through the authenticated command route and plays the server token", async () => {
-    const playlist = vi.fn().mockResolvedValue({ say: "Playing your new demo stories.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
+    const playlist = vi.fn().mockResolvedValue({ say: "Playing your new stories.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
     const agent = fakeAgent({ playlist });
     const response = await createHandler({ skillId: SKILL_ID, agent })(intent("PlayNewStoriesIntent"));
     expect(playlist).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", command: "start", order: "newest" });
