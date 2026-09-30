@@ -8,11 +8,9 @@
 // Usage: AWS_PROFILE=archy pnpm -F @spoken-letter-alexa/agent measure:cache-prefix
 // The result is recorded in docs/research/2026-09-30-bedrock-cache-prefix.md.
 import {
-  type BaseModelConfig,
   BedrockModel,
   configureLogging,
   Message,
-  Model,
   type ModelStreamEvent,
   type StreamOptions,
   type SystemPrompt,
@@ -36,21 +34,12 @@ const UTTERANCE = "Alexa, play the story Grandpa sent";
 type Captured = { messages: Message[]; systemPrompt: SystemPrompt | undefined; toolSpecs: ToolSpec[] };
 
 /** Records what the agent hands the model on each call, then lets the scripted model answer. */
-class RecordingModel extends Model {
+class RecordingModel extends ScriptedModel {
   readonly calls: Captured[] = [];
-  private readonly inner = new ScriptedModel();
 
-  updateConfig(modelConfig: BaseModelConfig): void {
-    this.inner.updateConfig(modelConfig);
-  }
-
-  getConfig(): BaseModelConfig {
-    return this.inner.getConfig();
-  }
-
-  async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
+  override async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
     this.calls.push({ messages: [...messages], systemPrompt: options?.systemPrompt, toolSpecs: options?.toolSpecs ?? [] });
-    yield* this.inner.stream(messages, options);
+    yield* super.stream(messages, options);
   }
 }
 

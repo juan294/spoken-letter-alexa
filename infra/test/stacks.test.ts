@@ -28,6 +28,12 @@ function statements(template: Template): Statement[] {
   return resources(template, "AWS::IAM::Policy").flatMap((policy) => (policy.Properties.PolicyDocument as { Statement: Statement[] }).Statement);
 }
 
+/** The API Lambda's environment variables. */
+function lambdaVariables(template: Template): Record<string, unknown> {
+  const [fn] = resources(template, "AWS::Lambda::Function");
+  return (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
+}
+
 function synth(): Templates {
   const app = new App({ context: { "sla:certificateArn": CERT_ARN, "sla:alertEmail": "owner@example.com" } });
   const core = new CoreStack(app, "SpokenLetterAlexaCore", { env });
@@ -88,11 +94,10 @@ describe("Phase 6 stacks", () => {
     test("the deployed BEDROCK_MODEL_ID is the model the Bedrock cache-prefix record measured (prompt-caching Phase 6)", () => {
       // A model switch changes the cache minimum, so the record in docs/research must be re-measured first.
       const record = readFileSync(path.resolve(import.meta.dirname, "../../docs/research/2026-09-30-bedrock-cache-prefix.md"), "utf8");
-      const measured = /^Decision: .+ tokens for (\S+)$/m.exec(record)?.[1];
-      const [fn] = resources(t.api, "AWS::Lambda::Function");
-      const variables = (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
+      // The same Decision-line grammar packages/app/src/bootstrap.test.ts parses.
+      const measured = /^Decision: (not applicable|enabled) at (\d+) (<|>=) (\d+) tokens for (\S+)$/m.exec(record)?.[5];
       expect(measured).toBeDefined();
-      expect(variables.BEDROCK_MODEL_ID).toBe(measured);
+      expect(lambdaVariables(t.api).BEDROCK_MODEL_ID).toBe(measured);
     });
 
     test("the log group is explicit with 30-day retention", () => {
@@ -100,8 +105,7 @@ describe("Phase 6 stacks", () => {
     });
 
     test("secrets are read at cold start from Secrets Manager, not baked into the environment", () => {
-      const [fn] = resources(t.api, "AWS::Lambda::Function");
-      const variables = (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
+      const variables = lambdaVariables(t.api);
       expect(JSON.stringify(variables)).not.toMatch(/ALEXA_BRIDGE_SECRET|OAUTH_M2M_SECRET|ALEXA_SKILL_COMMAND_SECRET/);
       expect(variables.SECRETS_BRIDGE_ARN).toBeDefined();
       expect(variables.SECRETS_OAUTH_CLIENTS_ARN).toBeDefined();
@@ -110,8 +114,7 @@ describe("Phase 6 stacks", () => {
     });
 
     test("the API gets a separate demo-state table and scoped item access", () => {
-      const [fn] = resources(t.api, "AWS::Lambda::Function");
-      const variables = (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
+      const variables = lambdaVariables(t.api);
       expect(variables.DEMO_STATE_STORE).toBe("dynamo");
       expect(JSON.stringify(variables.DEMO_STATE_TABLE)).toContain("DemoStateTable");
       const demoAccess = statements(t.api).filter((statement) => JSON.stringify(statement.Resource).includes("DemoStateTable"));
