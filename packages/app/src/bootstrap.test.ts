@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, test } from "vitest";
 
-import { bootstrap } from "./bootstrap.ts";
-import { readServerEnv } from "./env.ts";
+import { bootstrap, createBedrockModel } from "./bootstrap.ts";
+import { DEFAULT_BEDROCK_MODEL_ID, readServerEnv } from "./env.ts";
 
 const BASE = {
   PORT: "4310",
@@ -102,5 +105,27 @@ describe("bootstrap", () => {
     expect(readServerEnv({ ...BASE, DEMO_STATE_TABLE: "custom-demo-state" }).DEMO_STATE_TABLE).toBe("custom-demo-state");
     expect(readServerEnv(BASE).DEMO_STATE_STORE).toBe("memory");
     expect(readServerEnv({ ...BASE, DEMO_STATE_STORE: "dynamo" }).DEMO_STATE_STORE).toBe("dynamo");
+  });
+});
+
+/** Prompt-caching Phase 6: the dated measurement that decides whether Bedrock caching applies. */
+const CACHE_PREFIX_RECORD = path.resolve(import.meta.dirname, "../../../docs/research/2026-09-30-bedrock-cache-prefix.md");
+
+describe("Bedrock prompt caching follows the measured record", () => {
+  const record = readFileSync(CACHE_PREFIX_RECORD, "utf8");
+  const decision = /^Decision: (not applicable|enabled) at (\d+) (<|>=) (\d+) tokens for (\S+)$/m.exec(record);
+
+  test("the record states a self-consistent decision for the default model", () => {
+    expect(decision).not.toBeNull();
+    const [, verdict = "", tokens = "", comparison = "", minimum = "", modelId = ""] = decision ?? [];
+    expect(comparison).toBe(Number(tokens) >= Number(minimum) ? ">=" : "<");
+    expect(verdict).toBe(comparison === ">=" ? "enabled" : "not applicable");
+    // A model switch changes the minimum, so it needs a new measurement.
+    expect(DEFAULT_BEDROCK_MODEL_ID).toBe(modelId);
+  });
+
+  test("cacheConfig is set exactly when the record says caching is enabled", () => {
+    const model = createBedrockModel(readServerEnv(BASE));
+    expect(model.getConfig().cacheConfig !== undefined).toBe(decision?.[1] === "enabled");
   });
 });

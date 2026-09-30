@@ -78,6 +78,15 @@ function documentClient(env: ServerEnv): DynamoDBDocumentClient {
   return DynamoDBDocumentClient.from(new DynamoDBClient({ region: env.AWS_REGION }), { marshallOptions: { removeUndefinedValues: true } });
 }
 
+/**
+ * The turn model. No `cacheConfig`: the tools + system prefix measures below Haiku 4.5's
+ * 4,096-token cache minimum, so a cache point would be a silent no-op. Enabling it needs a new
+ * measurement in docs/research/2026-09-30-bedrock-cache-prefix.md (bootstrap.test.ts holds the two together).
+ */
+export function createBedrockModel(env: ServerEnv): BedrockModel {
+  return new BedrockModel({ region: env.AWS_REGION, modelId: env.BEDROCK_MODEL_ID, maxTokens: 600, temperature: 0.3 });
+}
+
 function storeFromEnv(env: ServerEnv): OAuthStore {
   return env.OAUTH_STORE === "dynamo" ? new DynamoStore({ client: documentClient(env), tableName: env.OAUTH_TABLE }) : new MemoryStore();
 }
@@ -158,7 +167,7 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
     env.AGENT_OFFLINE === "1"
       ? createOfflineDeps({ mcpUrl: env.MCP_URL, mcpFetch, demoToken })
       : {
-          model: new BedrockModel({ region: env.AWS_REGION, modelId: env.BEDROCK_MODEL_ID, maxTokens: 600, temperature: 0.3 }),
+          model: createBedrockModel(env),
           modelId: env.BEDROCK_MODEL_ID,
           mcpUrl: env.MCP_URL,
           mcpFetch,
