@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -80,6 +83,16 @@ describe("Phase 6 stacks", () => {
       });
       // AuthType NONE by design (D18): an OAC would make Lambda reject every unsigned POST.
       t.api.hasResourceProperties("AWS::Lambda::Url", { InvokeMode: "RESPONSE_STREAM", AuthType: "NONE" });
+    });
+
+    test("the deployed BEDROCK_MODEL_ID is the model the Bedrock cache-prefix record measured (prompt-caching Phase 6)", () => {
+      // A model switch changes the cache minimum, so the record in docs/research must be re-measured first.
+      const record = readFileSync(path.resolve(import.meta.dirname, "../../docs/research/2026-09-30-bedrock-cache-prefix.md"), "utf8");
+      const measured = /^Decision: .+ tokens for (\S+)$/m.exec(record)?.[1];
+      const [fn] = resources(t.api, "AWS::Lambda::Function");
+      const variables = (fn?.Properties.Environment as { Variables: Record<string, unknown> }).Variables;
+      expect(measured).toBeDefined();
+      expect(variables.BEDROCK_MODEL_ID).toBe(measured);
     });
 
     test("the log group is explicit with 30-day retention", () => {
