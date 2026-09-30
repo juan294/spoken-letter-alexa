@@ -21,7 +21,7 @@ import {
 } from "@strands-agents/sdk";
 
 import { ALEXA_PERSONA, personaWithCatalog } from "../src/persona.ts";
-import { trimHistory } from "../src/routes.ts";
+import { formatCatalog, trimHistory } from "../src/routes.ts";
 import { ScriptedModel } from "../src/scripted-model.ts";
 import { MCP_URL, mcpHarness } from "../src/test-support.ts";
 import { runTurn } from "../src/turn.ts";
@@ -84,6 +84,11 @@ async function count(messages: Message[], options: { systemPrompt?: SystemPrompt
   return { api: { tokens: heuristic, label: "INFERRED (Strands heuristic)", modelId: MODEL_ID, error: errors.join(" | ") }, heuristic };
 }
 
+/** A captured model call, counted as sent. `runTurn` always passes a system prompt. */
+function countCall(call: Captured): ReturnType<typeof count> {
+  return count(call.messages, { systemPrompt: call.systemPrompt ?? ALEXA_PERSONA, toolSpecs: call.toolSpecs });
+}
+
 function userText(text: string): Message[] {
   return [new Message({ role: "user", content: [new TextBlock(text)] })];
 }
@@ -101,11 +106,14 @@ async function main(): Promise<void> {
   const longest = followUp.calls.at(-1);
   if (!first || !last || !longest) throw new Error("a turn made no model call");
 
-  // 20 stories, the most `fetchCatalog` asks for (routes.ts), in its line format: once typical,
+  // 20 stories, the most `fetchCatalog` asks for, through its own `formatCatalog`: once typical,
   // once at the HTTP provider's field maxima (id 64, title 200, storyteller 80 characters).
-  const catalog = Array.from({ length: 20 }, (_, i) => `st_story_${i}: A bedtime story number ${i} by Grandpa Juan, 3m4s`).join("\n");
+  const indexes = Array.from({ length: 20 }, (_, i) => i);
+  const catalog = formatCatalog(indexes.map((i) => ({ id: `st_story_${i}`, title: `A bedtime story number ${i}`, storyteller: "Grandpa Juan", durationSeconds: 184 })));
   const words = (i: number, length: number): string => `the lighthouse keeper and the owl who forgot how to hoot, part ${i} `.repeat(8).slice(0, length);
-  const longestCatalog = Array.from({ length: 20 }, (_, i) => `${`st_${i}_`.padEnd(64, "0123456789abcdef")}: ${words(i, 200)} by ${words(i, 80)}, 59m59s`).join("\n");
+  const longestCatalog = formatCatalog(
+    indexes.map((i) => ({ id: `st_${i}_`.padEnd(64, "0123456789abcdef"), title: words(i, 200), storyteller: words(i, 80), durationSeconds: 3599 })),
+  );
   // One character of user text: Bedrock CountTokens needs a message. Counted alone it is 24 tokens.
   const probe = userText(".");
 
@@ -114,9 +122,9 @@ async function main(): Promise<void> {
     ["system checkpoint (tools + ALEXA_PERSONA)", await count(probe, { systemPrompt: ALEXA_PERSONA, toolSpecs: first.toolSpecs })],
     ["system checkpoint with a typical 20-story catalog", await count(probe, { systemPrompt: personaWithCatalog(catalog), toolSpecs: first.toolSpecs })],
     ["system checkpoint with a maximum-length 20-story catalog", await count(probe, { systemPrompt: personaWithCatalog(longestCatalog), toolSpecs: first.toolSpecs })],
-    ["first request of a turn (no catalog)", await count(first.messages, { systemPrompt: first.systemPrompt ?? ALEXA_PERSONA, toolSpecs: first.toolSpecs })],
-    [`last request of the turn (call ${model.calls.length})`, await count(last.messages, { systemPrompt: last.systemPrompt ?? ALEXA_PERSONA, toolSpecs: last.toolSpecs })],
-    [`last request of a follow-up turn with stored history (call ${followUp.calls.length})`, await count(longest.messages, { systemPrompt: longest.systemPrompt ?? ALEXA_PERSONA, toolSpecs: longest.toolSpecs })],
+    ["first request of a turn (no catalog)", await countCall(first)],
+    [`last request of the turn (call ${model.calls.length})`, await countCall(last)],
+    [`last request of a follow-up turn with stored history (call ${followUp.calls.length})`, await countCall(longest)],
     ["probe message alone", await count(probe, {})],
   ];
 
