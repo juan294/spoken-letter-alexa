@@ -25,6 +25,7 @@ import { trimHistory } from "../src/routes.ts";
 import { ScriptedModel } from "../src/scripted-model.ts";
 import { MCP_URL, mcpHarness } from "../src/test-support.ts";
 import { runTurn } from "../src/turn.ts";
+import { nativeCountEvidence } from "./count-evidence.ts";
 
 const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 const REGION = process.env.AWS_REGION ?? "us-east-1";
@@ -53,7 +54,7 @@ class RecordingModel extends Model {
   }
 }
 
-// Strands reports a CountTokens failure only through its logger, then falls back silently.
+// Strands reports CountTokens success and failure only through its logger.
 const strandsLog: string[] = [];
 const keep = (...args: unknown[]): void => {
   strandsLog.push(args.map(String).join(" "));
@@ -76,9 +77,9 @@ async function count(messages: Message[], options: { systemPrompt?: SystemPrompt
     BedrockModel.clearCountTokensCache();
     const before = strandsLog.length;
     const tokens = await new BedrockModel({ region: REGION, modelId, useNativeTokenCount: true }).countTokens(messages, options);
-    const failure = strandsLog.slice(before).find((line) => /falling back/i.test(line));
-    if (!failure) return { api: { tokens, label: "VERIFIED (CountTokens API)", modelId, ...(errors.length > 0 && { error: errors.join(" | ") }) }, heuristic };
-    errors.push(failure);
+    const evidence = nativeCountEvidence(tokens, strandsLog.slice(before));
+    if (evidence.verified) return { api: { tokens, label: "VERIFIED (CountTokens API)", modelId, ...(errors.length > 0 && { error: errors.join(" | ") }) }, heuristic };
+    errors.push(`${modelId}: ${evidence.reason}`);
   }
   return { api: { tokens: heuristic, label: "INFERRED (Strands heuristic)", modelId: MODEL_ID, error: errors.join(" | ") }, heuristic };
 }
@@ -100,15 +101,19 @@ async function main(): Promise<void> {
   const longest = followUp.calls.at(-1);
   if (!first || !last || !longest) throw new Error("a turn made no model call");
 
-  // A 20-story catalog, the most `fetchCatalog` requests (routes.ts), in its line format.
+  // 20 stories, the most `fetchCatalog` asks for (routes.ts), in its line format: once typical,
+  // once at the HTTP provider's field maxima (id 64, title 200, storyteller 80 characters).
   const catalog = Array.from({ length: 20 }, (_, i) => `st_story_${i}: A bedtime story number ${i} by Grandpa Juan, 3m4s`).join("\n");
+  const words = (i: number, length: number): string => `the lighthouse keeper and the owl who forgot how to hoot, part ${i} `.repeat(8).slice(0, length);
+  const longestCatalog = Array.from({ length: 20 }, (_, i) => `${`st_${i}_`.padEnd(64, "0123456789abcdef")}: ${words(i, 200)} by ${words(i, 80)}, 59m59s`).join("\n");
   // One character of user text: Bedrock CountTokens needs a message. Counted alone it is 24 tokens.
   const probe = userText(".");
 
   const rows: [string, Awaited<ReturnType<typeof count>>][] = [
     ["tools checkpoint (tools only)", await count(probe, { toolSpecs: first.toolSpecs })],
     ["system checkpoint (tools + ALEXA_PERSONA)", await count(probe, { systemPrompt: ALEXA_PERSONA, toolSpecs: first.toolSpecs })],
-    ["system checkpoint with a 20-story catalog", await count(probe, { systemPrompt: personaWithCatalog(catalog), toolSpecs: first.toolSpecs })],
+    ["system checkpoint with a typical 20-story catalog", await count(probe, { systemPrompt: personaWithCatalog(catalog), toolSpecs: first.toolSpecs })],
+    ["system checkpoint with a maximum-length 20-story catalog", await count(probe, { systemPrompt: personaWithCatalog(longestCatalog), toolSpecs: first.toolSpecs })],
     ["first request of a turn (no catalog)", await count(first.messages, { systemPrompt: first.systemPrompt ?? ALEXA_PERSONA, toolSpecs: first.toolSpecs })],
     [`last request of the turn (call ${model.calls.length})`, await count(last.messages, { systemPrompt: last.systemPrompt ?? ALEXA_PERSONA, toolSpecs: last.toolSpecs })],
     [`last request of a follow-up turn with stored history (call ${followUp.calls.length})`, await count(longest.messages, { systemPrompt: longest.systemPrompt ?? ALEXA_PERSONA, toolSpecs: longest.toolSpecs })],
@@ -121,6 +126,7 @@ async function main(): Promise<void> {
     minimumTokens: MINIMUM_TOKENS,
     tools: first.toolSpecs.map((spec) => spec.name),
     personaChars: ALEXA_PERSONA.length,
+    longestCatalogLineChars: Math.max(...longestCatalog.split("\n").map((line) => line.length)),
     modelCallsInTurn: model.calls.length,
     rows: rows.map(([shape, { api, heuristic }]) => ({ shape, tokens: api.tokens, label: api.label, countModelId: api.modelId, heuristic, skippedError: api.error })),
   };
