@@ -94,7 +94,7 @@ All rows VERIFIED by the Bedrock CountTokens API against `anthropic.claude-haiku
 | Tools checkpoint: 4 tool specs                                  |       1,316 |             2,410 |
 | System checkpoint: tools + `ALEXA_PERSONA` (1,190 chars)        |       1,586 |             2,708 |
 | System checkpoint: tools + persona + a typical 20-story catalog |       2,185 |             3,092 |
-| System checkpoint: tools + persona + a maximum-length catalog   |       3,865 |             4,587 |
+| System checkpoint: tools + persona + a max-length English catalog |       3,865 |             4,587 |
 | First request of a turn, no catalog                             |       1,596 |             2,716 |
 | Last request of the turn (call 3, after two tool results)       |       2,147 |             3,053 |
 | Last request of a follow-up turn replaying the stored history   |       3,003 |             3,693 |
@@ -104,7 +104,10 @@ All rows VERIFIED by the Bedrock CountTokens API against `anthropic.claude-haiku
   (`packages/agent/src/routes.ts:119-142`). The typical one has short fixture-like lines. The
   maximum-length one fills every field to the HTTP provider's limits (id 64, title 200,
   storyteller 80 characters; `packages/mcp-server/src/provider/http.ts:9-11`), which gives
-  358-character lines.
+  358-character lines of English text. This is a maximum-length English-text catalog: emoji
+  or CJK titles can tokenize more densely per character, so the same limits could produce
+  more tokens. The decision rests on the 1,586-token stable prefix, which has no catalog, so it
+  is unaffected.
 - The catalog has no hard upper bound in this repository. On a cache miss the HTTP provider
   returns every story the bridge sends, without applying `limit`
   (`packages/mcp-server/src/provider/http.ts:60-77`), and `fetchCatalog` does not cap the count.
@@ -123,7 +126,7 @@ is below the minimum too (at most 3,003), so a cache point at any of the three p
 would put one (tools, system, last user message) would be a silent no-op.
 
 With the catalog still in the system prompt, a typical 20-story catalog gives 2,185 and a
-maximum-length one 3,865, both below the minimum. A catalog prefix is per session anyway, so it
+maximum-length English-text one 3,865, both below the minimum. A catalog prefix is per session anyway, so it
 is not the prefix the plan would cache. A bridge that returned more than about 22 maximum-length
 stories would push that per-session prefix past 4,096 (INFERRED from the rows above).
 
