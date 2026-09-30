@@ -11,11 +11,17 @@ Repository: `spoken-letter-alexa`. Measurement date: 2026-09-30. Base: `develop`
 `f31b9915bf0b6c7876616780bb569e782a9a90e9`, branch `feat/prompt-caching`. Strands
 `@strands-agents/sdk` 1.16.0. Account `106403001709`, region `us-east-1`, CLI profile `archy`.
 
-Decision: not applicable at 2185 < 4096 tokens for us.anthropic.claude-haiku-4-5-20251001-v1:0
+Decision: not applicable at 1586 < 4096 tokens for us.anthropic.claude-haiku-4-5-20251001-v1:0
 
-`packages/app/src/bootstrap.test.ts` parses the line above. It fails if `cacheConfig` is added
-to `createBedrockModel` (`packages/app/src/bootstrap.ts:86`) while this line says "not
-applicable", or if the default model changes without a new measurement.
+The number is the stable prefix the plan would cache: the tool specs plus `ALEXA_PERSONA`
+with no catalog. Two tests parse the line above:
+
+- `packages/app/src/bootstrap.test.ts` fails if `cacheConfig` is added to `createBedrockModel`
+  (`packages/app/src/bootstrap.ts:86`) while this line says "not applicable", if the line
+  contradicts itself, or if the app default model (`packages/app/src/env.ts:10`) differs from
+  the measured one.
+- `infra/test/stacks.test.ts:88` fails if the `BEDROCK_MODEL_ID` the API stack deploys
+  (`infra/lib/api-stack.ts:26`, `:47`, `:68`) differs from the measured one.
 
 ## Model minimum
 
@@ -52,7 +58,11 @@ Source: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
 3. Each shape is counted with Strands `BedrockModel.countTokens` and `useNativeTokenCount: true`,
    which sends Bedrock `CountTokens` (read-only, no inference). The Strands character heuristic
    (text chars/4, JSON chars/2) is reported next to it.
-4. A checkpoint's prefix needs a message for `CountTokens` to accept the request, so the
+4. A count is labelled VERIFIED only on positive evidence: Strands' own success line,
+   `total_tokens=<N> | native token count`, with the same N, logged during that call
+   (`packages/agent/scripts/count-evidence.ts`, tested in `count-evidence.test.ts`). A missing
+   line means the heuristic, because Strands does not always log a fallback (next section).
+5. A checkpoint's prefix needs a message for `CountTokens` to accept the request, so the
    checkpoint rows carry a one-character user message. Counted alone, that message is 24
    tokens, so these rows overstate the prefix by up to 24 tokens.
 
@@ -67,9 +77,11 @@ Source: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
   for the one-character message). The script tries the profile, then the base ID.
 - Strands logs that failure once at debug level, adds the model ID to a process-wide skip set,
   and silently returns the heuristic on every later call (`bedrock.js:48-51`, `:311`, `:337-341`).
-  The first run of this script therefore labelled heuristic numbers as API counts (for example
-  2,708 for the system checkpoint). The script now calls `BedrockModel.clearCountTokensCache()`
-  before every attempt. Every number below comes from the corrected run; the first run's
+  An AccessDenied failure is only warned about once per process (`bedrock.js:333-335`).
+  The first run of this script took the absence of a fallback line as success, and so labelled
+  heuristic numbers as API counts (for example 2,708 for the system checkpoint). The script now
+  calls `BedrockModel.clearCountTokensCache()` before every attempt and requires the success
+  line (method step 4). Every number below comes from a run with both fixes; the first run's
   numbers are void.
 
 ## Results
@@ -81,15 +93,22 @@ All rows VERIFIED by the Bedrock CountTokens API against `anthropic.claude-haiku
 | --------------------------------------------------------------- | ----------: | ----------------: |
 | Tools checkpoint: 4 tool specs                                  |       1,316 |             2,410 |
 | System checkpoint: tools + `ALEXA_PERSONA` (1,190 chars)        |       1,586 |             2,708 |
-| System checkpoint: tools + persona + a 20-story catalog         |       2,185 |             3,092 |
+| System checkpoint: tools + persona + a typical 20-story catalog |       2,185 |             3,092 |
+| System checkpoint: tools + persona + a maximum-length catalog   |       3,865 |             4,587 |
 | First request of a turn, no catalog                             |       1,596 |             2,716 |
 | Last request of the turn (call 3, after two tool results)       |       2,147 |             3,053 |
 | Last request of a follow-up turn replaying the stored history   |       3,003 |             3,693 |
 | The one-character probe message alone                           |          24 |                 1 |
 
-- The 20-story catalog uses the line format and the 20-story limit of `fetchCatalog`
-  (`packages/agent/src/routes.ts:119-142`). It is the largest system prompt a device session
-  can carry today (`packages/agent/src/persona.ts:24-33`).
+- Both catalogs use the line format of `fetchCatalog` and the 20 stories it asks for
+  (`packages/agent/src/routes.ts:119-142`). The typical one has short fixture-like lines. The
+  maximum-length one fills every field to the HTTP provider's limits (id 64, title 200,
+  storyteller 80 characters; `packages/mcp-server/src/provider/http.ts:9-11`), which gives
+  358-character lines.
+- The catalog has no hard upper bound in this repository. On a cache miss the HTTP provider
+  returns every story the bridge sends, without applying `limit`
+  (`packages/mcp-server/src/provider/http.ts:60-77`), and `fetchCatalog` does not cap the count.
+  The 20-story figure holds only while the upstream bridge honours `limit=20`.
 - The follow-up turn replays history trimmed to `MAX_HISTORY_MESSAGES = 8`
   (`packages/agent/src/routes.ts:145-165`), as `/agent/turn` stores it.
 - The heuristic overstates every prefix by 700 to 1,100 tokens. It would not be a safe basis
@@ -97,10 +116,16 @@ All rows VERIFIED by the Bedrock CountTokens API against `anthropic.claude-haiku
 
 ## Decision
 
-The tools + system prefix is 1,586 tokens without a catalog and at most 2,185 with one. Both
-are below Haiku 4.5's 4,096 minimum, as is every whole request measured (at most 3,003). A
-cache point at any of the three places Strands would put one (tools, system, last user message)
-would be a silent no-op.
+The stable tools + system prefix, the persona without a catalog plus the tool specs, is 1,586
+tokens. That is what would be cached if the catalog moved out of the system prompt, and it is
+2,510 tokens short of Haiku 4.5's 4,096 minimum. Every whole request measured in a normal turn
+is below the minimum too (at most 3,003), so a cache point at any of the three places Strands
+would put one (tools, system, last user message) would be a silent no-op.
+
+With the catalog still in the system prompt, a typical 20-story catalog gives 2,185 and a
+maximum-length one 3,865, both below the minimum. A catalog prefix is per session anyway, so it
+is not the prefix the plan would cache. A bridge that returned more than about 22 maximum-length
+stories would push that per-session prefix past 4,096 (INFERRED from the rows above).
 
 - No `cacheConfig` on the Bedrock model (`packages/app/src/bootstrap.ts:86`).
 - The per-session catalog stays in the system prompt. Moving it to the first user turn only
@@ -112,7 +137,7 @@ Anthropic strategy for any model ID containing `anthropic` or `claude`, and it i
 points without checking the size (`bedrock.js:188-216`, `:468-469`, `:491-500`). The warning
 `cache_config is enabled but this model does not support automatic caching` fires only for
 other model IDs, so on Haiku 4.5 below the minimum there is no log line at all. The
-bootstrap test and the per-turn usage log are the guards.
+bootstrap test, the infra stack test and the per-turn usage log are the guards.
 
 ## Usage logging
 
@@ -125,10 +150,14 @@ caching (INFERRED from the documentation above; not observed).
 
 ## Re-measure when
 
-- the default model changes (`DEFAULT_BEDROCK_MODEL_ID`, `packages/app/src/env.ts:10`;
-  `infra/lib/api-stack.ts:26`). The bootstrap test fails until this record names the new model.
-  Bedrock lists 512 for the Claude 5 family and 1,024 for Sonnet 4.x, both below today's
-  prefix; Opus 4.5 to 4.7 stay at 4,096;
+- the model changes, in either place: `packages/app/src/env.ts:10` (the app default) or
+  `infra/lib/api-stack.ts:26` (the deployed value). The bootstrap test and the infra stack test
+  respectively fail until this record names the new model. Bedrock's table lists 512 for
+  Opus 5, Fable 5 and the 5.5 series (Opus 5.5, Sonnet 5.5, Fable 5.1); 1,024 for Sonnet 5,
+  Opus 4.8 and Sonnet 4.5/4.6; and 4,096 for Opus 4.5 to 4.7 and Haiku 4.5. The 512 and 1,024
+  minimums are below today's prefix;
 - the persona, the tool set or its schemas grow by roughly 2,500 tokens;
+- the catalog moves out of the system prompt, or the bridge's story count or field limits
+  change;
 - the `agent_turn` log shows whole-turn input near 4,096 per call, for example from a large
   real catalog in `list_family_stories` results.
