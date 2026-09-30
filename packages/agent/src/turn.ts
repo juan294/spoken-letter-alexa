@@ -1,6 +1,6 @@
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { log } from "@spoken-letter-alexa/shared";
-import { Agent, AfterToolCallEvent, BeforeToolCallEvent, McpClient, type MessageData, type Model } from "@strands-agents/sdk";
+import { Agent, AfterToolCallEvent, BeforeToolCallEvent, McpClient, type MessageData, type Model, type Usage } from "@strands-agents/sdk";
 
 import { personaWithCatalog } from "./persona.ts";
 import { FALLBACK_SAY, type Play, type ToolTrace, turnOutputSchema } from "./schema.ts";
@@ -30,13 +30,26 @@ export type TurnOptions = {
   reuseMcpClient?: boolean | undefined;
 };
 
+/** Bedrock tokens for one turn, summed over its model calls. Cache fields are 0 when Bedrock reports none. */
+export type TurnUsage = { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number };
+
 export type TurnResult = {
   say: string;
   play: Play | null;
   needsAnswer?: boolean;
   toolCalls: ToolTrace[];
   history: MessageData[];
+  usage: TurnUsage;
 };
+
+function turnUsage(usage: Usage): TurnUsage {
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadInputTokens: usage.cacheReadInputTokens ?? 0,
+    cacheWriteInputTokens: usage.cacheWriteInputTokens ?? 0,
+  };
+}
 
 type CachedMcpClient = { client: McpClient; token: { current: string } };
 
@@ -122,18 +135,20 @@ export async function runTurn(options: TurnOptions, text: string): Promise<TurnR
     });
   });
 
+  // A fresh agent per turn, so its accumulated usage is this turn's, failed turns included.
   try {
     const result = await agent.invoke(text);
     const parsed = turnOutputSchema.safeParse(result.structuredOutput);
     const history = JSON.parse(JSON.stringify(agent.messages)) as MessageData[];
+    const usage = turnUsage(agent.metrics.accumulatedUsage);
     if (!parsed.success) {
       log.warn("agent_output_invalid", { issues: parsed.error.issues.length });
-      return { say: FALLBACK_SAY, play: null, toolCalls, history };
+      return { say: FALLBACK_SAY, play: null, toolCalls, history, usage };
     }
-    return { say: parsed.data.say, play: parsed.data.play, needsAnswer: parsed.data.needsAnswer ?? false, toolCalls, history };
+    return { say: parsed.data.say, play: parsed.data.play, needsAnswer: parsed.data.needsAnswer ?? false, toolCalls, history, usage };
   } catch (error) {
     log.warn("agent_turn_failed", { message: error instanceof Error ? error.message : String(error), toolCalls: toolCalls.length });
-    return { say: FALLBACK_SAY, play: null, toolCalls, history: options.history ?? [] };
+    return { say: FALLBACK_SAY, play: null, toolCalls, history: options.history ?? [], usage: turnUsage(agent.metrics.accumulatedUsage) };
   } finally {
     if (!reuse) await mcp.disconnect().catch(() => undefined);
   }

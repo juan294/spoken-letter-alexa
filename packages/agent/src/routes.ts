@@ -371,7 +371,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
       session.mode === "device" ? Promise.resolve(null) : deps.speech.synthesize(result.say),
       deps.sessions.put({ ...session, history: trimHistory(result.history) }),
     ]);
-    log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play) });
+    log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play), ...result.usage });
     return c.json({ say: result.say, play: result.play, needsAnswer: result.needsAnswer ?? false, speechUrl, toolCalls: result.toolCalls });
   });
 

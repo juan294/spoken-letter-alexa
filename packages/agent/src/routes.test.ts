@@ -1,3 +1,4 @@
+import { log } from "@spoken-letter-alexa/shared";
 import { type MessageData } from "@strands-agents/sdk";
 import { type Hono } from "hono";
 import { beforeAll, describe, expect, test, vi } from "vitest";
@@ -6,7 +7,7 @@ import { createOfflineDeps } from "./offline.ts";
 import { createAgentApp, trimHistory, type AgentDeps } from "./routes.ts";
 import { ScriptedModel } from "./scripted-model.ts";
 import { deviceSessionId, MemorySessionStore, newSession } from "./sessions.ts";
-import { ISSUER, MCP_URL, mcpHarness, type McpHarness } from "./test-support.ts";
+import { ISSUER, MCP_URL, mcpHarness, type McpHarness, MeteredModel } from "./test-support.ts";
 
 type SessionBody = { sessionId: string; mode: string; subject: string; offline: boolean };
 type TurnBody = {
@@ -126,6 +127,20 @@ describe("agent routes", () => {
     await deps.sessions.put(newSession({ id, mode: "device", subject: "svc:alexa-m2m", accessToken: stale }));
     const turn = (await (await post(app, "/agent/turn", { sessionId: id, text: "play a story" })).json()) as TurnBody;
     expect(turn.play?.title).toBe("A lighthouse for Mateo");
+  });
+
+  test("the turn log carries the turn's Bedrock usage, cache reads and writes included (prompt-caching Phase 6)", async () => {
+    const model = new MeteredModel({ inputTokens: 1600, outputTokens: 40, cacheReadInputTokens: 30, cacheWriteInputTokens: 7 });
+    const meteredApp = createAgentApp({ ...deps, model });
+    const session = (await (await post(meteredApp, "/agent/session", { mode: "demo" })).json()) as SessionBody;
+    const info = vi.spyOn(log, "info");
+    try {
+      expect((await post(meteredApp, "/agent/turn", { sessionId: session.sessionId, text: "play a story" })).status).toBe(200);
+      const turnLog = info.mock.calls.find(([event]) => event === "agent_turn");
+      expect(turnLog?.[1]).toMatchObject({ inputTokens: 4800, outputTokens: 120, cacheReadInputTokens: 90, cacheWriteInputTokens: 21 });
+    } finally {
+      info.mockRestore();
+    }
   });
 
   test("validation and unknown sessions answer RFC-style JSON errors", async () => {
