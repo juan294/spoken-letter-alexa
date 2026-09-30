@@ -13,7 +13,7 @@ import {
 import { describe, expect, test } from "vitest";
 
 import { ScriptedModel } from "./scripted-model.ts";
-import { ISSUER, MCP_URL, mcpHarness } from "./test-support.ts";
+import { ISSUER, MCP_URL, mcpHarness, MeteredModel } from "./test-support.ts";
 import { runTurn } from "./turn.ts";
 
 const STRUCTURED_OUTPUT_TOOL = "strands_structured_output";
@@ -152,5 +152,20 @@ describe("runTurn with the scripted model against the real MCP server", () => {
       const result = await runTurn({ model: new ScriptedModel(), mcpUrl: MCP_URL, accessToken: token, fetch: h.fetch, reuseMcpClient: true }, "play a story");
       expect(result.play).not.toBeNull();
     }
+  });
+
+  test("reports the turn's token usage, cache reads and writes included, summed over every model call", async () => {
+    const h = await mcpHarness();
+    const model = new MeteredModel({ inputTokens: 100, outputTokens: 10, cacheReadInputTokens: 40, cacheWriteInputTokens: 5 });
+    const result = await runTurn({ model, mcpUrl: MCP_URL, accessToken: await h.serviceToken(), fetch: h.fetch }, "play a story");
+    // list, get, then the structured reply: three model calls.
+    expect(result.usage).toEqual({ inputTokens: 300, outputTokens: 30, cacheReadInputTokens: 120, cacheWriteInputTokens: 15 });
+  });
+
+  test("reports zero cache tokens when the model returns no cache fields", async () => {
+    const h = await mcpHarness();
+    const model = new MeteredModel({ inputTokens: 100, outputTokens: 10 });
+    const result = await runTurn({ model, mcpUrl: MCP_URL, accessToken: await h.serviceToken(), fetch: h.fetch }, "play a story");
+    expect(result.usage).toEqual({ inputTokens: 300, outputTokens: 30, cacheReadInputTokens: 0, cacheWriteInputTokens: 0 });
   });
 });

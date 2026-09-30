@@ -107,7 +107,7 @@ export function cachedServiceToken(mint: () => Promise<string>, now: () => numbe
 
 const catalogStorySchema = z.object({ id: z.string(), title: z.string(), storyteller: z.string(), durationSeconds: z.number().optional() });
 const catalogStoriesSchema = z.array(catalogStorySchema);
-type CatalogStory = z.infer<typeof catalogStorySchema>;
+export type CatalogStory = z.infer<typeof catalogStorySchema>;
 
 function formatDuration(seconds: number | undefined): string {
   if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "unknown length";
@@ -117,7 +117,7 @@ function formatDuration(seconds: number | undefined): string {
 }
 
 /** One line per story: id, title, storyteller and duration (phase-2.md section 1). */
-function formatCatalog(stories: CatalogStory[]): string {
+export function formatCatalog(stories: CatalogStory[]): string {
   return stories.map((story) => `${story.id}: ${story.title} by ${story.storyteller}, ${formatDuration(story.durationSeconds)}`).join("\n");
 }
 
@@ -371,7 +371,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
       session.mode === "device" ? Promise.resolve(null) : deps.speech.synthesize(result.say),
       deps.sessions.put({ ...session, history: trimHistory(result.history) }),
     ]);
-    log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play) });
+    log.info("agent_turn", { mode: session.mode, tools: result.toolCalls.map((call) => `${call.name}:${call.ms}ms`), played: Boolean(result.play), ...result.usage });
     return c.json({ say: result.say, play: result.play, needsAnswer: result.needsAnswer ?? false, speechUrl, toolCalls: result.toolCalls });
   });
 

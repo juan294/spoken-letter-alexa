@@ -3,7 +3,10 @@
 import { createServerApp, FixtureProvider, type FixtureStory } from "@spoken-letter-alexa/mcp-server";
 import { LocalSigner, MemoryStore, mintAccessToken, parseClients } from "@spoken-letter-alexa/oauth";
 import { sha256Hex } from "@spoken-letter-alexa/shared";
+import { type Message, ModelMetadataEvent, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import { type Hono } from "hono";
+
+import { ScriptedModel } from "./scripted-model.ts";
 
 export const ISSUER = "http://localhost:4310";
 export const MCP_URL = `${ISSUER}/mcp`;
@@ -69,4 +72,16 @@ export async function mcpHarness(): Promise<McpHarness> {
   const userToken = async (subject: string) =>
     (await mintAccessToken({ signer, issuer: ISSUER, audience: MCP_URL, subject, clientId: "simulator", scope: "mcp:tools mcp:resources" })).token;
   return { app, fetch: fetchImpl, signer, serviceToken, userToken };
+}
+
+/** The scripted model, closing every call with the usage metadata Bedrock streams last. */
+export class MeteredModel extends ScriptedModel {
+  constructor(private readonly usage: { inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheWriteInputTokens?: number }) {
+    super();
+  }
+
+  override async *stream(messages: Message[], options?: StreamOptions): AsyncIterable<ModelStreamEvent> {
+    yield* super.stream(messages, options);
+    yield new ModelMetadataEvent({ type: "modelMetadataEvent", usage: { ...this.usage, totalTokens: this.usage.inputTokens + this.usage.outputTokens } });
+  }
 }
