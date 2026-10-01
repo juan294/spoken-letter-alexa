@@ -34,6 +34,7 @@ describe("generateInteractionModel", () => {
         "CatchAllIntent",
         "StartStoryIntent",
         "ThemeIntent",
+        "ThemeChoiceIntent",
         "HelpTopicIntent",
         "ReadDemoDraftIntent",
         "WishStoryIntent",
@@ -245,4 +246,19 @@ describe("generateExamplePhrases", () => {
     const manifest = JSON.parse(readFileSync(skillJsonPath, "utf8")) as { manifest: { publishingInformation: { locales: Record<string, { examplePhrases: string[] }> } } };
     expect(manifest.manifest.publishingInformation.locales["en-US"]?.examplePhrases).toEqual(generateExamplePhrases(loadStories()));
   });
+});
+
+
+test("bare topics use a distinct custom slot and explicit creation paraphrases", () => {
+  expect(byName.ThemeChoiceIntent?.slots).toEqual([{ name: "drafttheme", type: "DemoTopic" }]);
+  expect(byName.ThemeChoiceIntent?.samples).toContain("{drafttheme}");
+  for (const phrase of ["let's make a story", "i would like to create a story", "i'd like to make a story"]) {
+    expect(byName.StartStoryIntent?.samples).toContain(phrase);
+    expect(byName.StartStoryIntent?.samples).toContain(`${phrase} about {theme}`);
+  }
+  for (const intent of intents) {
+    for (const slot of intent.slots ?? []) {
+      if (slot.type === "AMAZON.SearchQuery") expect(intent.samples).not.toContain(`{${slot.name}}`);
+    }
+  }
 });

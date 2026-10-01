@@ -314,6 +314,17 @@ describe("Phase 6 stacks", () => {
       t.observability.hasResourceProperties("AWS::SNS::Subscription", { Protocol: "email", Endpoint: "owner@example.com" });
     });
 
+    test("fallback counter uses the exact undimensioned namespace and sum", () => {
+      const [dashboard] = resources(t.observability, "AWS::CloudWatch::Dashboard");
+      const body = dashboard?.Properties.DashboardBody as { "Fn::Join": [string, (string | object)[]] };
+      const joined = body["Fn::Join"][1].map((part) => typeof part === "string" ? part : "TOKEN").join("");
+      const parsed = JSON.parse(joined) as { widgets: { properties: { metrics?: unknown[][]; stat?: string } }[] };
+      const widget = parsed.widgets.find((item) => item.properties.metrics?.some((metric) => metric[1] === "FallbackCount"));
+      expect(widget?.properties.metrics).toEqual([["sla/mcp", "FallbackCount", { label: "FallbackCount sum", stat: "Sum" }]]);
+      expect(resources(t.observability, "AWS::CloudWatch::Alarm")).toHaveLength(2);
+      expect(resources(t.observability, "AWS::SNS::Subscription")).toHaveLength(1);
+    });
+
     test("phase-1.md: p95 alarm on SkillTurnMs > 5000 ms, and dashboard widgets for SkillTurnMs and DeadEndPlay", () => {
       t.observability.hasResourceProperties("AWS::CloudWatch::Alarm", {
         Namespace: "sla/mcp",

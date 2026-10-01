@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { log } from "@spoken-letter-alexa/shared";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -497,6 +499,16 @@ describe("skill handler", () => {
 });
 
 type SkillTurnFields = {
+  slotPresence?: Record<string, "missing" | "present">;
+  flowBefore: string;
+  flowAfter: string;
+  fallbackCount: number;
+  interactionResult: string;
+  responseKey: string;
+  sessionHash?: string;
+  requestHash: string;
+  FallbackCount?: number;
+  _aws?: { CloudWatchMetrics: { Dimensions: string[][]; Metrics: { Name: string }[] }[] };
   event: string;
   requestType: string;
   intent?: string;
@@ -642,5 +654,291 @@ describe("progressive response (phase-2.md section 2)", () => {
     await handler(intent("PlayStoryIntent", { title: "the owl" }));
     await vi.advanceTimersByTimeAsync(1000);
     expect(progressiveFetch).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("session friction recovery", () => {
+  function journey(agent: AgentClient, initial: Record<string, string> = {}) {
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    let attributes = initial;
+    let request = 0;
+    return async (name: string, slots: Record<string, string | undefined> = {}) => {
+      const event = intent(name, slots);
+      event.request.requestId = `journey-${++request}`;
+      event.session = { ...event.session!, new: false, attributes };
+      const response = await handler(event);
+      attributes = response.sessionAttributes ?? {};
+      return response;
+    };
+  }
+  const reprompt = (r: AlexaResponseEnvelope) => r.response.reprompt?.outputSpeech.ssml ?? "";
+
+  test.each(["mermaids", "space", "stars"])("S1 bare %s completes a prompted draft", async (theme) => {
+    const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme, outline: "Safe outline." });
+    const turn = journey(fakeAgent({ saveDraft }));
+    const start = await turn("StartStoryIntent");
+    expect(reprompt(start)).toMatch(/mermaids.*space/i);
+    const saved = await turn("ThemeChoiceIntent", { drafttheme: theme });
+    expect(ssml(saved)).toMatch(/saved your story draft/i);
+    expect(saveDraft).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ theme, requestId: "journey-2" }));
+  });
+  test("S3 consecutive fallbacks preserve the draft and escalate without writes", async () => {
+    const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "mermaids", outline: "Safe." });
+    const turn = journey(fakeAgent({ saveDraft }));
+    await turn("StartStoryIntent");
+    const first = await turn("AMAZON.FallbackIntent");
+    expect(first.sessionAttributes).toEqual({ demoFlow: "draft", fallbackCount: "1" });
+    expect(reprompt(first)).toMatch(/mermaids.*space/i);
+    const second = await turn("AMAZON.FallbackIntent");
+    expect(second.sessionAttributes).toEqual({ demoFlow: "draft", fallbackCount: "2" });
+    expect(ssml(second)).toMatch(/about mermaids/i);
+    expect(ssml(second)).toMatch(/cancel/i);
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(ssml(await turn("ThemeChoiceIntent", { drafttheme: "mermaids" }))).toMatch(/saved your story draft/i);
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+  });
+  test.each([{}, { demoFlow: "reaction" }, { demoFlow: "wish", demoTopic: "space" }])("S4 bare topic outside draft does not write: %j", async (state) => {
+    const saveDraft = vi.fn();
+    const demoWish = vi.fn();
+    const response = await journey(fakeAgent({ saveDraft, demoWish }), state)("ThemeChoiceIntent", { drafttheme: "space" });
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(demoWish).not.toHaveBeenCalled();
+    expect(ssml(response)).toMatch(/create a story|like or love|yes or no/i);
+  });
+  test.each(["AMAZON.CancelIntent", "AMAZON.NoIntent", "PlayStoryIntent", "HelpTopicIntent"])("S5 %s clears obsolete draft state", async (name) => {
+    const saveDraft = vi.fn();
+    const turn = journey(fakeAgent({ saveDraft }));
+    await turn("StartStoryIntent");
+    const response = await turn(name);
+    expect(response.sessionAttributes).toEqual({});
+    await turn("ThemeChoiceIntent", { drafttheme: "space" });
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+  test("S6 fixed error copy retains theme entry and never repeats backend text", async () => {
+    const saveDraft = vi.fn().mockRejectedValueOnce(new AgentHttpError(422, "unsupported_theme", "Lily private speech"))
+      .mockRejectedValueOnce(new Error("private failure"))
+      .mockResolvedValue({ status: "saved", draftId: "d1", theme: "space", outline: "Safe." });
+    const turn = journey(fakeAgent({ saveDraft }));
+    await turn("StartStoryIntent");
+    const missing = await turn("ThemeChoiceIntent");
+    expect(reprompt(missing)).toMatch(/mermaids.*space/i);
+    expect(saveDraft).not.toHaveBeenCalled();
+    const unsupported = await turn("ThemeChoiceIntent", { drafttheme: "unknown" });
+    expect(ssml(unsupported)).not.toContain("Lily");
+    expect(unsupported.sessionAttributes).toEqual({ demoFlow: "draft" });
+    const failed = await turn("ThemeIntent", { theme: "space" });
+    expect(ssml(failed)).toMatch(/no draft was saved/i);
+    expect(reprompt(failed)).toMatch(/mermaids.*space/i);
+    expect(ssml(await turn("ThemeIntent", { theme: "space" }))).toMatch(/saved your story draft/i);
+  });
+  test.each(["AMAZON.FallbackIntent", "AMAZON.HelpIntent"])("S7 %s preserves validated wish/reaction state", async (name) => {
+    const demoWish = vi.fn().mockResolvedValue({ status: "saved", wishId: "w1" });
+    const wish = journey(fakeAgent({ demoWish }), { demoFlow: "wish", demoTopic: "space", demoStoryteller: "Aunt Whitney", secret: "Lily" });
+    const guidance = await wish(name);
+    expect(reprompt(guidance)).toMatch(/yes or no/i);
+    expect(guidance.sessionAttributes).toMatchObject({ demoFlow: "wish", demoTopic: "space", demoStoryteller: "Aunt Whitney" });
+    expect(JSON.stringify(guidance)).not.toContain("Lily");
+    expect(ssml(await wish("AMAZON.YesIntent"))).toMatch(/saved your wish/i);
+    const demoReact = vi.fn().mockResolvedValue({ status: "saved", reactionId: "r1", storyId: "s1", choice: "love" });
+    const reaction = journey(fakeAgent({ demoReact }), { demoFlow: "reaction" });
+    expect(reprompt(await reaction(name))).toMatch(/I like it.*I love it.*no/i);
+    expect(ssml(await reaction("ReactToStoryIntent", { choice: "love" }))).toMatch(/saved that you loved/i);
+  });
+  test.each([
+    { demoFlow: "arbitrary", fallbackCount: "900", extra: "Lily" },
+    { demoFlow: "wish", demoTopic: "space for Lily" },
+    { demoFlow: "wish", demoTopic: "space", demoStoryteller: "Lily" },
+  ])("S8 malformed state cannot confirm a write: %j", async (state) => {
+    const demoWish = vi.fn();
+    const response = await journey(fakeAgent({ demoWish }), state)("AMAZON.YesIntent");
+    expect(demoWish).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain("Lily");
+    expect(response.sessionAttributes).toEqual({});
+    expect(ssml(response)).toMatch(/wish|create a story/i);
+  });
+  test("S9 limit reached offers readback or later retry", async () => {
+    const saveDraft = vi.fn().mockRejectedValue(new AgentHttpError(429, "draft_limit_reached", "untrusted"));
+    const response = await journey(fakeAgent({ saveDraft }))("StartStoryIntent", { theme: "space" });
+    expect(ssml(response)).toMatch(/no draft was saved/i);
+    expect(ssml(response)).toMatch(/read.*draft/i);
+    expect(ssml(response)).toMatch(/later/i);
+    expect(ssml(response)).not.toMatch(/again in a moment/i);
+  });
+});
+
+describe("additional phase 1 acceptance", () => {
+  test("S2 explicit start theme and existing carrier each save their selected theme", async () => {
+    const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "forest", outline: "Safe." });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
+    expect(ssml(await handler(intent("StartStoryIntent", { theme: "forest" })))).toMatch(/saved your story draft/i);
+    const carrier = intent("ThemeIntent", { theme: "animals" });
+    carrier.session = { ...carrier.session!, attributes: { demoFlow: "draft" } };
+    carrier.request.requestId = "carrier-2";
+    expect(ssml(await handler(carrier))).toMatch(/saved your story draft/i);
+    expect(saveDraft).toHaveBeenCalledTimes(2);
+    expect(saveDraft).toHaveBeenNthCalledWith(1, expect.objectContaining({ theme: "forest" }));
+    expect(saveDraft).toHaveBeenNthCalledWith(2, expect.objectContaining({ theme: "animals" }));
+  });
+  test("S4 reopening does not resurrect pending draft state", async () => {
+    const saveDraft = vi.fn();
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
+    await handler(intent("StartStoryIntent"));
+    const reopened = await handler(envelope({ type: "LaunchRequest" }));
+    expect(reopened.sessionAttributes).toEqual({});
+    await handler(intent("ThemeChoiceIntent", { drafttheme: "mermaids" }));
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+  test("wish entry questions use theme or wish-specific reprompts", async () => {
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    const missing = await handler(intent("WishStoryIntent"));
+    expect(missing.response.reprompt?.outputSpeech.ssml).toMatch(/I want a story about space/i);
+    const unknown = await handler(intent("WishStoryIntent", { wishtopic: "space", storyteller: "Lily" }));
+    expect(unknown.response.reprompt?.outputSpeech.ssml).toMatch(/wish|want a story/i);
+  });
+});
+
+test.each(["AMAZON.HelpIntent", "AMAZON.FallbackIntent"])("invalid wish state receives safe restart guidance on %s", async (name) => {
+  const demoWish = vi.fn();
+  const event = intent(name);
+  event.session = { ...event.session!, attributes: { demoFlow: "wish", demoTopic: "space for Lily", extra: "private" } };
+  const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) })(event);
+  expect(ssml(response)).toMatch(/start a wish.*I want a story about space/i);
+  expect(JSON.stringify(response)).not.toContain("Lily");
+  expect(response.sessionAttributes).toEqual({});
+  expect(demoWish).not.toHaveBeenCalled();
+});
+
+
+test("pending draft handoff clears state and help resets only the fallback counter", async () => {
+  const saveDraft = vi.fn();
+  const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
+  const draft = intent("AMAZON.FallbackIntent");
+  draft.session = { ...draft.session!, attributes: { demoFlow: "draft", fallbackCount: "900", extra: "Lily" } };
+  const first = await handler(draft);
+  expect(first.sessionAttributes).toEqual({ demoFlow: "draft", fallbackCount: "1" });
+  const help = intent("AMAZON.HelpIntent");
+  help.session = { ...help.session!, attributes: first.sessionAttributes! };
+  const helped = await handler(help);
+  expect(helped.sessionAttributes).toEqual({ demoFlow: "draft" });
+  draft.session.attributes = helped.sessionAttributes!;
+  expect((await handler(draft)).sessionAttributes).toEqual({ demoFlow: "draft", fallbackCount: "1" });
+  const named = intent("CatchAllIntent", { text: "create a story for Lily" });
+  named.session = { ...named.session!, attributes: { demoFlow: "draft" } };
+  const handoff = await handler(named);
+  expect(handoff.sessionAttributes).toEqual({});
+  expect(ssml(handoff)).not.toContain("Lily");
+  await handler(intent("ThemeChoiceIntent", { drafttheme: "mermaids" }));
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+
+describe("safe session diagnostics", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  test.each([undefined, "   ", "mermaids for Lily"])("T1 presence distinguishes supplied input %j without values", async (theme) => {
+    const info = vi.spyOn(log, "info");
+    await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("StartStoryIntent", { theme }));
+    const [line] = loggedSkillTurns(info);
+    expect(line?.slotPresence).toEqual({ theme: theme?.trim() ? "present" : "missing" });
+    expect(line?.slots).toEqual({ theme: null });
+    expect(JSON.stringify(line)).not.toContain("Lily");
+  });
+  test("T2 hashes correlate start, fallbacks, and receipt-backed completion", async () => {
+    vi.stubEnv("EMF_NAMESPACE", "sla/mcp");
+    const info = vi.spyOn(log, "info");
+    const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "space", outline: "Safe." });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
+    let state: Record<string, string> = {};
+    for (const [i, name] of ["StartStoryIntent", "AMAZON.FallbackIntent", "AMAZON.FallbackIntent", "ThemeChoiceIntent"].entries()) {
+      const event = intent(name, name === "ThemeChoiceIntent" ? { drafttheme: "space" } : {});
+      event.request.requestId = `turn-${i}`;
+      event.session = { ...event.session!, new: false, attributes: state };
+      state = (await handler(event)).sessionAttributes ?? {};
+    }
+    const lines = loggedSkillTurns(info);
+    expect(lines.map((line) => [line.flowBefore, line.flowAfter, line.interactionResult, line.responseKey, line.fallbackCount, line.FallbackCount])).toEqual([
+      ["none", "draft", "awaiting_input", "theme_prompt", 0, 0],
+      ["draft", "draft", "fallback", "theme_recovery", 1, 1],
+      ["draft", "draft", "fallback", "theme_recovery", 2, 1],
+      ["draft", "none", "completed", "draft_saved", 0, 0],
+    ]);
+    expect(new Set(lines.map((line) => line.sessionHash)).size).toBe(1);
+    expect(new Set(lines.map((line) => line.requestHash)).size).toBe(4);
+    expect(lines[0]?.sessionHash).toBe(createHash("sha256").update("alexa-session\0amzn1.echo-api.session.1").digest("hex"));
+    expect(lines[0]?.requestHash).toBe(createHash("sha256").update("alexa-request\0turn-0").digest("hex"));
+    expect(JSON.stringify(lines)).not.toMatch(/amzn1\.ask\.account|amzn1\.echo-api|turn-0/);
+    for (const line of lines) {
+      expect(line._aws?.CloudWatchMetrics.find((metric) => metric.Metrics[0]?.Name === "FallbackCount")?.Dimensions).toEqual([[]]);
+      expect(line._aws?.CloudWatchMetrics.find((metric) => metric.Metrics[0]?.Name === "SkillTurnMs")?.Dimensions).toEqual([["Intent"], []]);
+    }
+  });
+  test("T3 generic fallback and playback emit one and zero", async () => {
+    vi.stubEnv("EMF_NAMESPACE", "sla/mcp");
+    const info = vi.spyOn(log, "info");
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    await handler(intent("AMAZON.FallbackIntent"));
+    await handler(intent("PlayStoryIntent", { title: "the owl" }));
+    const [fallback, played] = loggedSkillTurns(info);
+    expect(fallback).toMatchObject({ outcome: "ok", interactionResult: "fallback", responseKey: "general_recovery", FallbackCount: 1 });
+    expect(played).toMatchObject({ outcome: "ok", interactionResult: "completed", responseKey: "agent_reply", played: true, FallbackCount: 0 });
+  });
+  test.each([
+    ["StartStoryIntent", "saveDraft", { theme: "space" }],
+    ["ReadDemoDraftIntent", "latestDraft", {}],
+    ["WishStoryIntent", "demoWish", {}],
+    ["ReactToStoryIntent", "demoReact", { choice: "love" }],
+    ["UpdatesIntent", "demoInbox", {}],
+    ["LaunchRequest", "demoNext", {}],
+  ] as const)("T4 %s catches dependency errors accurately", async (name, method, slots) => {
+    const info = vi.spyOn(log, "info");
+    const agent = fakeAgent({ [method]: vi.fn().mockRejectedValue(new AgentHttpError(503, "update_unavailable", "Lily token=private")) });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const event = name === "LaunchRequest" ? envelope({ type: name }) : intent(name === "WishStoryIntent" ? "AMAZON.YesIntent" : name, slots);
+    if (name === "WishStoryIntent") event.session = { ...event.session!, attributes: { demoFlow: "wish", demoTopic: "space" } };
+    await handler(event);
+    const [line] = loggedSkillTurns(info);
+    expect(line).toMatchObject({ outcome: "rejected", errorClass: "AgentHttpError:update_unavailable", interactionResult: "retry" });
+    expect(JSON.stringify(line)).not.toMatch(/Lily|token=private/);
+  });
+  test.each([
+    [new AgentHttpError(200, "malformed", "Lily"), "rejected", "AgentHttpError:malformed"],
+    [new AgentHttpError(503, "Lily private code", "Lily"), "rejected", "AgentHttpError:unknown"],
+    [new DOMException("Lily", "AbortError"), "timeout", "DOMException"],
+    [Object.assign(new Error("Lily"), { name: "Lily" }), "agent_error", "Error"],
+  ] as const)("T4 draft failure classification is bounded", async (error, outcome, errorClass) => {
+    const info = vi.spyOn(log, "info");
+    await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft: vi.fn().mockRejectedValue(error) }) })(intent("StartStoryIntent", { theme: "space" }));
+    expect(loggedSkillTurns(info)[0]).toMatchObject({ outcome, errorClass, interactionResult: "retry", responseKey: "theme_recovery" });
+  });
+  test("T5 adversarial slot keys, values, state, and optional flags never enter diagnostics", async () => {
+    const info = vi.spyOn(log, "info");
+    const record = vi.fn();
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ turn: vi.fn().mockResolvedValue({ say: "Lily model text", play: null, toolCalls: [] }) }), recordUtterance: record, logSay: true });
+    const event = intent("WhatIsNewIntent", { storyteller: "Lily", "Lily-unknown-slot": "secret-token" });
+    event.session = { ...event.session!, attributes: { demoFlow: "Lily", secret: "Lily" } };
+    await handler(event);
+    const line = loggedSkillTurns(info)[0];
+    expect(line?.slotPresence).toEqual({ storyteller: "present" });
+    expect(line?.slots).toEqual({ storyteller: null });
+    expect(line?.flowBefore).toBe("none");
+    expect(JSON.stringify(line)).not.toMatch(/Lily|secret-token|model text|amzn1\.ask\.account|amzn1\.echo-api/);
+    expect(record).not.toHaveBeenCalled();
+  });
+  test("T6 callbacks omit absent sessions and closing turns classify once", async () => {
+    const info = vi.spyOn(log, "info");
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    const audio = envelope({ type: "AudioPlayer.PlaybackStarted" });
+    delete audio.session;
+    await handler(audio);
+    await handler(envelope({ type: "SessionEndedRequest", reason: "USER_INITIATED" }));
+    const cancel = intent("AMAZON.CancelIntent");
+    cancel.session = { ...cancel.session!, attributes: { demoFlow: "draft" } };
+    await handler(cancel);
+    const lines = loggedSkillTurns(info);
+    expect(lines).toHaveLength(3);
+    expect(lines[0]?.sessionHash).toBeUndefined();
+    expect(lines[0]?.slotPresence).toBeUndefined();
+    expect(lines.map((line) => line.interactionResult)).toEqual(["no_action", "no_action", "canceled"]);
+    expect(lines[2]?.flowAfter).toBe("none");
   });
 });

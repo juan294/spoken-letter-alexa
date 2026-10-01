@@ -1,0 +1,74 @@
+# Alexa session friction handoff
+
+## Planning state, 2026-10-01
+
+The Owner authorized planning after a read-only September 30 session review. The plan and three phase files were written on `develop` in `/Users/juan/code/spoken-letter-alexa`, source baseline `be03dd1a7ca82368a8e45a5b7b472649a5ae49fd`. No implementation branch/worktree, code edit, commit, push, model publication, deployment, notification send, or private-repository change was performed for this planning task.
+
+F1–F4 cover contextual recognition/recovery and prompt consistency. F5 covers safe presence/result diagnostics. F6 records successful playback and sparse latency observations with no speculative optimization. The selected design adds a custom bare-topic intent while retaining phrase-slot carriers; it preserves only validated session state and keeps raw values out of logs. The public MCP and agent route contracts remain unchanged.
+
+The primary live evidence came from CloudWatch logs and the fetched deployed skill source map, with the AWS artifact identity recorded in the main plan. Logs show four fallbacks among nine intent requests, two immediate creation starts with no draft backend request, one listing, and one confirmed playback start. Missing-theme behavior is an inference; redacted null slot values cannot establish it. Exact failed speech and spoken replies are unavailable. Owner-recalled wording is optional additional regression input, not a prerequisite for the known fixes.
+
+Graphify was queried through the repository's own graph using its read-only CLI because the MCP query tool was not exposed. Direct reads confirmed relevant behavior and the consumer list. Amazon primary documentation was checked for phrase-slot restrictions, custom slot validation, session attributes, and reprompts. Prior implementation notes establish that raw speech suppression is deliberate; new diagnostics must preserve it.
+
+Planning artifacts require link/path and diff validation only. Product gates were not run and no product outcome is claimed. The next action is Owner review of [the main plan](2026-10-01-alexa-session-friction.md), followed by explicit implementation authorization. Phase 1 starts only after revalidating actual refs/files. Per-phase stops apply unless the Owner explicitly grants continuation; external actions retain separate authorization boundaries.
+
+## Authorization and implementation entry
+
+The Owner invoked `/rpi-implement` on this plan, then authorized all phases without intermediate stops, local merge into `develop`, and task worktree pruning. External publication and device operations keep the separate boundaries in Phase 3. Entry verified `develop` at `be03dd1a7ca82368a8e45a5b7b472649a5ae49fd`; only the untracked planning artifacts belonged to this task. Their originals remain preserved in the integration checkout until byte comparison at merge. Worktree: `/Users/juan/code/spoken-letter-alexa-session-friction`, branch `fix/alexa-session-friction`. No private checkout is modified.
+
+Graphify's read-only CLI queried the repository's own `graphify-out` link before source tracing; the MCP tool is unavailable. The structural result located the handler, model, client, routes, and observability consumers. Current source reads confirmed the baseline.
+
+## Phase 1 implementation
+
+F1–F4 are repaired locally. `ThemeChoiceIntent` uses the distinct custom `drafttheme` slot; supported explicit-start paraphrases retain SearchQuery carriers. Draft entry is gated; fallback never writes; validated state survives contextual recovery. Returned state contains only allowed fields, canonical wish data, and the bounded fallback counter. Fixed error copy distinguishes unsupported themes, backend unavailability, and the draft limit. Explicit task switches and cancellation clear obsolete state.
+
+Red tests: the initial focused run had 20 failures and 85 passes; repaired handler/model tests reached 111 passes before the final wish-carrier repair. Further review regressions failed before their fixes. Four executed mutations were killed: removing draft gating, dropping recovery attributes, restoring the playback reprompt, and writing on fallback. Exact operational logs are retained locally outside tracked deliverables.
+
+Independent reviewer `review_phase1` found wish-entry reprompt gaps, a bare-reaction prompt/model mismatch, invalid-wish restart guidance, and missing explicit-start/reopen/handoff/counter-reset coverage. All were repaired. Re-review identified the missing-topic wish's bare-theme command as unusable without wish state; it now gives the full supported wish-start carrier. These changes preserve the shared wish vocabulary and public contracts.
+
+The required `codex-simplify` pass inspected reuse (shared question/recovery helpers), quality (state reconstruction and fixed copy), and efficiency (bounded state and catalog lookups). No additional refactor was justified. The first full gate passed all five checks, but subsequent review repairs invalidate that candidate's receipt; the final Phase 1 gate must pass before Phase 2 entry. Amazon routing and Echo behavior remain UNVERIFIED.
+
+## Deviations
+
+- Plan said reaction guidance uses like/love/no. Found the interaction model declares reaction carrier phrases, with no bare like/love sample. Chose supported “I like it”/“I love it”/“no” reprompts, preserving recognition scope and avoiding a second prompt/model mismatch.
+- Plan said matching wish reprompts. Found a missing-topic wish has no validated confirmation state, so a bare-topic reply cannot continue it. Chose a complete supported wish-start command until canonical wish state exists.
+
+Phase 1 final-gate attempt on `241f7c807c1f4e0e07899317c605471210dcf0ea` retained failures: lint rejected an untyped mock-call read, and an existing wish-copy regression required the theme question. Both were repaired by explicit call assertions and retaining the question followed by the usable wish-start command. Typecheck, synth, and all eight E2E cases passed in that attempt; the aggregate result remains failed and its receipt is retained.
+
+## Phase 1 accepted locally
+
+Independent review approved the repaired recognition/state implementation. Full default verification on `84cff45` passed typecheck, lint, 541 unit tests, CDK synth (including Lambda bundles), and eight simulator E2E cases, with unchanged candidate/environment identity. Review subsequently requested restoring an exact two-call-count assertion alongside the S2 nth-call assertions; it is included in Phase 2's regression candidate. All earlier failed receipts remain retained and superseded explicitly. F1–F4 are local resolved findings; Amazon recognition remains unverified.
+
+## Phase 2 implementation
+
+F5 is repaired locally with generated-definition slot presence, redacted known-slot legacy maps, finite response/result/flow fields, bounded fallback count, and domain-separated SHA-256 hashes of Alexa session and request IDs. Hashes are log fields, never metric dimensions or store fields. Response keys are chosen with response constructors, never extracted from speech. Backend rejection, timeout, malformed-client receipt, and unexpected errors receive bounded classes and retry diagnostics. Launch dependency failures retain welcome copy and disclose the failure in the same turn log.
+
+`FallbackCount` publishes only an undimensioned count in the existing `sla/mcp` namespace; the dashboard uses its sum. Existing alarms, subscriptions, latency/dead-end metrics, and 7 s/8 s budgets are preserved. Recording controls remain compatible and off by default, with truthful inert-control warnings. README, infrastructure comments, and the historical importer explain that safe fields cannot reconstruct transcripts or produce training speech.
+
+Red evidence: the first Phase 2 focused run had 19 failures and 105 passes. The final focused handler/Lambda/CDK selection passed 124 tests. Initial test repairs corrected module-reset spy identity and asserted CDK's effective metric-level `Sum` statistic; namespace, metric name, and absence of dimensions remain exact assertions. Lint exposed an unused value-only registry and shorthand void callback; the finite registry is now a TypeScript union and the callback has an explicit body. Executed mutations that falsely completed fallback, leaked slot values, or added hash dimensions were each killed.
+
+Independent reviewer `review_phase2` approved T1–T6 and all changed consumers with no actionable finding, and independently ran 114 handler/Lambda/client tests. Required simplify passes found reusable failure classification and redundant state/presence calculation; those are centralized/computed once. Quality review retained code-owned branch keys and compatibility switches. Efficiency review found no other justified change. The complete Phase 2 default gate is the next entry condition for Phase 3; its receipt will bind this committed candidate. External telemetry, Amazon routing, and Echo acceptance remain UNVERIFIED.
+
+## Deviations, Phase 2
+
+- Generator also rewrote manifest whitespace while producing the interaction model. Restored the unchanged manifest bytes because no metadata change is required.
+- CDK encodes the effective `Sum` statistic on the metric tuple rather than on the widget defaults. The test asserts that tuple exactly, including no dimension pairs, and keeps the existing alarm/subscription counts.
+
+## Phase 2 accepted locally
+
+Full default verification on `a70f4725ff7319153f47b2aea8e04ac96b31dfa3` passed typecheck, lint, 560 tests, CDK synth, and eight E2E cases. Receipt attempt `8b18996e4688482e8876be4c532bdf80` binds candidate digest `8364afacc38e59349a55cb8384bb2cb77620ebfca730a6f9f5d08ccc869eea5c`; candidate and environment remained unchanged. F5 is resolved locally. Deployed fields and metric publication remain unverified.
+
+## Phase 3 implementation and review
+
+Added `packages/skill/src/session-recovery.integration.test.ts:1`, exercising real `createHandler`, `createAgentClient`, Hono agent routes, `MemoryDemoDraftStore`, `MemorySessionStore`, and the existing real fixture MCP/OAuth harness. Network IO is adapted to Hono requests; deterministic outline generation replaces paid model IO. The harness forwards response attributes, changes transport request IDs per turn, and repeats the exact successful request only for duplicate delivery. Every command-secret header is asserted before the real route validates it.
+
+I1–I4 passed in the initial and repaired local runs. No new production behavior is introduced in this phase, so there is no implementation red/green cycle; these integrated tests verify the already repaired behavior against the real owned modules. Removing preserved state breaks I1, removing idempotency breaks I2's same-receipt/count/generator-call assertions, allowing stale entry breaks I3, and routing named/playback text into drafts breaks I4. The earlier executed mutations already demonstrated draft-gating and state-retention sensitivity.
+
+Independent reviewer `review_phase3` independently passed all four journeys and identified two oracle gaps: hash uniqueness permitted all hashes to be absent, and session-store privacy lacked a direct assertion. Both were hardened, rerun, and approved in re-review. No actionable finding remains. The required three simplify lenses confirmed reuse of existing real test support, clear transport/state ownership, and bounded offline work; no further edit was justified. Typecheck and lint passed in preliminary runs, and relative documentation links and diff whitespace were checked. The complete final phase gate remains the next required check.
+
+The device script has nine focused NOT RUN case groups and a concrete exact-candidate release/model/Lambda/log checklist, with supported reaction carriers. The friction log preserves historical observations and records only measured local behavior. Generated model SHA-256 is `bf3f7afa21acaa22d0f4d49eb1b7e0155aa958402b3d0b19e074972c11db7624`. F6 remains monitoring-only, with no speculative latency changes or new percentile claim. D1–D5 are implemented within the Owner's authorized local scope. `amazon_routing=UNVERIFIED`, `echo_acceptance=UNVERIFIED`; all Amazon/Echo matrix cases remain NOT RUN.
+
+## Deviations, Phase 3
+
+- The planned route-test setup was extended with the existing real fixture MCP/OAuth harness so I4's unrelated playback actually runs the agent and playlist path without sockets or mocked owned modules.
+- No AWS, ASK, private-app, paid-model, or outbound operation is executed. Those are explicit separate prerequisites for device completion, not failed or skipped local software gates.

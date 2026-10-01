@@ -23,19 +23,15 @@ const command = await new SecretsManagerClient({ region: process.env.AWS_REGION 
 if (!command.SecretString) throw new Error("sla/skill-command has no value");
 
 const recording = process.env.RECORD_UTTERANCES === "1";
-if (recording) log.warn("utterance_recording_on", { hint: "RECORD_UTTERANCES=1: catch-all phrasings are logged for pnpm -F skill record:pull" });
+if (recording) log.warn("raw_recording_disabled", { control: "RECORD_UTTERANCES" });
 
 const logSay = process.env.LOG_SAY === "1";
-if (logSay) log.warn("say_logging_on", { hint: "LOG_SAY=1: spoken replies are logged in skill_turn for one recorded device session, then the flag goes back to 0" });
+if (logSay) log.warn("raw_recording_disabled", { control: "LOG_SAY" });
 
 const skill = createHandler({
   skillId,
   agent: createAgentClient({ baseUrl: publicBaseUrl, timeoutMs: AGENT_BUDGET_MS, skillSecret: command.SecretString }),
-  recordUtterance: recording
-    ? (utterance) => {
-        log.info("utterance_recorded", utterance);
-      }
-    : undefined,
+  // Compatibility switches remain accepted, but raw recording is intentionally inert.
   logSay,
 });
 

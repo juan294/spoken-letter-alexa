@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // `pnpm -F skill record:pull` (phase-9.md section 3, recording mode). Reads the
-// `utterance_recorded` log lines the skill Lambda writes while RECORD_UTTERANCES=1 and
+// historical `utterance_recorded` log lines from older skill versions and
 // appends the new phrasings to skill-package/training/en-US.jsonl for the next
 // `pnpm -F skill generate`. The Owner reviews the file before committing it; it holds the
 // parent's phrasings only (no child speaks on this path) and no transcript is shown to anyone.
+//
+// Current raw recording is disabled even when RECORD_UTTERANCES=1. Safe presence
+// diagnostics cannot reconstruct speech or produce training transcripts, including
+// the September 30 session. Do not turn safe fields into synthetic transcripts.
 //
 //   pnpm -F skill record:pull                 # last 7 days
 //   pnpm -F skill record:pull --since=24h     # h, d or an ISO timestamp
