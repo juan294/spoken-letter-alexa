@@ -459,7 +459,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const catchAllWish = catchAll && /^i\s+(?:want|wish)\b.*\bstory\b.*\babout\b/i.test(catchAll);
       if (intent === "WishStoryIntent" || catchAllWish || catchAllAsk) {
         const topic = safeDemoTopic(slotValue(event, "wishtopic") ?? catchAll);
-        if (!topic) return ask(WISH_START, WISH_START);
+        if (!topic) return ask(`What would you like your story to be about? ${WISH_START}`, WISH_START);
         const rawStoryteller = slotValue(event, "storyteller") ?? catchAllAsk?.[1];
         const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(rawStoryteller.toLocaleLowerCase("en-US")) : undefined;
         if (rawStoryteller && !spokenStoryteller) return ask("Who would you like a story from?", WISH_START);

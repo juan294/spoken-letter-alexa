@@ -764,7 +764,8 @@ describe("additional phase 1 acceptance", () => {
     carrier.session = { ...carrier.session!, attributes: { demoFlow: "draft" } };
     carrier.request.requestId = "carrier-2";
     expect(ssml(await handler(carrier))).toMatch(/saved your story draft/i);
-    expect(saveDraft.mock.calls.map(([input]) => input.theme)).toEqual(["forest", "animals"]);
+    expect(saveDraft).toHaveBeenNthCalledWith(1, expect.objectContaining({ theme: "forest" }));
+    expect(saveDraft).toHaveBeenNthCalledWith(2, expect.objectContaining({ theme: "animals" }));
   });
   test("S4 reopening does not resurrect pending draft state", async () => {
     const saveDraft = vi.fn();

@@ -32,3 +32,5 @@ The required `codex-simplify` pass inspected reuse (shared question/recovery hel
 
 - Plan said reaction guidance uses like/love/no. Found the interaction model declares reaction carrier phrases, with no bare like/love sample. Chose supported “I like it”/“I love it”/“no” reprompts, preserving recognition scope and avoiding a second prompt/model mismatch.
 - Plan said matching wish reprompts. Found a missing-topic wish has no validated confirmation state, so a bare-topic reply cannot continue it. Chose a complete supported wish-start command until canonical wish state exists.
+
+Phase 1 final-gate attempt on `241f7c807c1f4e0e07899317c605471210dcf0ea` retained failures: lint rejected an untyped mock-call read, and an existing wish-copy regression required the theme question. Both were repaired by explicit call assertions and retaining the question followed by the usable wish-start command. Typecheck, synth, and all eight E2E cases passed in that attempt; the aggregate result remains failed and its receipt is retained.
