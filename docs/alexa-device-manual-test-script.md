@@ -1,6 +1,6 @@
 # Spoken Letter Alexa device manual test script
 
-Use this script with an `en-US` Echo signed in to the Owner's Alexa developer account. An adult speaks every line. The script tests the **fixture demo** implemented on `develop` at `621b6610fab69d2916306c04cf5b53b7812267f4`. It does not test real story delivery, a child account, creator messaging, or a credit purchase.
+Use this script with an `en-US` Echo signed in to the Owner's Alexa developer account. An adult speaks every line. The script tests the **fixture demo** with the October 1 candidate `c46be917a1c82d02dfc1dfd761b0c41d69e13ec9`. It does not test real story delivery, a child account, creator messaging, or a credit purchase.
 
 ## Before you speak
 
@@ -20,15 +20,15 @@ Run this section only after the development manifest is published and validated,
 
 ## 2. Fixture updates and family occasion
 
-- [ ] **2.1 First launch.** Open Spoken Letter. On fresh demo state, Alexa should speak the synthetic family birthday update and call it a fixture. It must not name a child or a real birth date. Record the exact reply and whether `LaunchRequest` read `fixture_family_birthday`.
-- [ ] **2.2 Occasion to draft.** After the birthday prompt, say **“Let's create a story.”** Alexa should ask for a general theme. Say **“About forest.”** Alexa should confirm a saved **demo draft**, without claiming that a birthday story was delivered. This is a synthetic occasion, not a calendar reminder for a named person.
-- [ ] **2.3 New story.** Open again, or say **“Show my demo updates.”** Continue only until Alexa speaks the fixture new-story update. It should identify **Martina the music loving mermaid** by **Aunt Whitney** and say it is a fixture update. Record the linked event ID `fixture_new_mermaid_story` from operator evidence; Alexa does not need to speak the ID.
-- [ ] **2.4 Read-once behavior.** Say **“Show my demo updates.”** after both seed events have been heard. Alexa should say there are no unread demo updates. If a wish or reaction was saved meanwhile, its own update may appear first; drain those separately and record the order.
+- [ ] **2.1 First launch.** Open Spoken Letter. On fresh demo state, Alexa should speak the synthetic family birthday update without naming a child or a real birth date. Record the exact reply and whether `LaunchRequest` read `fixture_family_birthday`.
+- [ ] **2.2 Occasion to draft.** After the birthday prompt, say **“Let's create a story.”** Alexa should ask for a general theme. Say **“About forest.”** Alexa should confirm a saved **story draft**, without claiming that a birthday story was delivered. This is a synthetic occasion, not a calendar reminder for a named person.
+- [ ] **2.3 New story.** Open again, or say **“Show my demo updates.”** Continue only until Alexa speaks the fixture new-story update. It should identify **Martina the music loving mermaid** by **Aunt Whitney** as the available fixture recording. Record the linked event ID `fixture_new_mermaid_story` from operator evidence; Alexa does not need to speak the ID.
+- [ ] **2.4 Read-once behavior.** Say **“Show my demo updates.”** after both seed events have been heard. Alexa should say there are no unread updates. If a wish or reaction was saved meanwhile, its own update may appear first; drain those separately and record the order.
 
 ## 3. Reaction after a completed story
 
 - [ ] **3.1 Complete one recording.** Open; say **“Play the story Martina the music loving mermaid.”** Let its 6:14 recording finish naturally. Do not use Stop or Next for this check. No spoken feedback prompt should come from the `PlaybackFinished` callback itself.
-- [ ] **3.2 Next invocation.** Open Spoken Letter. Alexa should ask whether the parent liked or loved **Martina the music loving mermaid**. Say **“I love that story.”** Alexa should confirm a **demo reaction** was saved and say it was **not sent to the storyteller**. The operator checks one receipt tied to Martina's story ID and Aunt Whitney, without exposing a user ID.
+- [ ] **3.2 Next invocation.** Open Spoken Letter. Alexa should ask whether the parent liked or loved **Martina the music loving mermaid**. Say **“I love that story.”** Alexa should confirm that the reaction was saved. It must not claim that a message was sent to the storyteller. The operator checks one receipt tied to Martina's story ID and Aunt Whitney, without exposing a user ID.
 - [ ] **3.3 No repeated prompt.** Open again. The same completed story should not trigger a second reaction prompt. Say **“Show my demo updates.”** A saved-reaction fixture update may be read once. Do not describe this as an email or a message from a child to the creator.
 
 ## 4. Entire playlist and playback controls
@@ -50,22 +50,22 @@ Run this section only after the development manifest is published and validated,
 
 ## 6. Guided demo draft and listener handoff
 
-- [ ] **6.1 Missing theme.** Open; say **“Let's create a bedtime story.”** Alexa should ask for a general theme. Say **“About mermaids.”** It should confirm that a **demo draft** was saved, then direct the parent to the Spoken Letter app to choose a listener and finish it.
+- [ ] **6.1 Missing theme.** Open; say **“Let's create a bedtime story.”** Alexa should ask for a general theme. Say **“About mermaids.”** It should confirm that a **story draft** was saved, then direct the parent to the Spoken Letter app to choose a listener and finish it.
 - [ ] **6.2 Readback.** Open; say **“Read my demo draft.”** Alexa should read an actual short outline about mermaids. It should contain no listener name and should not say a story was sent or delivered. The operator checks that the saved receipt and readback refer to the same demo draft.
 - [ ] **6.3 Named listener.** Use only a fictional alias that is not a stored Recipient. Open; say **“Can you send Morgan a Spoken Letter?”** and **“Can you create a story for Morgan?”** These carrier phrases should reach the safe app handoff. Also try the original bare form **“Send Morgan a Spoken Letter.”** and record its actual routing separately. Alexa must not claim that Morgan received anything, save the alias in demo state, or repeat the alias in its response. If the bare form misses the handoff, mark that source phrasing **FAIL** even if a carrier phrase works.
-- [ ] **6.4 Canceled draft.** Open; say **“Let's create a story.”** When Alexa asks for a theme, say **“Cancel.”** Alexa should say no new demo draft was saved. A draft saved earlier in this run can still exist; this check concerns only the canceled attempt.
+- [ ] **6.4 Canceled draft.** Open; say **“Let's create a story.”** When Alexa asks for a theme, say **“Cancel.”** Alexa should say no draft was saved. A draft saved earlier in this run can still exist; this check concerns only the canceled attempt.
 
 ## 7. Story wishes and their fixture updates
 
-- [ ] **7.1 Topic wish.** Open; say **“I want a story about mermaids.”** Alexa should ask whether to save a **demo wish**, state that nobody will be contacted, and wait for confirmation. Say **“Yes.”** It should confirm a saved demo wish and say it was not sent to the storyteller. The operator checks one receipt with the canonical topic `mermaids`.
-- [ ] **7.2 Adult storyteller wish.** Open; say **“Ask Aunt Whitney for another mermaid story.”** Alexa should confirm a demo wish about mermaids **from Aunt Whitney**. Say **“Yes.”** It should save a distinct demo wish, with no outbound creator message. The operator checks the adult storyteller on the receipt.
-- [ ] **7.3 Update and cancellation.** Say **“Show my demo updates.”** The fixture inbox should report the wish update once. Start another wish with **“I want a story about space,”** then say **“No.”** Alexa should say no new demo wish was saved. If other unread updates exist, record their order and continue until the wish update is heard.
-- [ ] **7.4 Unknown creator.** Open; say **“Ask Mila for another mermaid story.”** Mila is not in the delivered fixture catalog. Alexa should ask which adult storyteller from the demo catalog is meant and should not save or send a wish.
+- [ ] **7.1 Topic wish.** Open; say **“I want a story about mermaids.”** Alexa should ask whether to save a **wish**, offer yes or no, and wait for confirmation. No outbound contact occurs. Say **“Yes.”** It should confirm the saved wish without claiming delivery or contact with the storyteller. The operator checks one receipt with the canonical topic `mermaids`.
+- [ ] **7.2 Adult storyteller wish.** Open; say **“Ask Aunt Whitney for another mermaid story.”** Alexa should confirm a wish about mermaids **from Aunt Whitney**. Say **“Yes.”** It should save a distinct demo wish, with no outbound creator message. The operator checks the adult storyteller on the receipt.
+- [ ] **7.3 Update and cancellation.** Say **“Show my demo updates.”** The fixture inbox should report the wish update once. Start another wish with **“I want a story about space,”** then say **“No.”** Alexa should say no wish was saved. If other unread updates exist, record their order and continue until the wish update is heard.
+- [ ] **7.4 Unknown creator.** Open; say **“Ask Mila for another mermaid story.”** Mila is not in the delivered fixture catalog. Alexa should ask who the parent would like a story from and should not save or send a wish.
 
 ## 8. Help and story credits
 
 - [ ] **8.1 Creation help.** Open; say **“How do I create a story?”** Alexa should explain that the parent chooses a listener and completes delivery in the Spoken Letter app; it may offer a name-free demo draft on Alexa.
-- [ ] **8.2 Credit help.** Open; say **“How do I add story credits?”** and **“Can you add story credits?”** Both should direct the parent to the app and say Alexa cannot charge or change credits. Also try the original bare form **“Add story credits.”** and record its routing separately. The operator confirms no payment or entitlement write occurred.
+- [ ] **8.2 Credit help.** Open; say **“How do I add story credits?”** and **“Can you add story credits?”** Both should direct the parent to the app without claiming to charge or change credits. Also try the original bare form **“Add story credits.”** and record its routing separately. The operator confirms no payment or entitlement write occurred.
 
 ## Close the run
 
@@ -83,9 +83,13 @@ The original ideal list also asks for real recipient delivery, creator notificat
 
 ## 9. October 1 session-friction acceptance
 
-This section is the current acceptance matrix for [the session-friction plan](plans/2026-10-01-alexa-session-friction.md). Sections 1–8 describe the earlier fixture rehearsal; their older expected “demo/fixture” copy is not a requirement for this candidate. Current replies say “story draft,” “wish,” and “reaction.” The same fixture-only effects apply. These are designed test phrases, not a reconstruction of the September 30 speech.
+This section is the current acceptance matrix for [the session-friction plan](plans/2026-10-01-alexa-session-friction.md). Sections 1–8 retain the fixture rehearsal and now use the current reply expectations. The older exact “demo/fixture,” “not sent,” and “cannot charge” disclosures are superseded by the preserved current copy; no outbound messages, delivery, payments, or entitlement changes occur. Current replies say “story draft,” “wish,” and “reaction.” The same fixture-only effects apply. These are designed test phrases, not a reconstruction of the September 30 speech.
 
-Current software status on October 1: 11 Amazon NLU plus Manual JSON endpoint journeys passed across 50 turns. A separate evidence validator passed 500 assertions covering required routing, slot values, saved receipts, exact draft readback, request correlation, contextual recovery, and privacy-safe CloudWatch diagnostics. The skill Lambda and development en-US model match source `c7009edf12418855b8a4986f4871a1c06418aabb`. Global Alexa Simulator and ASK dialog still fail with Amazon's generic service error before an observed endpoint invocation, including after refreshing development enablement. `amazon_routing=PARTIAL` (NLU plus endpoint tested); `echo_acceptance=UNVERIFIED`. Published c7009ed model SHA-256: `bf3f7afa21acaa22d0f4d49eb1b7e0155aa958402b3d0b19e074972c11db7624`.
+Current software status on October 1: 16 Amazon NLU plus Manual JSON endpoint journeys passed across 106 successful turns on source `c46be917a1c82d02dfc1dfd761b0c41d69e13ec9`. Spoken inputs used Amazon's NLU profiler; endpoint requests carried actual returned session attributes. Eleven session-friction journeys passed 500 evidence assertions, and five extended rehearsal journeys passed 482 more. Stored receipts, exact draft readback, read-once updates, playback tokens/offsets, and privacy-safe CloudWatch diagnostics agree. One extended playlist attempt failed on an Amazon API transport disconnect; its isolated repeat passed, and the failed attempt remains retained. This is software evidence, not a conversational simulator or Echo pass.
+
+All seven AWS stacks completed. Downloaded skill and API ZIPs match all 3 and 225 candidate files respectively. Skill code SHA-256: `uqb+8HuEXkyHyrja4L0vQceirhcCdQQpOVvpRU7isyg=`. Development en-US model SHA-256: `b743a6d7bd1b9ed504cba697c74f47468836c0c5b1ba2efc1b7a61d25232d182`; Amazon import `amzn1.ask-package.import.896c8899-e667-4109-8ab4-bb4b2477eeb4` succeeded and fetched JSON matches the generated model. Authenticated metadata, token issuance, legacy/modern MCP negotiation, 20 list-tool calls, and SSE probes passed. All three recordings returned HTTP 206 audio range responses. Recording flags remain off.
+
+A final full Alexa simulation still returned “An unexpected error occurred.” The 88.470-second test window contained zero observed skill/API log events. The Owner also reports a failure on the Echo; its exact utterance, reply, and time are not yet available. A broader Alexa outage or the device failure's cause is unconfirmed. `amazon_routing=PARTIAL`; `echo_acceptance=UNVERIFIED`. Notification delivery, actual Echo audio/ASR, idle reprompt timing, and natural playback events remain unverified.
 
 An adult speaks the planned lines and observes audio. The agent/operator handles CLI publication, dialog requests, log retrieval, and backend readback after the applicable authorization. Every positive recognition case must work on its first attempt without fallback. An invalid turn must disclose recovery and permit the next valid answer without reopening. Record actual intent and slot presence rather than assume the invalid turn reached `AMAZON.FallbackIntent`.
 
@@ -114,4 +118,19 @@ For each case, record PASS/FAIL/NOT RUN, observed intent, generated-slot presenc
 
 Local journey implementation: `packages/skill/src/session-recovery.integration.test.ts:1`. Safe turn diagnostics: `packages/skill/src/handler.ts:678`. Model generator: `packages/skill/src/model/generate.ts:268`.
 
-The console-test repair adds dedicated bare handoff/credit intents and a separate named-wish intent, and normalizes short spoken title wrappers. Pending repaired model SHA-256: `ac9c7da21dc1cb9dc471104dfc6f0124ce209fa3e011c685914139491d85703a`. The source and publication evidence below must be refreshed after the repair is deployed.
+The console-test repairs add dedicated bare handoff/credit intents, a separate named-wish intent, short spoken title normalization, and exact samples for “play my Spoken Letter stories” and “start all over.” The latter restarts the current recording; the explicit playlist-reset phrase resets the playlist.
+
+### Software coverage of the original rehearsal
+
+| Sections | Final software evidence | Device evidence still required |
+| --- | --- | --- |
+| 1 | NOT RUN: no Proactive Events send; separate one-send authorization and opt-in prerequisites apply. | Owner-device notification observation and matched event detail. |
+| 2 | PASS: seed birthday/new-story updates and read-once behavior; occasion-to-draft and exact readback. | Actual spoken launch/update behavior. |
+| 3 | PASS: synthetic completion, one canonical love receipt, next launch without repeated reaction prompt, read-once reaction update. | Natural recording completion and genuine callback. |
+| 4 | PASS: shuffled starts, source playlist phrase, next/previous, same-URL restarts, playlist reset, pause/resume at 1200 ms, and ENQUEUE token continuity. | Actual audio, resume position, automatic advance and device control routing. |
+| 5 | PASS: creator/exact/short-title searches, newest-first order, missing-title handling; all three audio range probes. | Actual recordings and transitions on Echo. |
+| 6 | PASS: bedtime creation phrase, theme choice, exact draft readback, cancellation, all three named-listener handoffs with no alias in replies or draft write. | Spoken recognition and observed replies. |
+| 7 | PASS: topic/named wishes, canonical receipt, read-once wish update, cancellation and unknown-storyteller recovery. | Spoken recognition and observed replies. |
+| 8 | PASS: creation help and all three credit-help phrases; handoffs create no draft. Existing handler tests verify these fixed handoffs call no agent action. | Spoken help/credit replies. |
+
+Operator evidence is retained locally under `.rpi/local/alexa-session-friction/deployment-2026-10-01/`. `final-session-directory.json` and `final-extended-directory.json` locate request/response, state and validated diagnostic proofs. `aws-proof.json`, `amazon-identity.json` and `final-simulator-proof.json` retain deployment/model identity and the failed full-invocation result. These local artifacts include synthetic test envelopes and are not public submission material.
