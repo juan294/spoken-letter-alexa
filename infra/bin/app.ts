@@ -21,8 +21,8 @@ const app = new App();
 //   sla:gatewayUrl      the GatewayUrl output; on the third deploy the agent targets the gateway
 //   sla:m2mSecretVersion the sla/oauth-clients version printed by seed:secrets --rotate-m2m
 //   sla:skillId         the Alexa skill id once `pnpm -F skill deploy` has run (Phase 9)
-//   sla:recordUtterances "1" for one recording session (phase-9 section 3), then unset
-//   sla:logSay           "1" for the one recorded device session (phase-1 section 3), then unset
+//   sla:recordUtterances deprecated compatibility switch; raw recording remains disabled
+//   sla:logSay           deprecated compatibility switch; model speech logging remains disabled
 //   sla:skillPermissionOpen "1" for the first `pnpm -F skill deploy` only (see SkillStack)
 const context = (key: string) => app.node.tryGetContext(key) as string | undefined;
 const certificateArn = context("sla:certificateArn");

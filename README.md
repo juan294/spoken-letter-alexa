@@ -100,8 +100,15 @@ Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.
 Real device (Phase 9): a thin classic Alexa Skill in `packages/skill` calls the same agent
 endpoint and plays the family MP3 through `AudioPlayer` on an Echo. `pnpm -F skill generate`
 rebuilds the interaction model from the tool metadata; `pnpm -F skill deploy` creates the
-development-stage skill with the ASK CLI (Owner gate); `pnpm -F skill record:pull` collects
-real phrasings while `RECORD_UTTERANCES=1`.
+development-stage skill with the ASK CLI (Owner gate); `pnpm -F skill record:pull` imports
+historical raw records only. Raw recording and model-speech logging are intentionally
+disabled, including when the deprecated `RECORD_UTTERANCES` or `LOG_SAY` switches are set.
+Safe diagnostics work without either switch. Legacy slot nulls mean redacted, not missing;
+`slotPresence` reports missing/present. Flow, response keys, interaction results, and
+domain-separated hashes of ephemeral session/request IDs support recovery analysis
+without logging speech, names, or user/device IDs. `FallbackCount` is an undimensioned
+CloudWatch counter; hashes are log fields only. Safe diagnostics cannot reconstruct
+utterances or produce training transcripts.
 
 ## Repository layout
 

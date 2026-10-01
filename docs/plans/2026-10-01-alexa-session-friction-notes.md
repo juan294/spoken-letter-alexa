@@ -34,3 +34,22 @@ The required `codex-simplify` pass inspected reuse (shared question/recovery hel
 - Plan said matching wish reprompts. Found a missing-topic wish has no validated confirmation state, so a bare-topic reply cannot continue it. Chose a complete supported wish-start command until canonical wish state exists.
 
 Phase 1 final-gate attempt on `241f7c807c1f4e0e07899317c605471210dcf0ea` retained failures: lint rejected an untyped mock-call read, and an existing wish-copy regression required the theme question. Both were repaired by explicit call assertions and retaining the question followed by the usable wish-start command. Typecheck, synth, and all eight E2E cases passed in that attempt; the aggregate result remains failed and its receipt is retained.
+
+## Phase 1 accepted locally
+
+Independent review approved the repaired recognition/state implementation. Full default verification on `84cff45` passed typecheck, lint, 541 unit tests, CDK synth (including Lambda bundles), and eight simulator E2E cases, with unchanged candidate/environment identity. Review subsequently requested restoring an exact two-call-count assertion alongside the S2 nth-call assertions; it is included in Phase 2's regression candidate. All earlier failed receipts remain retained and superseded explicitly. F1–F4 are local resolved findings; Amazon recognition remains unverified.
+
+## Phase 2 implementation
+
+F5 is repaired locally with generated-definition slot presence, redacted known-slot legacy maps, finite response/result/flow fields, bounded fallback count, and domain-separated SHA-256 hashes of Alexa session and request IDs. Hashes are log fields, never metric dimensions or store fields. Response keys are chosen with response constructors, never extracted from speech. Backend rejection, timeout, malformed-client receipt, and unexpected errors receive bounded classes and retry diagnostics. Launch dependency failures retain welcome copy and disclose the failure in the same turn log.
+
+`FallbackCount` publishes only an undimensioned count in the existing `sla/mcp` namespace; the dashboard uses its sum. Existing alarms, subscriptions, latency/dead-end metrics, and 7 s/8 s budgets are preserved. Recording controls remain compatible and off by default, with truthful inert-control warnings. README, infrastructure comments, and the historical importer explain that safe fields cannot reconstruct transcripts or produce training speech.
+
+Red evidence: the first Phase 2 focused run had 19 failures and 105 passes. The final focused handler/Lambda/CDK selection passed 124 tests. Initial test repairs corrected module-reset spy identity and asserted CDK's effective metric-level `Sum` statistic; namespace, metric name, and absence of dimensions remain exact assertions. Lint exposed an unused value-only registry and shorthand void callback; the finite registry is now a TypeScript union and the callback has an explicit body. Executed mutations that falsely completed fallback, leaked slot values, or added hash dimensions were each killed.
+
+Independent reviewer `review_phase2` approved T1–T6 and all changed consumers with no actionable finding, and independently ran 114 handler/Lambda/client tests. Required simplify passes found reusable failure classification and redundant state/presence calculation; those are centralized/computed once. Quality review retained code-owned branch keys and compatibility switches. Efficiency review found no other justified change. The complete Phase 2 default gate is the next entry condition for Phase 3; its receipt will bind this committed candidate. External telemetry, Amazon routing, and Echo acceptance remain UNVERIFIED.
+
+## Deviations, Phase 2
+
+- Generator also rewrote manifest whitespace while producing the interaction model. Restored the unchanged manifest bytes because no metadata change is required.
+- CDK encodes the effective `Sum` statistic on the metric tuple rather than on the widget defaults. The test asserts that tuple exactly, including no dimension pairs, and keeps the existing alarm/subscription counts.

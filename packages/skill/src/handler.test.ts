@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { log } from "@spoken-letter-alexa/shared";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -497,6 +499,16 @@ describe("skill handler", () => {
 });
 
 type SkillTurnFields = {
+  slotPresence?: Record<string, "missing" | "present">;
+  flowBefore: string;
+  flowAfter: string;
+  fallbackCount: number;
+  interactionResult: string;
+  responseKey: string;
+  sessionHash?: string;
+  requestHash: string;
+  FallbackCount?: number;
+  _aws?: { CloudWatchMetrics: { Dimensions: string[][]; Metrics: { Name: string }[] }[] };
   event: string;
   requestType: string;
   intent?: string;
@@ -764,6 +776,7 @@ describe("additional phase 1 acceptance", () => {
     carrier.session = { ...carrier.session!, attributes: { demoFlow: "draft" } };
     carrier.request.requestId = "carrier-2";
     expect(ssml(await handler(carrier))).toMatch(/saved your story draft/i);
+    expect(saveDraft).toHaveBeenCalledTimes(2);
     expect(saveDraft).toHaveBeenNthCalledWith(1, expect.objectContaining({ theme: "forest" }));
     expect(saveDraft).toHaveBeenNthCalledWith(2, expect.objectContaining({ theme: "animals" }));
   });
@@ -817,4 +830,115 @@ test("pending draft handoff clears state and help resets only the fallback count
   expect(ssml(handoff)).not.toContain("Lily");
   await handler(intent("ThemeChoiceIntent", { drafttheme: "mermaids" }));
   expect(saveDraft).not.toHaveBeenCalled();
+});
+
+
+describe("safe session diagnostics", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  test.each([undefined, "   ", "mermaids for Lily"])("T1 presence distinguishes supplied input %j without values", async (theme) => {
+    const info = vi.spyOn(log, "info");
+    await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("StartStoryIntent", { theme }));
+    const [line] = loggedSkillTurns(info);
+    expect(line?.slotPresence).toEqual({ theme: theme?.trim() ? "present" : "missing" });
+    expect(line?.slots).toEqual({ theme: null });
+    expect(JSON.stringify(line)).not.toContain("Lily");
+  });
+  test("T2 hashes correlate start, fallbacks, and receipt-backed completion", async () => {
+    vi.stubEnv("EMF_NAMESPACE", "sla/mcp");
+    const info = vi.spyOn(log, "info");
+    const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "space", outline: "Safe." });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
+    let state: Record<string, string> = {};
+    for (const [i, name] of ["StartStoryIntent", "AMAZON.FallbackIntent", "AMAZON.FallbackIntent", "ThemeChoiceIntent"].entries()) {
+      const event = intent(name, name === "ThemeChoiceIntent" ? { drafttheme: "space" } : {});
+      event.request.requestId = `turn-${i}`;
+      event.session = { ...event.session!, new: false, attributes: state };
+      state = (await handler(event)).sessionAttributes ?? {};
+    }
+    const lines = loggedSkillTurns(info);
+    expect(lines.map((line) => [line.flowBefore, line.flowAfter, line.interactionResult, line.responseKey, line.fallbackCount, line.FallbackCount])).toEqual([
+      ["none", "draft", "awaiting_input", "theme_prompt", 0, 0],
+      ["draft", "draft", "fallback", "theme_recovery", 1, 1],
+      ["draft", "draft", "fallback", "theme_recovery", 2, 1],
+      ["draft", "none", "completed", "draft_saved", 0, 0],
+    ]);
+    expect(new Set(lines.map((line) => line.sessionHash)).size).toBe(1);
+    expect(new Set(lines.map((line) => line.requestHash)).size).toBe(4);
+    expect(lines[0]?.sessionHash).toBe(createHash("sha256").update("alexa-session\0amzn1.echo-api.session.1").digest("hex"));
+    expect(lines[0]?.requestHash).toBe(createHash("sha256").update("alexa-request\0turn-0").digest("hex"));
+    expect(JSON.stringify(lines)).not.toMatch(/amzn1\.ask\.account|amzn1\.echo-api|turn-0/);
+    for (const line of lines) {
+      expect(line._aws?.CloudWatchMetrics.find((metric) => metric.Metrics[0]?.Name === "FallbackCount")?.Dimensions).toEqual([[]]);
+      expect(line._aws?.CloudWatchMetrics.find((metric) => metric.Metrics[0]?.Name === "SkillTurnMs")?.Dimensions).toEqual([["Intent"], []]);
+    }
+  });
+  test("T3 generic fallback and playback emit one and zero", async () => {
+    vi.stubEnv("EMF_NAMESPACE", "sla/mcp");
+    const info = vi.spyOn(log, "info");
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    await handler(intent("AMAZON.FallbackIntent"));
+    await handler(intent("PlayStoryIntent", { title: "the owl" }));
+    const [fallback, played] = loggedSkillTurns(info);
+    expect(fallback).toMatchObject({ outcome: "ok", interactionResult: "fallback", responseKey: "general_recovery", FallbackCount: 1 });
+    expect(played).toMatchObject({ outcome: "ok", interactionResult: "completed", responseKey: "agent_reply", played: true, FallbackCount: 0 });
+  });
+  test.each([
+    ["StartStoryIntent", "saveDraft", { theme: "space" }],
+    ["ReadDemoDraftIntent", "latestDraft", {}],
+    ["WishStoryIntent", "demoWish", {}],
+    ["ReactToStoryIntent", "demoReact", { choice: "love" }],
+    ["UpdatesIntent", "demoInbox", {}],
+    ["LaunchRequest", "demoNext", {}],
+  ] as const)("T4 %s catches dependency errors accurately", async (name, method, slots) => {
+    const info = vi.spyOn(log, "info");
+    const agent = fakeAgent({ [method]: vi.fn().mockRejectedValue(new AgentHttpError(503, "update_unavailable", "Lily token=private")) });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    const event = name === "LaunchRequest" ? envelope({ type: name }) : intent(name === "WishStoryIntent" ? "AMAZON.YesIntent" : name, slots);
+    if (name === "WishStoryIntent") event.session = { ...event.session!, attributes: { demoFlow: "wish", demoTopic: "space" } };
+    await handler(event);
+    const [line] = loggedSkillTurns(info);
+    expect(line).toMatchObject({ outcome: "rejected", errorClass: "AgentHttpError:update_unavailable", interactionResult: "retry" });
+    expect(JSON.stringify(line)).not.toMatch(/Lily|token=private/);
+  });
+  test.each([
+    [new AgentHttpError(200, "malformed", "Lily"), "rejected", "AgentHttpError:malformed"],
+    [new AgentHttpError(503, "Lily private code", "Lily"), "rejected", "AgentHttpError:unknown"],
+    [new DOMException("Lily", "AbortError"), "timeout", "DOMException"],
+    [Object.assign(new Error("Lily"), { name: "Lily" }), "agent_error", "Error"],
+  ] as const)("T4 draft failure classification is bounded", async (error, outcome, errorClass) => {
+    const info = vi.spyOn(log, "info");
+    await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft: vi.fn().mockRejectedValue(error) }) })(intent("StartStoryIntent", { theme: "space" }));
+    expect(loggedSkillTurns(info)[0]).toMatchObject({ outcome, errorClass, interactionResult: "retry", responseKey: "theme_recovery" });
+  });
+  test("T5 adversarial slot keys, values, state, and optional flags never enter diagnostics", async () => {
+    const info = vi.spyOn(log, "info");
+    const record = vi.fn();
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ turn: vi.fn().mockResolvedValue({ say: "Lily model text", play: null, toolCalls: [] }) }), recordUtterance: record, logSay: true });
+    const event = intent("WhatIsNewIntent", { storyteller: "Lily", "Lily-unknown-slot": "secret-token" });
+    event.session = { ...event.session!, attributes: { demoFlow: "Lily", secret: "Lily" } };
+    await handler(event);
+    const line = loggedSkillTurns(info)[0];
+    expect(line?.slotPresence).toEqual({ storyteller: "present" });
+    expect(line?.slots).toEqual({ storyteller: null });
+    expect(line?.flowBefore).toBe("none");
+    expect(JSON.stringify(line)).not.toMatch(/Lily|secret-token|model text|amzn1\.ask\.account|amzn1\.echo-api/);
+    expect(record).not.toHaveBeenCalled();
+  });
+  test("T6 callbacks omit absent sessions and closing turns classify once", async () => {
+    const info = vi.spyOn(log, "info");
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    const audio = envelope({ type: "AudioPlayer.PlaybackStarted" });
+    delete audio.session;
+    await handler(audio);
+    await handler(envelope({ type: "SessionEndedRequest", reason: "USER_INITIATED" }));
+    const cancel = intent("AMAZON.CancelIntent");
+    cancel.session = { ...cancel.session!, attributes: { demoFlow: "draft" } };
+    await handler(cancel);
+    const lines = loggedSkillTurns(info);
+    expect(lines).toHaveLength(3);
+    expect(lines[0]?.sessionHash).toBeUndefined();
+    expect(lines[0]?.slotPresence).toBeUndefined();
+    expect(lines.map((line) => line.interactionResult)).toEqual(["no_action", "no_action", "canceled"]);
+    expect(lines[2]?.flowAfter).toBe("none");
+  });
 });

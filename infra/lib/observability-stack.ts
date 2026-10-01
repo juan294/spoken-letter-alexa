@@ -104,6 +104,13 @@ export class ObservabilityStack extends Stack {
       }),
     );
     this.dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: "Recognition fallbacks",
+        width: 12,
+        left: [new cloudwatch.Metric({ namespace: METRIC_NAMESPACE, metricName: "FallbackCount", statistic: "Sum", period: Duration.minutes(5), label: "FallbackCount sum" })],
+      }),
+    );
+    this.dashboard.addWidgets(
       new cloudwatch.LogQueryWidget({
         title: "OAuth errors (last hour)",
         width: 12,

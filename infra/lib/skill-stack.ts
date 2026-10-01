@@ -24,9 +24,9 @@ export type SkillStackProps = StackProps & {
   skillId?: string;
   /** `false` in tests: the marker function instead of the built bundle. */
   bundle?: boolean;
-  /** Recording mode (phase-9.md section 3): `-c sla:recordUtterances=1` for one session. */
+  /** Deprecated compatibility switch; raw recording is intentionally disabled. */
   recordUtterances?: boolean;
-  /** Phase 1 section 3: `-c sla:logSay=1` for the one recorded device session, then unset. */
+  /** Deprecated compatibility switch; model speech logging is intentionally disabled. */
   logSay?: boolean;
   /**
    * First registration only (`-c sla:skillPermissionOpen=1`): the Skill Management API
@@ -74,8 +74,7 @@ export class SkillStack extends Stack {
         NODE_OPTIONS: "--enable-source-maps",
         PUBLIC_BASE_URL: props.publicBaseUrl,
         SKILL_ID: props.skillId ?? "",
-        // "1" for a recording session only: catch-all phrasings are logged for the
-        // interaction-model training file, then the flag goes back to "0".
+        // Legacy controls are retained for compatibility; raw recording stays disabled.
         RECORD_UTTERANCES: props.recordUtterances ? "1" : "0",
         LOG_SAY: props.logSay ? "1" : "0",
         EMF_NAMESPACE: METRIC_NAMESPACE,

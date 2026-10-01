@@ -17,6 +17,7 @@ vi.mock("./agent-client.ts", () => ({ createAgentClient: mocks.createAgentClient
 
 describe("skill Lambda cold start", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.resetModules();
     mocks.getSecret.mockReset();
@@ -49,4 +50,19 @@ describe("skill Lambda cold start", () => {
     await expect(import("./lambda.ts")).rejects.toThrow("sla/skill-command has no value");
     expect(mocks.createAgentClient).not.toHaveBeenCalled();
   });
+
+  test("legacy recording switches warn that raw recording is disabled", async () => {
+  vi.stubEnv("PUBLIC_BASE_URL", "https://alexa.spokenletter.com");
+  vi.stubEnv("SKILL_ID", "amzn1.ask.skill.test");
+  vi.stubEnv("SECRETS_SKILL_COMMAND_ARN", "example-arn");
+  vi.stubEnv("RECORD_UTTERANCES", "1");
+  vi.stubEnv("LOG_SAY", "1");
+  mocks.getSecret.mockResolvedValue({ SecretString: "example-command-secret-0123456789" });
+  const { log } = await import("@spoken-letter-alexa/shared");
+  const warn = vi.spyOn(log, "warn");
+  await import("./lambda.ts");
+  expect(warn).toHaveBeenCalledWith("raw_recording_disabled", { control: "RECORD_UTTERANCES" });
+  expect(warn).toHaveBeenCalledWith("raw_recording_disabled", { control: "LOG_SAY" });
+});
+
 });
