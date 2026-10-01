@@ -80,3 +80,36 @@ The original ideal list also asks for real recipient delivery, creator notificat
 - Device routing and truthful receipts: `packages/skill/src/handler.ts:250-479`.
 - Delivered fixtures and event IDs: `fixtures/stories.json:1-31`, `fixtures/events.json:1-17`.
 - Notification payload and development endpoint: `packages/skill/src/proactive-events.ts:1-62`, `packages/skill/src/notification-worker.ts:31-72`.
+
+## 9. October 1 session-friction acceptance
+
+This section is the current acceptance matrix for [the session-friction plan](plans/2026-10-01-alexa-session-friction.md). Sections 1–8 describe the earlier fixture rehearsal; their older expected “demo/fixture” copy is not a requirement for this candidate. Current replies say “story draft,” “wish,” and “reaction.” The same fixture-only effects apply. These are designed test phrases, not a reconstruction of the September 30 speech.
+
+Current status: local integrated journeys I1–I4 passed using the real skill handler, client, Hono routes, and in-memory draft store. `amazon_routing=UNVERIFIED`; `echo_acceptance=UNVERIFIED`. All cases below are **NOT RUN** on Amazon or Echo for this candidate. Local generated en-US model SHA-256: `bf3f7afa21acaa22d0f4d49eb1b7e0155aa958402b3d0b19e074972c11db7624`. The operational verification receipt identifies the tested source; a digest alone does not establish deployment.
+
+An adult speaks the planned lines and observes audio. The agent/operator handles CLI publication, dialog requests, log retrieval, and backend readback after the applicable authorization. Every positive recognition case must work on its first attempt without fallback. An invalid turn must disclose recovery and permit the next valid answer without reopening. Record actual intent and slot presence rather than assume the invalid turn reached `AMAZON.FallbackIntent`.
+
+| Case | Planned input and sequence | Required observation | Current external status |
+| --- | --- | --- | --- |
+| R1 | Open → “let's create a story” → “mermaids” → reopen → “read my draft” | Start routes to `StartStoryIntent`, answer to `ThemeChoiceIntent`; theme prompt and reprompt; one stored mermaids receipt; readback matches its actual outline. | NOT RUN |
+| R2 | Open → “let's make a story” → “space” | First-attempt start and bare-topic recognition; one space draft. | NOT RUN |
+| R3 | Open → “I would like to create a story” → “about forest” | Start followed by existing `ThemeIntent`; one forest draft. | NOT RUN |
+| R4 | Open → “I'd like to make a story about animals” | Explicit theme on `StartStoryIntent`; one animals draft without another question. | NOT RUN |
+| R5 | Start creation → deliberately unknown response → another unknown response → “about mermaids” | Record actual routing on both invalid turns. If they reach fallback, neither writes; state stays draft, count advances 1 then 2, second guidance gives a carrier and cancel; final answer saves one draft without reopening. | NOT RUN |
+| R6 | Start creation → wait for reprompt → “space” | Reprompt asks for a theme, not playback; valid answer saves one space draft. | NOT RUN |
+| R7 | Start creation → “cancel” → reopen → “mermaids” → explicit start → valid theme | Cancellation and bare topic save nothing; reopening has no pending draft state; explicit fresh creation succeeds. Previously saved drafts can still exist. | NOT RUN |
+| R8 | Control requests: “what is new,” “play all my stories,” “play the story Ignacio the snail,” then “Alexa, pause” | Existing intent routing and listing; actual recording starts, `PlaybackStarted` observed; pause stops audio. No draft write. | NOT RUN |
+| R9 | When fixture state permits, pending wish → help/fallback → “yes”; pending reaction → help/fallback → “I love it” | Wish guidance uses yes/no; reaction guidance uses supported carriers and no; validated state survives; actual confirmed receipts agree; no unintended draft. Mark unavailable fixture state NOT RUN. | NOT RUN |
+
+For each case, record PASS/FAIL/NOT RUN, observed intent, generated-slot presence flags, code-owned response key, interaction result, bounded fallback count, ephemeral session/request hashes, receipt/readback agreement, and elapsed turn time with cold/warm status. Report case counts and individual durations. Keep Echo observations distinct from ASK logs and backend readback; a Play directive or successful backend call does not prove device audio. Do not claim a latency percentile or improvement from this small sample. Save planned phrases only in local test evidence; runtime logs must not contain unsolicited raw speech, names, user/device IDs, tokens, URLs, or model replies.
+
+### Operator checklist after separate authorization
+
+1. Revalidate clean `develop`, the exact integration commit, and the five-check local receipt. Confirm the skill is `amzn1.ask.skill.0598e354-ee92-413f-940a-61e4a6a0a2a7`, development stage, en-US, endpoint `alexa.spokenletter.com`, and actual stack outputs. Resolve the installed ASK CLI with `pnpm -F @spoken-letter-alexa/skill exec ask --version`; require 2.x. No global 1.x CLI workaround is acceptable.
+2. Apply [the documented release procedure](release.md) for `develop` → `main` and `pnpm deploy` only under release/deployment authorization. Publish metadata with the existing `pnpm -F @spoken-letter-alexa/skill deploy` only under separate ASK publication authorization. No notification send is part of this repair.
+3. Verify Amazon model build status and fetch the development model. Compare its digest with the candidate's generated model. Record skill ID, stage, locale, model digest, actual endpoint, Lambda code SHA-256 and last-modified time, plus build evidence connecting the bundle to the source candidate. Never infer Git/AWS identity from timestamps alone.
+4. Run development ASK dialog cases, then the adult Echo matrix. The operator performs software operations; the adult supplies hardware speech and observations. Preserve genuine `PlaybackStarted` and receipt-backed readback evidence.
+5. Retrieve logs read-only using AWS profile `archy`, account `106403001709`, region `us-east-1`, skill group `/aws/lambda/sla-alexa-skill`, and API group `/aws/lambda/sla-alexa-api`. Check presence/result/flow fields, response keys, fallback counter, hashed correlation, and absence of raw values. Legacy `slots` nulls mean redacted, not missing. Keep `LOG_SAY` and `RECORD_UTTERANCES` off; neither is needed or enables raw recording.
+6. A failed remote action is a retained failed result. Reproduce and repair locally and complete the new gates before requesting a new remote attempt. Do not automatically republish, redeploy, rerun CI, or send Proactive Events.
+
+Local journey implementation: `packages/skill/src/session-recovery.integration.test.ts:1`. Safe turn diagnostics: `packages/skill/src/handler.ts:678`. Model generator: `packages/skill/src/model/generate.ts:268`.

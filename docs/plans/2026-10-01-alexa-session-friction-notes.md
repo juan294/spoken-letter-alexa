@@ -53,3 +53,22 @@ Independent reviewer `review_phase2` approved T1–T6 and all changed consumers 
 
 - Generator also rewrote manifest whitespace while producing the interaction model. Restored the unchanged manifest bytes because no metadata change is required.
 - CDK encodes the effective `Sum` statistic on the metric tuple rather than on the widget defaults. The test asserts that tuple exactly, including no dimension pairs, and keeps the existing alarm/subscription counts.
+
+## Phase 2 accepted locally
+
+Full default verification on `a70f4725ff7319153f47b2aea8e04ac96b31dfa3` passed typecheck, lint, 560 tests, CDK synth, and eight E2E cases. Receipt attempt `8b18996e4688482e8876be4c532bdf80` binds candidate digest `8364afacc38e59349a55cb8384bb2cb77620ebfca730a6f9f5d08ccc869eea5c`; candidate and environment remained unchanged. F5 is resolved locally. Deployed fields and metric publication remain unverified.
+
+## Phase 3 implementation and review
+
+Added `packages/skill/src/session-recovery.integration.test.ts:1`, exercising real `createHandler`, `createAgentClient`, Hono agent routes, `MemoryDemoDraftStore`, `MemorySessionStore`, and the existing real fixture MCP/OAuth harness. Network IO is adapted to Hono requests; deterministic outline generation replaces paid model IO. The harness forwards response attributes, changes transport request IDs per turn, and repeats the exact successful request only for duplicate delivery. Every command-secret header is asserted before the real route validates it.
+
+I1–I4 passed in the initial and repaired local runs. No new production behavior is introduced in this phase, so there is no implementation red/green cycle; these integrated tests verify the already repaired behavior against the real owned modules. Removing preserved state breaks I1, removing idempotency breaks I2's same-receipt/count/generator-call assertions, allowing stale entry breaks I3, and routing named/playback text into drafts breaks I4. The earlier executed mutations already demonstrated draft-gating and state-retention sensitivity.
+
+Independent reviewer `review_phase3` independently passed all four journeys and identified two oracle gaps: hash uniqueness permitted all hashes to be absent, and session-store privacy lacked a direct assertion. Both were hardened, rerun, and approved in re-review. No actionable finding remains. The required three simplify lenses confirmed reuse of existing real test support, clear transport/state ownership, and bounded offline work; no further edit was justified. Typecheck and lint passed in preliminary runs, and relative documentation links and diff whitespace were checked. The complete final phase gate remains the next required check.
+
+The device script has nine focused NOT RUN case groups and a concrete exact-candidate release/model/Lambda/log checklist, with supported reaction carriers. The friction log preserves historical observations and records only measured local behavior. Generated model SHA-256 is `bf3f7afa21acaa22d0f4d49eb1b7e0155aa958402b3d0b19e074972c11db7624`. F6 remains monitoring-only, with no speculative latency changes or new percentile claim. D1–D5 are implemented within the Owner's authorized local scope. `amazon_routing=UNVERIFIED`, `echo_acceptance=UNVERIFIED`; all Amazon/Echo matrix cases remain NOT RUN.
+
+## Deviations, Phase 3
+
+- The planned route-test setup was extended with the existing real fixture MCP/OAuth harness so I4's unrelated playback actually runs the agent and playlist path without sockets or mocked owned modules.
+- No AWS, ASK, private-app, paid-model, or outbound operation is executed. Those are explicit separate prerequisites for device completion, not failed or skipped local software gates.
