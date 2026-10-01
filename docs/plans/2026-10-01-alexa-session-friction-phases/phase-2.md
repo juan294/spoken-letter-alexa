@@ -45,3 +45,11 @@ Test the dashboard widget's namespace, metric name, statistic, and lack of trans
 Unit A owns skill handler/telemetry tests, Lambda warning tests, and raw-recording documentation/comments. Unit B owns the fallback dashboard widget and its infrastructure tests after the metric contract above is fixed. B is `[batch-eligible]` because it has no file overlap with A and needs no implementation output. One integration owner; no working-branch publication. Keep staffing proportionate to this small change.
 
 Write red tests, implement, independently review, repair, simplify, then run the full sequential local gate. Automated acceptance: T1–T6, existing suppression tests, CDK assertions, and all five gate checks pass on exact candidate inputs. Manual acceptance: Phase 3 observes the new fields from the deployed exact candidate; until then they are local-only. Stop for Owner Phase 2 acceptance unless explicit continuation exists.
+
+## Local acceptance, 2026-10-01
+
+- [x] T1–T6 automated oracles, independent review and repairs, and simplify completed.
+- [x] Full default sequential gate passed on candidate `a70f4725ff7319153f47b2aea8e04ac96b31dfa3`: typecheck, lint, 560 tests, CDK synth, and eight E2E cases. Exact digests, earlier failures, review dispositions, and the integrated identity are in [notes](../2026-10-01-alexa-session-friction-notes.md).
+- [ ] Amazon/Echo acceptance: NOT RUN for this repair; separate publication/deployment authorization and device observation remain required.
+
+The Owner authorized continuation through all local phases and local integration, so no intermediate stop was taken.

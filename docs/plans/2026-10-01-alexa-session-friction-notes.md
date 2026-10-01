@@ -72,3 +72,13 @@ The device script has nine focused NOT RUN case groups and a concrete exact-cand
 
 - The planned route-test setup was extended with the existing real fixture MCP/OAuth harness so I4's unrelated playback actually runs the agent and playlist path without sockets or mocked owned modules.
 - No AWS, ASK, private-app, paid-model, or outbound operation is executed. Those are explicit separate prerequisites for device completion, not failed or skipped local software gates.
+
+## Phase 3 acceptance and local integration
+
+Phase 3 candidate `491694de866c991598c987311db21ac54e55c28d` passed the complete default gate: typecheck, lint, 564 tests across 69 files, Lambda bundle/CDK synth, and eight simulator E2E cases. Receipt attempt `495f8334bb3d4bb19d7633a1daebf6b0` binds candidate digest `cd29d163cdfbe565ef5d6cc9af2d18c0efb578a1e9de8a871aab589dc471f98a`; candidate/environment identity was unchanged. Independent review and simplify are complete. Coverage percentages were not collected; none is claimed.
+
+Fetched `origin` before integration and confirmed `origin/develop` still matched the baseline. The authorized local merge is `c864591cad022a938e28ad69f978a9d9fe8a02fa` on `develop`, merging the tested task branch without conflicts. Original untracked planning inputs were byte-checked and preserved under `.rpi/local/alexa-session-friction/original-planning-inputs/` before the tracked versions were integrated. This documentation completion records the merge and marks local acceptance; it does not change product source.
+
+Final integrated verification command: `python3 .rpi/scripts/rpi-verify.py --evidence .rpi/local/alexa-session-friction/final-verification.json`. That receipt records the final integrated checkout identity, all five exit codes, runtime identity, and candidate stability. Earlier receipts, red/green and mutation logs, and review dispositions are preserved under `.rpi/local/alexa-session-friction/`. Task worktree build/dependency outputs are reproducible; verification and simulator-result evidence are preserved before pruning. No foreign worktree or branch is removed.
+
+Local scope completed: F1–F5 resolved; F6 retained as monitoring-only; D1–D5 implemented. `local_verified=true` for the tested repair. `amazon_routing=UNVERIFIED`; `echo_acceptance=UNVERIFIED`. Nine external case groups are NOT RUN. The next action is separately authorized release/CDK deployment and ASK development metadata publication, followed by ASK dialog and adult Echo observation on the exact candidate. No push, deploy, publication, paid rehearsal, notification, or private-repository mutation occurred in this implementation session.

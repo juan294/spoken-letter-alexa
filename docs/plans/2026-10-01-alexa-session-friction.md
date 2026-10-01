@@ -97,3 +97,15 @@ Search: `rg -n 'createHandler|HandlerOptions|AlexaResponseEnvelope|skill_turn|De
 Current scope is planning only. Base and current source commit are `be03dd1a7ca82368a8e45a5b7b472649a5ae49fd` on `develop`; no implementation worktree exists for this plan. Findings F1–F5 are assigned above; F6 is monitored with no speculative latency work. D1–D5 are proposed design decisions ready for Owner review. Exact failed phrases and actual device acceptance remain unavailable; no claim of repair is made.
 
 On implementation entry, reread actual refs/status, this plan and the phase file, compare cited source with current files, verify the logs if still available, and preserve unrelated changes. Record tested candidate identities, red/green evidence, review/simplify results, deviations, local merge identity, and external evidence separately in [notes](2026-10-01-alexa-session-friction-notes.md). The next action is plan acceptance and explicit implementation authorization.
+
+## Implementation status, 2026-10-01
+
+The Owner authorized `/rpi-implement`, all-phase continuation, local merge into `develop`, and task worktree pruning. This status supersedes the planning-only handoff above; the original evidence and decisions remain preserved.
+
+- [x] Phase 1: S1–S9, independent review, repairs, simplify, four killed recovery mutations, and full local gate.
+- [x] Phase 2: T1–T6, independent review, simplify, three killed diagnostics mutations, and full local gate.
+- [x] Phase 3 local: I1–I4 using real owned modules, independent review with repaired oracles, simplify, concrete device checklist, and full local gate (564 tests and eight E2E cases).
+- [x] Local integration: merge `c864591cad022a938e28ad69f978a9d9fe8a02fa`; exact tested source and final integration receipt are recorded in [notes](2026-10-01-alexa-session-friction-notes.md).
+- [ ] ASK publication/deployment and device acceptance: NOT RUN; separate authorization and adult hardware observations remain prerequisites.
+
+`local_verified=true`; `amazon_routing=UNVERIFIED`; `echo_acceptance=UNVERIFIED`. F1–F5 are resolved locally, F6 remains monitoring-only. No latency improvement is claimed.

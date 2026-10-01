@@ -49,3 +49,11 @@ Local completion requires I1–I4, phase regression tests, independent review an
 Device completion additionally requires positive phrase cases to recognize correctly without fallback, matching theme reprompt, recovery without reopening, receipt/readback agreement, and unchanged real playback. Report case counts and cold/warm turn durations. The historical 3.098 s launch and 2.85 s listing were single observations; do not advertise a new p95 or latency improvement from this small rehearsal. A device failure remains a finding with a local fix or explicit disposition.
 
 Until deployment is authorized and the matrix is observed, report `local_verified=true`, `amazon_routing=UNVERIFIED`, and `echo_acceptance=UNVERIFIED` only when the respective local work has actually passed. No placeholder success values. Record actual candidate/merge identities, authorization, observations, deviations, unresolved cases, and next action in the notes.
+
+## Local acceptance, 2026-10-01
+
+- [x] I1–I4 automated oracles, independent review and repairs, and simplify completed.
+- [x] Full default sequential gate passed on candidate `491694de866c991598c987311db21ac54e55c28d`: typecheck, lint, 564 tests, CDK synth, and eight E2E cases. Exact digests, earlier failures, review dispositions, and the integrated identity are in [notes](../2026-10-01-alexa-session-friction-notes.md).
+- [ ] Amazon/Echo acceptance: NOT RUN for this repair; separate publication/deployment authorization and device observation remain required.
+
+The Owner authorized continuation through all local phases and local integration, so no intermediate stop was taken.

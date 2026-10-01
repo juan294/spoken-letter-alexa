@@ -49,3 +49,11 @@ Generator tests assert the new list slot, no bare SearchQuery sample, declared p
 One unit owns handler, generator, generated model, and their tests. These changes share state semantics, so no independent implementation batch is justified. Optional independent review is read-only and does not own files. Follow independent review → repair → simplify → full sequential `python3 .rpi/scripts/rpi-verify.py`. No Amazon/model publishing is part of this gate.
 
 Automated acceptance: S1–S9 and existing tests pass on a named candidate, model drift is zero, all five local gates pass. Manual acceptance is deferred to the exact-candidate ASK/Echo matrix in Phase 3. Stop for Owner Phase 1 acceptance unless explicit continuation has been granted. Record source identity, red/green results, review findings, simplify findings, and remaining device uncertainty in the notes.
+
+## Local acceptance, 2026-10-01
+
+- [x] S1–S9 automated oracles, independent review and repairs, and simplify completed.
+- [x] Full default sequential gate passed on candidate `84cff45`: typecheck, lint, 541 tests, CDK synth, and eight E2E cases. Exact digests, earlier failures, review dispositions, and the integrated identity are in [notes](../2026-10-01-alexa-session-friction-notes.md).
+- [ ] Amazon/Echo acceptance: NOT RUN for this repair; separate publication/deployment authorization and device observation remain required.
+
+The Owner authorized continuation through all local phases and local integration, so no intermediate stop was taken.
