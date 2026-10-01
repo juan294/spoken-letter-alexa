@@ -72,7 +72,12 @@ const NOTHING_TO_GO_BACK_TO = "That was the first one. Ask for another story ins
 const ONE_AT_A_TIME = "I play family stories one at a time.";
 const NO_PLAY = "Which delivered story would you like? You can name a title, or say play my stories.";
 const THEME_PROMPT = "What would you like your story to be about? You can say mermaids or space.";
-const DRAFT_UNAVAILABLE = "No draft was saved. Try again in a moment.";
+const DRAFT_UNAVAILABLE = "No draft was saved. You can try another theme in a moment.";
+const DRAFT_UNSUPPORTED = "No draft was saved. Try a theme such as mermaids or space.";
+const DRAFT_LIMIT = "No draft was saved. You can say read my draft, or try creating another later.";
+const REACTION_REPROMPT = "You can say I like it, I love it, or no.";
+const WISH_REPROMPT = "You can say yes or no.";
+const WISH_START = "To start a wish, say I want a story about space.";
 const NAMED_HANDOFF = "I can help you start a story. Open Spoken Letter to choose the listener and send it.";
 const CREDITS_HELP = "You can add story credits in Spoken Letter.";
 const CREATION_HELP = "To get started here, say let's create a story. You can finish your draft, record a story, and choose who to send it to in Spoken Letter.";
@@ -94,6 +99,46 @@ function safeDemoTopic(speech: string | undefined): string | null {
     ["bedtime", /\b(?:bedtime|sleep)\b/],
   ];
   return topics.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+}
+
+const SAFE_TOPICS = new Set(["mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime"]);
+
+/** Rebuild only code-owned state; neither arbitrary attributes nor wish prose can survive. */
+function validatedSession(attributes: Record<string, string> | undefined): Record<string, string> {
+  const state: Record<string, string> = {};
+  const flow = attributes?.demoFlow;
+  if (flow === "draft" || flow === "reaction") state.demoFlow = flow;
+  if (flow === "wish" && attributes?.demoTopic && SAFE_TOPICS.has(attributes.demoTopic)
+      && (!attributes.demoStoryteller || SAFE_STORYTELLERS.has(attributes.demoStoryteller))) {
+    state.demoFlow = "wish";
+    state.demoTopic = attributes.demoTopic;
+    if (attributes.demoStoryteller) state.demoStoryteller = attributes.demoStoryteller;
+  }
+  if (attributes?.fallbackCount === "1" || attributes?.fallbackCount === "2") state.fallbackCount = attributes.fallbackCount;
+  return state;
+}
+
+function recovery(state: Record<string, string>, fallback: boolean): AlexaResponseEnvelope {
+  const count = fallback ? (state.fallbackCount ? "2" : "1") : undefined;
+  const repeated = count === "2";
+  const next = { ...state };
+  delete next.fallbackCount;
+  if (count) next.fallbackCount = count;
+  let text = HELP;
+  let reprompt = REPROMPT;
+  if (state.demoFlow === "draft") {
+    text = repeated ? "Say about mermaids to choose a theme, or say cancel." : THEME_PROMPT;
+    reprompt = THEME_PROMPT;
+  } else if (state.demoFlow === "reaction") {
+    text = repeated ? "Say I love that story, or say cancel." : "Did you like or love that story?";
+    reprompt = REACTION_REPROMPT;
+  } else if (state.demoFlow === "wish") {
+    text = repeated ? "Say yes to save your wish, or say cancel." : "Would you like to save your wish? Say yes or no.";
+    reprompt = WISH_REPROMPT;
+  } else if (repeated) {
+    text = "Say let's create a story, play my stories, or cancel.";
+  }
+  return { ...ask(text, reprompt), sessionAttributes: next };
 }
 
 /** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
@@ -124,12 +169,12 @@ function speak(text: string, options: { reprompt?: string; endSession: boolean; 
 const EMPTY: AlexaResponseEnvelope = { version: "1.0", response: {} };
 
 /** A question: the session stays open with the standard reprompt. */
-const ask = (text: string) => speak(text, { reprompt: REPROMPT, endSession: false });
+const ask = (text: string, reprompt = REPROMPT) => speak(text, { reprompt, endSession: false });
 /** A closing line, optionally with playback: the session ends. */
 const tell = (text: string, directives?: AudioDirective[]) => speak(text, { endSession: true, ...(directives && { directives }) });
 /** Playback control without speech. */
 const control = (directives: AudioDirective[]): AlexaResponseEnvelope => ({ version: "1.0", response: { directives, shouldEndSession: true } });
-const askForTheme = (text = THEME_PROMPT): AlexaResponseEnvelope => ({ ...ask(text), sessionAttributes: { demoFlow: "draft" } });
+const askForTheme = (text = THEME_PROMPT): AlexaResponseEnvelope => ({ ...ask(text, THEME_PROMPT), sessionAttributes: { demoFlow: "draft" } });
 
 /** Resume, start over and repeat all decode the current AudioPlayer token and re-issue a play directive, differing only in the offset. */
 function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number): AlexaResponseEnvelope {
@@ -240,7 +285,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         try {
           const next = await options.agent.demoNext({ deviceUserId });
           if (next.pendingReaction) {
-            return { ...ask(`Did you like or love ${next.pendingReaction.title}?`), sessionAttributes: { demoFlow: "reaction" } };
+            return { ...ask(`Did you like or love ${next.pendingReaction.title}?`, REACTION_REPROMPT), sessionAttributes: { demoFlow: "reaction" } };
           }
           if (next.event) {
             const response = ask(`${next.event.detail} You can say let's create a story.`);
@@ -283,12 +328,13 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           await options.agent.saveDraft({ deviceUserId, requestId: event.request.requestId, theme });
           return tell("I saved your story draft. Open Spoken Letter to choose the listener and finish it.");
         } catch (error) {
-          if (error instanceof AgentHttpError && error.code === "unsupported_theme") return askForTheme(error.message);
+          if (error instanceof AgentHttpError && error.code === "unsupported_theme") return askForTheme(DRAFT_UNSUPPORTED);
+          if (error instanceof AgentHttpError && error.code === "draft_limit_reached") return ask(DRAFT_LIMIT, "You can say read my draft.");
           return askForTheme(DRAFT_UNAVAILABLE);
         }
       };
       const saveReaction = async (choice: "like" | "love" | "dismiss"): Promise<AlexaResponseEnvelope> => {
-        if (!options.agent.demoReact) return { ...ask(REACTION_UNAVAILABLE), sessionAttributes: { demoFlow: "reaction" } };
+        if (!options.agent.demoReact) return { ...ask(REACTION_UNAVAILABLE, REACTION_REPROMPT), sessionAttributes: { demoFlow: "reaction" } };
         try {
           const reply: unknown = await options.agent.demoReact({ deviceUserId, requestId: event.request.requestId, choice });
           if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== (choice === "dismiss" ? "dismissed" : "saved")) throw new Error("incomplete demo reaction receipt");
@@ -296,17 +342,17 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           return choice === "dismiss" ? tell("Okay. Maybe next time.") : tell(`I saved that you ${choice === "love" ? "loved" : "liked"} the story.`);
         } catch (error) {
           if (error instanceof AgentHttpError && error.code === "no_pending_reaction") return tell("There is no completed story waiting for a reaction.");
-          return { ...ask(REACTION_UNAVAILABLE), sessionAttributes: { demoFlow: "reaction" } };
+          return { ...ask(REACTION_UNAVAILABLE, REACTION_REPROMPT), sessionAttributes: { demoFlow: "reaction" } };
         }
       };
       const saveWish = async (topic: string, storyteller?: string): Promise<AlexaResponseEnvelope> => {
-        if (!options.agent.demoWish) return ask(WISH_UNAVAILABLE);
+        if (!options.agent.demoWish) return { ...ask(WISH_UNAVAILABLE, WISH_REPROMPT), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } };
         try {
           const receipt: unknown = await options.agent.demoWish({ deviceUserId, requestId: event.request.requestId, topic, ...(storyteller && { storyteller }), confirmed: true });
           if (!receipt || typeof receipt !== "object" || !("status" in receipt) || receipt.status !== "saved" || !("wishId" in receipt) || typeof receipt.wishId !== "string" || !receipt.wishId) throw new Error("incomplete demo wish receipt");
           return tell("I saved your wish.");
         } catch {
-          return { ...ask(WISH_UNAVAILABLE), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } };
+          return { ...ask(WISH_UNAVAILABLE, WISH_REPROMPT), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } };
         }
       };
       if (type === "SessionEndedRequest") return EMPTY;
@@ -339,9 +385,10 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const intent = event.request.intent?.name ?? "";
       const observed = event.context.AudioPlayer?.token;
       const tokenInput = observed ? { observedToken: observed } : {};
-      const pendingDraft = event.session?.attributes?.demoFlow === "draft";
-      const pendingReaction = event.session?.attributes?.demoFlow === "reaction";
-      const pendingWish = event.session?.attributes?.demoFlow === "wish";
+      const state = validatedSession(event.session?.attributes);
+      const pendingDraft = state.demoFlow === "draft";
+      const pendingReaction = state.demoFlow === "reaction";
+      const pendingWish = state.demoFlow === "wish";
       telemetry.intent = intent;
       const slots = loggedSlots(event);
       if (slots !== undefined) telemetry.slots = slots;
@@ -375,37 +422,48 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           // Acknowledged, not silently ignored — a skill that answers nothing reads as broken.
           return ask(ONE_AT_A_TIME);
         case "AMAZON.HelpIntent":
+          if (event.session?.attributes?.demoFlow === "wish" && !pendingWish) return ask(WISH_START, WISH_START);
+          return recovery(state, false);
         case "AMAZON.FallbackIntent":
-          return ask(HELP);
+          if (event.session?.attributes?.demoFlow === "wish" && !pendingWish) return ask(WISH_START, WISH_START);
+          return recovery(state, true);
         default:
           break;
       }
 
+      if (pendingDraft && intent === "AMAZON.NoIntent") return tell("Okay. No draft was saved.");
+      if (intent === "ThemeChoiceIntent") {
+        if (!pendingDraft) return pendingWish || pendingReaction ? recovery(state, false) : ask(CREATION_HELP);
+        const theme = slotValue(event, "drafttheme");
+        return theme ? saveDemoDraft(theme) : askForTheme();
+      }
       if (pendingReaction && intent === "AMAZON.NoIntent") return saveReaction("dismiss");
       if (intent === "ReactToStoryIntent") {
         const spokenChoice = slotValue(event, "choice")?.toLocaleLowerCase("en-US");
         if (spokenChoice === "like" || spokenChoice === "liked") return saveReaction("like");
         if (spokenChoice === "love" || spokenChoice === "loved") return saveReaction("love");
-        return { ...ask("Did you like or love that story?"), sessionAttributes: { demoFlow: "reaction" } };
+        return { ...ask("Did you like or love that story?", REACTION_REPROMPT), sessionAttributes: { demoFlow: "reaction" } };
       }
       if (pendingWish && intent === "AMAZON.NoIntent") return tell("Okay. No wish was saved.");
       if (pendingWish && intent === "AMAZON.YesIntent") {
-        const topic = safeDemoTopic(event.session?.attributes?.demoTopic);
-        const storyteller = event.session?.attributes?.demoStoryteller;
+        const topic = state.demoTopic ?? null;
+        const storyteller = state.demoStoryteller;
         if (!topic || (storyteller && !SAFE_STORYTELLERS.has(storyteller))) return ask("What would you like your story to be about?");
         return saveWish(topic, storyteller);
       }
+
+      if (intent === "AMAZON.YesIntent" && !pendingWish) return ask(WISH_START);
 
       const catchAll = intent === "CatchAllIntent" ? slotValue(event, "text") : undefined;
       const catchAllAsk = catchAll ? /^ask\s+(.+?)\s+for\b.*\bstory\b/i.exec(catchAll) : null;
       const catchAllWish = catchAll && /^i\s+(?:want|wish)\b.*\bstory\b.*\babout\b/i.test(catchAll);
       if (intent === "WishStoryIntent" || catchAllWish || catchAllAsk) {
         const topic = safeDemoTopic(slotValue(event, "wishtopic") ?? catchAll);
-        if (!topic) return ask("What would you like your story to be about? Try mermaids or space.");
+        if (!topic) return ask(WISH_START, WISH_START);
         const rawStoryteller = slotValue(event, "storyteller") ?? catchAllAsk?.[1];
         const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(rawStoryteller.toLocaleLowerCase("en-US")) : undefined;
-        if (rawStoryteller && !spokenStoryteller) return ask("Who would you like a story from?");
-        return { ...ask(`Save a wish for a ${topic} story${spokenStoryteller ? ` from ${spokenStoryteller}` : ""}? Say yes or no.`),
+        if (rawStoryteller && !spokenStoryteller) return ask("Who would you like a story from?", WISH_START);
+        return { ...ask(`Save a wish for a ${topic} story${spokenStoryteller ? ` from ${spokenStoryteller}` : ""}? Say yes or no.`, WISH_REPROMPT),
           sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(spokenStoryteller && { demoStoryteller: spokenStoryteller }) } };
       }
       if (intent === "UpdatesIntent") {
@@ -533,7 +591,10 @@ export function createHandler(options: HandlerOptions): SkillHandler {
     }
 
     try {
-      return await respond();
+      const response = await respond();
+      return type === "IntentRequest" || type === "LaunchRequest"
+        ? { ...response, sessionAttributes: validatedSession(response.sessionAttributes) }
+        : response;
     } finally {
       const ms = Math.round(performance.now() - started);
       const dimensionIntent = telemetry.intent ?? type;

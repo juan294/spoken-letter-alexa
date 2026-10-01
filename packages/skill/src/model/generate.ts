@@ -282,7 +282,12 @@ export function generateInteractionModel(input: { training: string[]; stories: C
     {
       name: "StartStoryIntent",
       slots: [{ name: "theme", type: "AMAZON.SearchQuery" }],
-      samples: ["let's create a story", "create a story", "make a story", "let's create a bedtime story", "create a story about {theme}", "make a story about {theme}"],
+      samples: ["let's create a story", "create a story", "make a story", "let's create a bedtime story", "create a story about {theme}", "make a story about {theme}", "let's make a story", "i would like to create a story", "i'd like to make a story", "let's make a story about {theme}", "i would like to create a story about {theme}", "i'd like to make a story about {theme}"],
+    },
+    {
+      name: "ThemeChoiceIntent",
+      slots: [{ name: "drafttheme", type: "DemoTopic" }],
+      samples: ["{drafttheme}"],
     },
     {
       name: "ThemeIntent",
