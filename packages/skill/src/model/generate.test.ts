@@ -57,10 +57,12 @@ describe("generateInteractionModel", () => {
 
   test("playlist intents distinguish all, newest, creator, and reset", () => {
     expect(byName.PlayAllIntent?.samples).toContain("play my stories");
+    expect(byName.PlayAllIntent?.samples).toContain("play my spoken letter stories");
     expect(byName.PlayNewStoriesIntent?.samples).toContain("play my new stories");
     expect(byName.PlayCreatorStoriesIntent?.slots).toEqual([{ name: "storyteller", type: "StorytellerName" }]);
     expect(byName.StartPlaylistOverIntent?.samples).toContain("start the playlist over");
     expect(byName.PlayAgainIntent?.samples).toContain("play it again");
+    expect(byName.PlayAgainIntent?.samples).toContain("start all over");
     expect(byName.PlayStoryIntent?.samples).not.toContain("play it again");
   });
 

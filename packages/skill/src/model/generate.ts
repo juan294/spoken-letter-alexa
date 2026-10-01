@@ -327,8 +327,8 @@ export function generateInteractionModel(input: { training: string[]; stories: C
       samples: ["i {choice} that story", "i {choice} it", "that story was {choice}"],
     },
     { name: "UpdatesIntent", samples: ["show my updates", "tell me my updates", "any updates", "what are my updates"] },
-    { name: "PlayAllIntent", samples: ["play my stories", "play all my stories", "play the whole playlist", "shuffle my stories"] },
-    { name: "PlayAgainIntent", samples: ["play it again", "play that again", "play the current story again"] },
+    { name: "PlayAllIntent", samples: ["play my stories", "play my spoken letter stories", "play all my stories", "play the whole playlist", "shuffle my stories"] },
+    { name: "PlayAgainIntent", samples: ["play it again", "play that again", "play the current story again", "start all over"] },
     { name: "PlayNewStoriesIntent", samples: ["play my new stories", "play the new stories", "play my newest stories"] },
     {
       name: "PlayCreatorStoriesIntent",
