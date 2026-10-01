@@ -259,6 +259,7 @@
           "name": "PlayAllIntent",
           "samples": [
             "play my stories",
+            "play my spoken letter stories",
             "play all my stories",
             "play the whole playlist",
             "shuffle my stories"
@@ -269,7 +270,8 @@
           "samples": [
             "play it again",
             "play that again",
-            "play the current story again"
+            "play the current story again",
+            "start all over"
           ]
         },
         {
