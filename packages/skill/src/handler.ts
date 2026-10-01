@@ -525,7 +525,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const catchAll = intent === "CatchAllIntent" ? slotValue(event, "text") : undefined;
       const catchAllAsk = catchAll ? /^ask\s+(.+?)\s+for\b.*\bstory\b/i.exec(catchAll) : null;
       const catchAllWish = catchAll && /^i\s+(?:want|wish)\b.*\bstory\b.*\babout\b/i.test(catchAll);
-      if (intent === "WishStoryIntent" || catchAllWish || catchAllAsk) {
+      if (intent === "WishFromStorytellerIntent" && !slotValue(event, "storyteller")) return ask("Who would you like a story from?", WISH_START, "wish_start");
+      if (intent === "WishStoryIntent" || intent === "WishFromStorytellerIntent" || catchAllWish || catchAllAsk) {
         const topic = safeDemoTopic(slotValue(event, "wishtopic") ?? catchAll);
         if (!topic) return ask(`What would you like your story to be about? ${WISH_START}`, WISH_START, "wish_start");
         const rawStoryteller = slotValue(event, "storyteller") ?? catchAllAsk?.[1];
@@ -548,6 +549,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           return ask("I couldn't read your updates right now. Try again in a moment.", REPROMPT, "updates_retry", "retry");
         }
       }
+      if (intent === "AppHandoffIntent") return ask(NAMED_HANDOFF, REPROMPT, "handoff", "handoff");
+      if (intent === "CreditHelpIntent") return ask(CREDITS_HELP, REPROMPT, "credits_help", "handoff");
       if (catchAll && /\b(?:send|deliver)\b/i.test(catchAll)) return ask(NAMED_HANDOFF, REPROMPT, "handoff", "handoff");
       if (catchAll && /\b(?:create|make)\b.*\bfor\b/i.test(catchAll)) return ask(NAMED_HANDOFF, REPROMPT, "handoff", "handoff");
       const helpTopic = intent === "HelpTopicIntent" ? slotValue(event, "topic") : catchAll;
@@ -593,7 +596,10 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         if (intent === "PlayStoryIntent") {
           const title = slotValue(event, "title");
           const storyteller = slotValue(event, "storyteller");
-          if (title) return command({ command: "title", title, ...(storyteller && { storyteller }) });
+          if (title) {
+            const shortTitle = /^(?:the\s+)?(.+?)\s+story$/i.exec(title)?.[1];
+            return command({ command: "title", title: shortTitle ?? title, ...(storyteller && { storyteller }) });
+          }
           return command({ command: "start", order: "shuffle", ...(storyteller && { storyteller }) });
         }
         if (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent") {

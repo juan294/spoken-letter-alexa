@@ -15,7 +15,7 @@
     "test": "vitest run",
     "build": "pnpm -r --if-present build",
     "synth": "pnpm -F infra synth",
-    "deploy": "pnpm -F infra deploy",
+    "deploy": "pnpm -F infra run deploy",
     "dev": "node scripts/dev.mjs",
     "dev:offline": "AGENT_OFFLINE=1 node scripts/dev.mjs",
     "test:e2e": "pnpm -F @spoken-letter-alexa/simulator test:e2e"

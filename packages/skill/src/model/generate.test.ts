@@ -38,6 +38,9 @@ describe("generateInteractionModel", () => {
         "HelpTopicIntent",
         "ReadDemoDraftIntent",
         "WishStoryIntent",
+        "WishFromStorytellerIntent",
+        "AppHandoffIntent",
+        "CreditHelpIntent",
         "ReactToStoryIntent",
         "UpdatesIntent",
         "NextStoryIntent",
@@ -72,12 +75,13 @@ describe("generateInteractionModel", () => {
   });
 
   test("fixture wishes, reactions, and updates have dedicated safe intents", () => {
-    expect(byName.WishStoryIntent?.slots).toEqual([
+    expect(byName.WishStoryIntent?.slots).toEqual([{ name: "wishtopic", type: "DemoTopic" }]);
+    expect(byName.WishFromStorytellerIntent?.slots).toEqual([
       { name: "wishtopic", type: "DemoTopic" },
       { name: "storyteller", type: "StorytellerName" },
     ]);
     expect(byName.WishStoryIntent?.samples).toContain("i want a story about {wishtopic}");
-    expect(byName.WishStoryIntent?.samples).toContain("ask {storyteller} for another {wishtopic} story");
+    expect(byName.WishFromStorytellerIntent?.samples).toContain("ask {storyteller} for another {wishtopic} story");
     expect(model.interactionModel.languageModel.types.find((type) => type.name === "DemoTopic")?.values.map((value) => value.name.value)).toEqual([
       "mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime",
     ]);
@@ -148,13 +152,17 @@ describe("generateInteractionModel", () => {
 
   test("no utterance names a child, a denylisted fragment or a non-ASCII character", () => {
     const samples = intents.flatMap((intent) => intent.samples);
+    const handoffSamples = new Set(byName.AppHandoffIntent!.samples);
+    const creditSamples = new Set(byName.CreditHelpIntent!.samples);
     for (const sample of samples) {
-      // The generator's own filter for recorded phrasings must accept every fixed sample too.
-      expect(utteranceAllowed(sample)).toBe(true);
+      // These fixed intents only explain the app handoff. Raw training stays denied.
+      const safeHandoff = handoffSamples.has(sample);
+      const safeCreditHelp = creditSamples.has(sample);
+      if (!safeHandoff && !safeCreditHelp) expect(utteranceAllowed(sample)).toBe(true);
       expect(sample).toMatch(/^[a-z0-9 {}']+$/);
       expect(sample).not.toMatch(/\b(?:demo|fixture)\b/i);
       for (const denied of CLASS_C_DENYLIST) {
-        if (denied.fragment === "record" || denied.fragment === "audio") continue; // never appear either; asserted below
+        if ((safeHandoff && denied.fragment === "send") || (safeCreditHelp && denied.fragment === "credit")) continue;
         expect(sample.includes(denied.fragment)).toBe(false);
       }
       expect(sample).not.toMatch(/\b(kid|kids|child|children|son|daughter)\b/);
@@ -261,4 +269,15 @@ test("bare topics use a distinct custom slot and explicit creation paraphrases",
       if (slot.type === "AMAZON.SearchQuery") expect(intent.samples).not.toContain(`{${slot.name}}`);
     }
   }
+});
+
+test("bare handoff and credits have dedicated recognition paths", () => {
+  expect(byName.AppHandoffIntent?.samples).toContain("send {listeneralias} a spoken letter");
+  expect(byName.CreditHelpIntent?.samples).toContain("add story credits");
+  expect(byName.WishStoryIntent?.samples).not.toContain("ask {storyteller} for another {wishtopic} story");
+});
+
+test("handoff words remain excluded from imported training", () => {
+  expect(utteranceAllowed("send morgan a spoken letter")).toBe(false);
+  expect(utteranceAllowed("add story credits")).toBe(false);
 });

@@ -95,11 +95,11 @@ The simulated Alexa+ client runs with `pnpm dev` (server on `:4310`, Vite on
 or `pnpm dev:offline` (scripted model, canned transcript, no AWS). `pnpm test:e2e` runs
 the Playwright smoke against the simulator's in-app mock.
 
-Deploy (Owner, Phase 6 onward): `pnpm deploy`. Release procedure: `docs/release.md`.
+Deploy (Owner, Phase 6 onward): `pnpm run deploy`. Release procedure: `docs/release.md`.
 
 Real device (Phase 9): a thin classic Alexa Skill in `packages/skill` calls the same agent
 endpoint and plays the family MP3 through `AudioPlayer` on an Echo. `pnpm -F skill generate`
-rebuilds the interaction model from the tool metadata; `pnpm -F skill deploy` creates the
+rebuilds the interaction model from the tool metadata; `pnpm -F @spoken-letter-alexa/skill run deploy` creates the
 development-stage skill with the ASK CLI (Owner gate); `pnpm -F skill record:pull` imports
 historical raw records only. Raw recording and model-speech logging are intentionally
 disabled, including when the deprecated `RECORD_UTTERANCES` or `LOG_SAY` switches are set.

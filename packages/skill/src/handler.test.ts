@@ -942,3 +942,35 @@ describe("safe session diagnostics", () => {
     expect(lines[2]?.flowAfter).toBe("none");
   });
 });
+
+test("bare app handoff and credit intents discard aliases without writes", async () => {
+  const agent = fakeAgent({ saveDraft: vi.fn(), demoWish: vi.fn(), demoReact: vi.fn(), playlist: vi.fn() });
+  const handler = createHandler({ skillId: SKILL_ID, agent });
+  const named = await handler(intent("AppHandoffIntent", { listeneralias: "Morgan" }));
+  expect(ssml(named)).toContain("Open Spoken Letter");
+  expect(ssml(named)).not.toContain("Morgan");
+  expect(ssml(await handler(intent("CreditHelpIntent")))).toContain("add story credits in Spoken Letter");
+  expect(agent.turn).not.toHaveBeenCalled();
+  expect(agent.saveDraft).not.toHaveBeenCalled();
+  expect(agent.demoWish).not.toHaveBeenCalled();
+  expect(agent.demoReact).not.toHaveBeenCalled();
+  expect(agent.playlist).not.toHaveBeenCalled();
+});
+
+test("named wish with an omitted unknown storyteller asks who instead of dropping the request", async () => {
+  const demoWish = vi.fn();
+  const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoWish }) });
+  const response = await handler(intent("WishFromStorytellerIntent", { wishtopic: "mermaids" }));
+  expect(ssml(response)).toContain("Who would you like a story from");
+  expect(response.sessionAttributes).toEqual({});
+  expect(demoWish).not.toHaveBeenCalled();
+});
+
+test("title playback removes the spoken short-title story wrapper", async () => {
+  const playlist = vi.fn().mockResolvedValue({ action: "none", say: "Which story?" });
+  const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) });
+  await handler(intent("PlayStoryIntent", { title: "the Ignacio story" }));
+  expect(playlist).toHaveBeenLastCalledWith(expect.objectContaining({ command: "title", title: "Ignacio" }));
+  await handler(intent("PlayStoryIntent", { title: "Ignacio the snail" }));
+  expect(playlist).toHaveBeenLastCalledWith(expect.objectContaining({ command: "title", title: "Ignacio the snail" }));
+});

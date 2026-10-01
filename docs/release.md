@@ -16,7 +16,7 @@ Values marked "Phase N" are fixed by the plan and become real when that phase la
 | Primary product type | Monorepo: MCP server, OAuth 2.1 server, agent API, static simulator SPA, CDK |
 | Package/build system | pnpm workspaces, TypeScript 6, ESLint 9, vitest, AWS CDK (Phase 0) |
 | Integration branch | `develop` (default local branch) |
-| Production branch | `main` (receives `develop` by local merge; a deploy is an explicit `pnpm deploy`) |
+| Production branch | `main` (receives `develop` by local merge; a deploy is an explicit `pnpm run deploy`) |
 | Merge strategy | Local integration on `develop`, local merge into `main` at release; no PR flow in September |
 | Release artifact | Git commit on `main` deployed by CDK (Lambda code plus S3 assets) |
 | Deployment provider | AWS CDK from the Owner's machine, profile `archy`, account `106403001709`, `us-east-1` |
@@ -64,7 +64,7 @@ fixture provider, which lets every tool be exercised without the private reposit
 
 ### A1. One source of truth for release steps
 
-- The release steps are this file plus `pnpm deploy`. `README.md`, `AGENTS.md` and the
+- The release steps are this file plus `pnpm run deploy`. `README.md`, `AGENTS.md` and the
   CI workflow link here and do not restate the sequence.
 - Stale-text scan before each release: branch names, test commands, deploy command,
   domain, AWS account and profile.
@@ -101,7 +101,7 @@ pnpm build                                        # simulator dist + infra/dist/
 pnpm -F infra exec cdk bootstrap                  # once per account/region
 
 # Deploy 1: Core, Simulator, Api, Edge, Observability, Skill (no gateway yet)
-pnpm deploy -c sla:certificateArn=arn:aws:acm:us-east-1:106403001709:certificate/<id>
+pnpm run deploy -c sla:certificateArn=arn:aws:acm:us-east-1:106403001709:certificate/<id>
 pnpm -F infra seed:secrets                        # keeps existing values; --rotate-bridge / --rotate-m2m to rotate
 # The latency workflow's repository secret is the alexa-m2m value just seeded. Read it first,
 # set it only when the read succeeded (a bare pipe would store an empty value on failure), never paste it:
@@ -111,26 +111,26 @@ m2m=$(aws secretsmanager get-secret-value --secret-id sla/oauth-clients --query 
 node scripts/verify-deploy.mjs                    # DNS, TLS and the server answer before the gateway exists
 
 # Deploy 2: the AgentCore Gateway (needs the public endpoint to resolve)
-pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1
+pnpm run deploy -c sla:certificateArn=... -c sla:deployGateway=1
 #   prints SpokenLetterAlexaGateway.GatewayUrl
 
 # Deploy 3: the agent targets the gateway (SigV4-signed, D19)
-pnpm deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
+pnpm run deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
 
 # Skill (Phase 9): open trigger, create the development-stage skill, lock the trigger to its id
-pnpm deploy -c sla:skillPermissionOpen=1          # first registration only: any Alexa skill may invoke the Lambda for a minute
-pnpm -F skill deploy                              # ask deploy creates the skill and records sla:skillId
-pnpm deploy                                      # replaces the open trigger with one locked to the skill id
+pnpm run deploy -c sla:skillPermissionOpen=1          # first registration only: any Alexa skill may invoke the Lambda for a minute
+pnpm -F @spoken-letter-alexa/skill run deploy                              # ask deploy creates the skill and records sla:skillId
+pnpm run deploy                                      # replaces the open trigger with one locked to the skill id
 ```
 
-Pass `-c` directly after `pnpm deploy` (a `--` separator makes pnpm swallow the flags
+Use `run deploy` explicitly: pnpm 11 also has a built-in `deploy` command that packages a workspace instead of invoking CDK. Pass `-c` directly after `pnpm run deploy` (a `--` separator makes pnpm swallow the flags
 and the stacks silently skip). Put the context keys in `infra/cdk.context.json` after the
-first run so the commands shorten to `pnpm deploy`. Keys: `sla:certificateArn` (the ACM certificate for
+first run so the commands shorten to `pnpm run deploy`. Keys: `sla:certificateArn` (the ACM certificate for
 `alexa.spokenletter.com` in `us-east-1`; without it EdgeStack is skipped and the function
 URL answers 403 to everything, since only CloudFront carries `x-origin-verify`, D18),
 `sla:alertEmail` (defaults to the Owner's address), `sla:deployGateway` (`1` from the
 second deploy on), `sla:gatewayUrl` (the `GatewayUrl` output; from the third deploy on
-the agent's `MCP_URL` is the gateway), `sla:skillId` (written by `pnpm -F skill deploy`).
+the agent's `MCP_URL` is the gateway), `sla:skillId` (written by `pnpm -F @spoken-letter-alexa/skill run deploy`).
 Every deploy runs with `PROVIDER_MODE=fixtures` for every subject; Phase 8 switches to
 `auto` after the private bridge lands.
 
@@ -143,7 +143,7 @@ seeded `sla/oauth-clients` document the authenticated checks run too. From Spain
 
 1. Identify the candidate: merge `develop` into `main` locally, then `git rev-parse main`, clean tree.
 2. Run the local gate: `python3 .rpi/scripts/rpi-verify.py`.
-3. Deploy that candidate: `pnpm deploy` (Owner authorization).
+3. Deploy that candidate: `pnpm run deploy` (Owner authorization).
 4. Verify deployed identity (`/healthz`).
 5. Run the A3 probes.
 6. Record results in the friction log entry for the release.

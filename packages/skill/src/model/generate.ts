@@ -72,6 +72,7 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
       "let's hear the story {storyteller} sent",
       "play {title}",
       "play the story {title}",
+      "play the {title} story",
       "play the story called {title}",
       "play the one about {title}",
       "play the one called {title}",
@@ -303,8 +304,22 @@ export function generateInteractionModel(input: { training: string[]; stories: C
     {
       name: "WishStoryIntent",
       // Alexa requires a slot name to keep one type across intents; HelpTopicIntent uses `topic` for SearchQuery.
+      slots: [{ name: "wishtopic", type: "DemoTopic" }],
+      samples: ["i want a story about {wishtopic}", "i wish for a story about {wishtopic}"],
+    },
+    {
+      name: "WishFromStorytellerIntent",
       slots: [{ name: "wishtopic", type: "DemoTopic" }, { name: "storyteller", type: "StorytellerName" }],
-      samples: ["i want a story about {wishtopic}", "i wish for a story about {wishtopic}", "ask {storyteller} for another {wishtopic} story", "i wish for another {wishtopic} story from {storyteller}"],
+      samples: ["ask {storyteller} for another {wishtopic} story", "i wish for another {wishtopic} story from {storyteller}"],
+    },
+    {
+      name: "AppHandoffIntent",
+      slots: [{ name: "listeneralias", type: "AMAZON.FirstName" }],
+      samples: ["send {listeneralias} a spoken letter", "create a story for {listeneralias}", "can you send {listeneralias} a spoken letter", "can you create a story for {listeneralias}"],
+    },
+    {
+      name: "CreditHelpIntent",
+      samples: ["add story credits", "can you add story credits", "how do i add story credits"],
     },
     {
       name: "ReactToStoryIntent",
