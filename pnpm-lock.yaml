@@ -12,6 +12,9 @@ overrides:
   ip-address@<10.7.1: 10.7.1
   semver@>=7.0.0 <7.5.2: 7.5.2
   uuid@<11.1.1: 11.1.1
+  proxy-addr@<2.0.8: 2.0.8
+  simple-git@<4.0.1: 4.0.1
+  '@simple-git/argv-parser@<2.0.1': 2.0.1
 
 importers:
 
@@ -114,7 +117,7 @@ importers:
         version: link:../shared
       '@strands-agents/sdk':
         specifier: 1.16.0
-        version: 1.16.0(@aws-sdk/client-s3@3.1127.0)(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(@opentelemetry/api@1.9.1)(@smithy/types@4.18.0)(express@5.2.1(supports-color@9.4.0))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.5.4)
+        version: 1.16.0(@aws-sdk/client-s3@3.1127.0)(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(@opentelemetry/api@1.9.1)(@smithy/types@4.18.0)(express@5.2.1(supports-color@9.4.0))(supports-color@9.4.0)(typescript@6.0.3)(zod@4.5.4)
       ffmpeg-static:
         specifier: 5.3.0
         version: 5.3.0(supports-color@9.4.0)
@@ -1494,11 +1497,11 @@ packages:
       zen-observable:
         optional: true
 
-  '@simple-git/args-pathspec@1.0.3':
-    resolution: {integrity: sha512-ngJMaHlsWDTfjyq9F3VIQ8b7NXbBLq5j9i5bJ6XLYtD6qlDXT7fdKY2KscWWUF8t18xx052Y/PUO1K1TRc9yKA==}
+  '@simple-git/args-pathspec@1.0.4':
+    resolution: {integrity: sha512-EtMX6XjRWSastG2SdkmSQByPtJ9dx/NIjnHbpQPCYt62j4RmSx5rgLTGpw0YCjF5h191gZOmBfheOT23cRSFdw==}
 
-  '@simple-git/argv-parser@1.1.1':
-    resolution: {integrity: sha512-Q9lBcfQ+VQCpQqGJFHe5yooOS5hGdLFFbJ5R+R5aDsnkPCahtn1hSkMcORX65J2Z5lxSkD0lQorMsncuBQxYUw==}
+  '@simple-git/argv-parser@2.0.1':
+    resolution: {integrity: sha512-M++IaVWrN+vYalilOHfwvT2IL3wYZtVEBQpmX6DLSOJLtxbZ+SUeIDE3IiPogzhPACLajwtxfa5rp+ZX1FczzQ==}
 
   '@sinonjs/commons@3.0.1':
     resolution: {integrity: sha512-K3mCHKQ9sVh8o1C9cxkwxaOmXoAMlDxC1mYyHrjqOWEcBjYr76t96zL2zlj5dUGZ3HSw240X1qgH3Mjf1yJWpQ==}
@@ -3503,8 +3506,8 @@ packages:
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
 
-  proxy-addr@2.0.7:
-    resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
+  proxy-addr@2.0.8:
+    resolution: {integrity: sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==}
     engines: {node: '>= 0.10'}
 
   proxy-from-env@2.1.0:
@@ -3720,8 +3723,8 @@ packages:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
 
-  simple-git@3.36.0:
-    resolution: {integrity: sha512-cGQjLjK8bxJw4QuYT7gxHw3/IouVESbhahSsHrX97MzCL1gu2u7oy38W6L2ZIGECEfIBG4BabsWDPjBxJENv9Q==}
+  simple-git@4.0.1:
+    resolution: {integrity: sha512-3OXqp9MDRL+IlkJz0qUkm7dZoxVi61xdX2RF8fOA2OHHA8BNAVD+UdiXZ+5VYkrYZZ31OCIcAm8F8xnHOSRmrg==}
 
   simple-update-notifier@1.1.0:
     resolution: {integrity: sha512-VpsrsJSUcJEseSbMHkrsrAVSdvVS5I96Qo1QAQ4FxQ9wXFcB+pjj7FB7/us9+GcgfW4ziHtYMc1J0PLczb55mg==}
@@ -5542,13 +5545,6 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kwsites/file-exists@1.1.1(supports-color@7.2.0)':
-    dependencies:
-      debug: 4.4.3(supports-color@7.2.0)
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
   '@kwsites/file-exists@1.1.1(supports-color@9.4.0)':
     dependencies:
       debug: 4.4.3(supports-color@9.4.0)
@@ -5768,12 +5764,12 @@ snapshots:
     transitivePeerDependencies:
       - zenObservable
 
-  '@simple-git/args-pathspec@1.0.3':
+  '@simple-git/args-pathspec@1.0.4':
     optional: true
 
-  '@simple-git/argv-parser@1.1.1':
+  '@simple-git/argv-parser@2.0.1':
     dependencies:
-      '@simple-git/args-pathspec': 1.0.3
+      '@simple-git/args-pathspec': 1.0.4
     optional: true
 
   '@sinonjs/commons@3.0.1':
@@ -5863,7 +5859,7 @@ snapshots:
       '@smithy/util-buffer-from': 2.2.0
       tslib: 2.8.1
 
-  '@strands-agents/sdk@1.16.0(@aws-sdk/client-s3@3.1127.0)(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(@opentelemetry/api@1.9.1)(@smithy/types@4.18.0)(express@5.2.1(supports-color@9.4.0))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.5.4)':
+  '@strands-agents/sdk@1.16.0(@aws-sdk/client-s3@3.1127.0)(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(@opentelemetry/api@1.9.1)(@smithy/types@4.18.0)(express@5.2.1(supports-color@9.4.0))(supports-color@9.4.0)(typescript@6.0.3)(zod@4.5.4)':
     dependencies:
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@7.2.0)(zod@4.5.4)
@@ -5876,7 +5872,7 @@ snapshots:
     optionalDependencies:
       '@aws-sdk/client-s3': 3.1127.0
       '@smithy/types': 4.18.0
-      '@tobilu/qmd': 2.8.3(supports-color@7.2.0)(typescript@6.0.3)
+      '@tobilu/qmd': 2.8.3(supports-color@9.4.0)(typescript@6.0.3)
       express: 5.2.1(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
@@ -5941,33 +5937,6 @@ snapshots:
       '@testing-library/dom': 10.4.1
 
   '@tinyhttp/content-disposition@2.2.4':
-    optional: true
-
-  '@tobilu/qmd@2.8.3(supports-color@7.2.0)(typescript@6.0.3)':
-    dependencies:
-      '@modelcontextprotocol/server': 2.0.0
-      better-sqlite3: 13.0.3
-      fast-glob: 3.3.3
-      node-llama-cpp: 3.20.0(supports-color@7.2.0)(typescript@6.0.3)
-      picomatch: 4.0.5
-      sqlite-vec: 0.1.9
-      tree-sitter-go: 0.25.0
-      tree-sitter-python: 0.25.0
-      tree-sitter-rust: 0.24.0
-      tree-sitter-typescript: 0.23.2
-      typescript: 6.0.3
-      web-tree-sitter: 0.26.12
-      yaml: 2.9.0
-      zod: 4.2.1
-    optionalDependencies:
-      sqlite-vec-darwin-arm64: 0.1.9
-      sqlite-vec-darwin-x64: 0.1.9
-      sqlite-vec-linux-arm64: 0.1.9
-      sqlite-vec-linux-x64: 0.1.9
-      sqlite-vec-windows-x64: 0.1.9
-    transitivePeerDependencies:
-      - supports-color
-      - tree-sitter
     optional: true
 
   '@tobilu/qmd@2.8.3(supports-color@9.4.0)(typescript@6.0.3)':
@@ -6598,21 +6567,6 @@ snapshots:
       - supports-color
     optional: true
 
-  cmake-js@8.0.0(supports-color@9.4.0):
-    dependencies:
-      debug: 4.4.3(supports-color@9.4.0)
-      fs-extra: 11.4.0
-      node-api-headers: 1.9.0
-      rc: 1.2.8
-      semver: 7.8.5
-      tar: 7.5.22
-      url-join: 4.0.1
-      which: 6.0.1
-      yargs: 17.7.3
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
   code-point-at@1.1.0: {}
 
   color-convert@1.9.3:
@@ -7017,7 +6971,7 @@ snapshots:
       on-finished: 2.4.1
       once: 1.4.0
       parseurl: 1.3.3
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0(supports-color@9.4.0)
@@ -7803,7 +7757,7 @@ snapshots:
   node-gyp-build@4.8.4:
     optional: true
 
-  node-llama-cpp@3.20.0(supports-color@7.2.0)(typescript@6.0.3):
+  node-llama-cpp@3.20.0(supports-color@9.4.0)(typescript@6.0.3):
     dependencies:
       '@huggingface/jinja': 0.5.10
       async-retry: 1.3.3
@@ -7826,57 +7780,7 @@ snapshots:
       pretty-ms: 9.3.1
       proper-lockfile: 4.1.2
       semver: 7.8.5
-      simple-git: 3.36.0(supports-color@7.2.0)
-      slice-ansi: 8.0.0
-      stdout-update: 4.0.1
-      strip-ansi: 7.2.0
-      validate-npm-package-name: 7.0.2
-      which: 6.0.1
-      yargs: 17.7.3
-    optionalDependencies:
-      '@node-llama-cpp/linux-arm64': 3.20.0
-      '@node-llama-cpp/linux-armv7l': 3.20.0
-      '@node-llama-cpp/linux-riscv64': 3.20.0
-      '@node-llama-cpp/linux-x64': 3.20.0
-      '@node-llama-cpp/linux-x64-cuda': 3.20.0
-      '@node-llama-cpp/linux-x64-cuda-ext': 3.20.0
-      '@node-llama-cpp/linux-x64-vulkan': 3.20.0
-      '@node-llama-cpp/mac-arm64-metal': 3.20.0
-      '@node-llama-cpp/mac-x64': 3.20.0
-      '@node-llama-cpp/win-arm64': 3.20.0
-      '@node-llama-cpp/win-x64': 3.20.0
-      '@node-llama-cpp/win-x64-cuda': 3.20.0
-      '@node-llama-cpp/win-x64-cuda-ext': 3.20.0
-      '@node-llama-cpp/win-x64-vulkan': 3.20.0
-      typescript: 6.0.3
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
-  node-llama-cpp@3.20.0(supports-color@9.4.0)(typescript@6.0.3):
-    dependencies:
-      '@huggingface/jinja': 0.5.10
-      async-retry: 1.3.3
-      bytes: 3.1.2
-      chalk: 5.6.2
-      chmodrp: 1.0.2
-      cmake-js: 8.0.0(supports-color@9.4.0)
-      cross-spawn: 7.0.6
-      env-var: 7.5.0
-      filenamify: 6.0.0
-      fs-extra: 11.4.0
-      ignore: 7.0.8
-      ipull: 3.9.5
-      is-unicode-supported: 2.1.0
-      lifecycle-utils: 4.4.1
-      log-symbols: 7.0.1
-      nanoid: 5.1.16
-      node-addon-api: 8.9.2
-      ora: 9.4.1
-      pretty-ms: 9.3.1
-      proper-lockfile: 4.1.2
-      semver: 7.8.5
-      simple-git: 3.36.0(supports-color@9.4.0)
+      simple-git: 4.0.1(supports-color@9.4.0)
       slice-ansi: 8.0.0
       stdout-update: 4.0.1
       strip-ansi: 7.2.0
@@ -8103,7 +8007,7 @@ snapshots:
       signal-exit: 3.0.7
     optional: true
 
-  proxy-addr@2.0.7:
+  proxy-addr@2.0.8:
     dependencies:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
@@ -8363,23 +8267,12 @@ snapshots:
   signal-exit@4.1.0:
     optional: true
 
-  simple-git@3.36.0(supports-color@7.2.0):
-    dependencies:
-      '@kwsites/file-exists': 1.1.1(supports-color@7.2.0)
-      '@kwsites/promise-deferred': 1.1.1
-      '@simple-git/args-pathspec': 1.0.3
-      '@simple-git/argv-parser': 1.1.1
-      debug: 4.4.3(supports-color@7.2.0)
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
-  simple-git@3.36.0(supports-color@9.4.0):
+  simple-git@4.0.1(supports-color@9.4.0):
     dependencies:
       '@kwsites/file-exists': 1.1.1(supports-color@9.4.0)
       '@kwsites/promise-deferred': 1.1.1
-      '@simple-git/args-pathspec': 1.0.3
-      '@simple-git/argv-parser': 1.1.1
+      '@simple-git/args-pathspec': 1.0.4
+      '@simple-git/argv-parser': 2.0.1
       debug: 4.4.3(supports-color@9.4.0)
     transitivePeerDependencies:
       - supports-color
