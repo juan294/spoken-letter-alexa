@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import { decodeJwtClaims, log, sha256Hex } from "@spoken-letter-alexa/shared";
+import { decodeJwtClaims, log, sha256Hex, SKILL_LOCALES } from "@spoken-letter-alexa/shared";
 import { type MessageData, type Model } from "@strands-agents/sdk";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { z } from "zod";
 import { type SpeechSynthesizer } from "./polly.ts";
 import { createModelDraftGenerator, DemoDraftController, DemoDraftError, type DemoDraftStore, type DraftGenerator } from "./demo-drafts.ts";
 import { DemoUpdateController, DemoUpdateError, type DemoUpdateStore, type DemoStory, type FixtureEvent } from "./demo-updates.ts";
+import { systemPromptFor } from "./persona.ts";
 import { PlaylistController, type PlaylistCatalog, type PlaylistStore } from "./playlist.ts";
 import { isCatalogStale, type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
@@ -39,29 +40,32 @@ export type AgentDeps = {
 
 const MAX_UTTERANCE_BYTES = 5 * 1024 * 1024;
 
+/** Optional on the bodies whose replies are spoken (plan D6); omitted means en-US, so older skills keep working. */
+const localeField = { locale: z.enum(SKILL_LOCALES).optional() };
 const sessionBodySchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("demo") }),
-  z.object({ mode: z.literal("linked"), accessToken: z.string().min(16) }),
-  z.object({ mode: z.literal("device"), deviceUserId: z.string().min(1).max(256) }),
+  z.object({ mode: z.literal("demo"), ...localeField }),
+  z.object({ mode: z.literal("linked"), accessToken: z.string().min(16), ...localeField }),
+  z.object({ mode: z.literal("device"), deviceUserId: z.string().min(1).max(256), ...localeField }),
 ]);
 const turnBodySchema = z.object({ sessionId: z.string().min(1).max(128), text: z.string().trim().min(1).max(500) });
 const draftBodySchema = z.object({ deviceUserId: z.string().min(1).max(256), requestId: z.string().min(1).max(256),
-  theme: z.string().trim().min(1).max(160) });
+  theme: z.string().trim().min(1).max(160), ...localeField });
 const draftLatestBodySchema = z.object({ deviceUserId: z.string().min(1).max(256) });
 const updateDeviceSchema = z.object({ deviceUserId: z.string().min(1).max(256) });
+const localizedDeviceSchema = updateDeviceSchema.extend(localeField);
 const legacyFinishedBodySchema = updateDeviceSchema.extend({ observedToken: z.string().min(1).max(4096), eventId: z.string().min(1).max(256) });
 const reactionBodySchema = updateDeviceSchema.extend({ requestId: z.string().min(1).max(256), choice: z.enum(["like", "love", "dismiss"]) });
 const wishBodySchema = updateDeviceSchema.extend({ requestId: z.string().min(1).max(256), topic: z.string().trim().min(1).max(160),
-  storyteller: z.string().trim().min(1).max(80).optional(), confirmed: z.literal(true) });
+  storyteller: z.string().trim().min(1).max(80).optional(), confirmed: z.literal(true), ...localeField });
 const eventBodySchema = updateDeviceSchema.extend({ eventId: z.string().min(1).max(80), action: z.enum(["read", "dismiss"]) });
 const playlistBodySchema = z.discriminatedUnion("command", [
-  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("start"), order: z.enum(["shuffle", "newest"]).optional(), storyteller: z.string().trim().min(1).max(80).optional() }),
-  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("title"), title: z.string().trim().min(1).max(200), storyteller: z.string().trim().min(1).max(80).optional() }),
+  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("start"), order: z.enum(["shuffle", "newest"]).optional(), storyteller: z.string().trim().min(1).max(80).optional(), ...localeField }),
+  z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("title"), title: z.string().trim().min(1).max(200), storyteller: z.string().trim().min(1).max(80).optional(), ...localeField }),
   ...(["next", "previous", "restart", "reset"] as const).map((command) => z.object({ deviceUserId: z.string().min(1).max(256),
-    command: z.literal(command), observedToken: z.string().min(1).max(2048).optional() })),
+    command: z.literal(command), observedToken: z.string().min(1).max(2048).optional(), ...localeField })),
   z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal("resume"), observedToken: z.string().min(1).max(2048),
-    offsetInMilliseconds: z.number().int().min(0).max(24 * 60 * 60 * 1000) }),
-  ...(["nearlyFinished", "finished"] as const).map((command) => z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal(command), observedToken: z.string().min(1).max(2048), eventId: z.string().min(1).max(256) })),
+    offsetInMilliseconds: z.number().int().min(0).max(24 * 60 * 60 * 1000), ...localeField }),
+  ...(["nearlyFinished", "finished"] as const).map((command) => z.object({ deviceUserId: z.string().min(1).max(256), command: z.literal(command), observedToken: z.string().min(1).max(2048), eventId: z.string().min(1).max(256), ...localeField })),
 ]);
 const playlistSummarySchema = z.object({ id: z.string(), title: z.string(), storyteller: z.string(), deliveredAt: z.string() });
 const playlistAudioSchema = playlistSummarySchema.extend({
@@ -225,10 +229,10 @@ export function createAgentApp(deps: AgentDeps): Hono {
     }
     const parsed = playlistBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A valid playlist command is required");
-    const { deviceUserId, ...command } = parsed.data;
+    const { deviceUserId, locale, ...command } = parsed.data;
     const deviceKey = deviceSessionId(deviceUserId);
     const controller = new PlaylistController({ store: deps.playlist.store, catalog: playlistCatalog, now });
-    const result = await controller.command(deviceKey, command);
+    const result = await controller.command(deviceKey, command, locale);
     if (command.command === "finished" && demoUpdates) {
       try {
         const playlist = await deps.playlist.store.get(deviceKey);
@@ -248,9 +252,9 @@ export function createAgentApp(deps: AgentDeps): Hono {
   app.post("/agent/demo/next", async (c) => {
     if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
-    const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = localizedDeviceSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
-    try { return c.json(await demoUpdates.next(deviceSessionId(parsed.data.deviceUserId))); }
+    try { return c.json(await demoUpdates.next(deviceSessionId(parsed.data.deviceUserId), parsed.data.locale)); }
     catch (error) { return updateError(error, c); }
   });
 
@@ -285,9 +289,9 @@ export function createAgentApp(deps: AgentDeps): Hono {
   app.post("/agent/demo/inbox", async (c) => {
     if (!demoUpdates || !deps.playlist) return c.json({ error: "update_unavailable", message: "Your updates are unavailable." }, 503);
     if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
-    const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = localizedDeviceSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
-    try { return c.json(await demoUpdates.inbox(deviceSessionId(parsed.data.deviceUserId))); }
+    try { return c.json(await demoUpdates.inbox(deviceSessionId(parsed.data.deviceUserId), parsed.data.locale)); }
     catch (error) { return updateError(error, c); }
   });
 
@@ -308,7 +312,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const parsed = draftBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device, request ID, and theme are required");
     try {
-      return c.json(await demoDrafts.save(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId, parsed.data.theme));
+      return c.json(await demoDrafts.save(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId, parsed.data.theme, parsed.data.locale));
     } catch (error) {
       if (error instanceof DemoDraftError && error.code === "unsupported_theme") {
         return c.json({ error: "unsupported_theme", message: "Try a theme like bedtime, space, ocean, forest, animals, friendship, or mermaids." }, 422);
@@ -343,9 +347,11 @@ export function createAgentApp(deps: AgentDeps): Hono {
     // A device (Echo user) keeps one conversation across invocations; other modes start fresh.
     const id = parsed.data.mode === "device" ? deviceSessionId(parsed.data.deviceUserId) : undefined;
     const existing = id === undefined ? null : await deps.sessions.get(id);
+    // Every open records its locale, so a device that changes language is answered in the new one (plan SS6).
+    const locale = parsed.data.locale ?? "en-US";
     let session = existing
-      ? { ...existing, expiresAt: now() + SESSION_TTL_SECONDS }
-      : newSession({ mode, subject: subjectOf(accessToken), accessToken, ...(id !== undefined && { id }) }, now);
+      ? { ...existing, expiresAt: now() + SESSION_TTL_SECONDS, locale }
+      : { ...newSession({ mode, subject: subjectOf(accessToken), accessToken, ...(id !== undefined && { id }) }, now), locale };
     if (mode === "device" && deps.deviceMcp && isCatalogStale(session, now())) {
       const catalog = await fetchCatalog(deps.deviceMcp, accessToken);
       if (catalog !== undefined) session = { ...session, catalog, catalogFetchedAt: now() };
@@ -362,8 +368,10 @@ export function createAgentApp(deps: AgentDeps): Hono {
     if (!session) return jsonError(c, 404, "session_not_found", "Start a new session");
     const accessToken = session.mode === "linked" ? session.accessToken : await serviceToken();
     const mcp = session.mode === "device" && deps.deviceMcp ? deps.deviceMcp : { url: deps.mcpUrl, fetch: deps.mcpFetch };
+    const locale = session.locale ?? "en-US";
     const result = await runTurn(
-      { model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history, catalog: session.catalog, reuseMcpClient: session.mode === "device" },
+      { model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history,
+        systemPrompt: systemPromptFor(session.catalog, locale), locale, reuseMcpClient: session.mode === "device" },
       parsed.data.text,
     );
     // The skill speaks `say` with Alexa's own voice, so Polly runs for the simulator only.

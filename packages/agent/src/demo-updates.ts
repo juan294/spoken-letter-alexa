@@ -1,15 +1,17 @@
 import { readFile } from "node:fs/promises";
 
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { randomToken, sha256Hex } from "@spoken-letter-alexa/shared";
+import { randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { z } from "zod";
 
 import { canonicalTheme, type DraftTheme } from "./demo-drafts.ts";
+import { AGENT_MESSAGES } from "./messages.ts";
 
 export const DEMO_UPDATE_TTL_SECONDS = 7 * 24 * 60 * 60;
 const UPDATE_LIMIT = 20;
-const NEW_STORY_DETAIL = "A new story is ready.";
-const OCCASION_DETAIL = "A family birthday is coming up. You can create a story for the occasion.";
+/** The fixture contract: seed events must carry exactly the English wording (rendered per locale when read). */
+const NEW_STORY_DETAIL = AGENT_MESSAGES["en-US"].updates.newStory;
+const OCCASION_DETAIL = AGENT_MESSAGES["en-US"].updates.occasion;
 export type DemoStory = { id: string; title: string; storyteller: string; deliveredAt: string; audioUrl: string };
 
 const seedEventSchema = z.discriminatedUnion("type", [
@@ -127,17 +129,18 @@ type ReactionResult = { status: "saved"; reactionId: string; storyId: string; ch
 type WishResult = { status: "saved"; wishId: string; topic: DraftTheme; storyteller?: string };
 type NextResult = { pendingReaction?: { storyId: string; title: string; storyteller: string }; event?: DemoEvent };
 
-function publicEvent(event: StoredEvent, stories: Map<string, DemoStory>, wishes: Wish[]): DemoEvent {
+function publicEvent(event: StoredEvent, stories: Map<string, DemoStory>, wishes: Wish[], locale: SkillLocale): DemoEvent {
   const { eventId, type, occurredAt } = event;
+  const m = AGENT_MESSAGES[locale].updates;
   const wish = type === "wish_update" ? wishes.find((item) => `wish_${item.wishId}` === eventId) : undefined;
-  // Render from typed state so saved events also use current customer wording.
-  const detail = type === "new_story" ? NEW_STORY_DETAIL
-    : type === "occasion" ? OCCASION_DETAIL
-    : type === "reaction_update" ? "Your reaction was saved."
-    : wish ? `Your wish for a story about ${wish.topic} was saved.` : "Your story wish was saved.";
+  // Render from typed state so saved events also use current customer wording, in the request locale.
+  const detail = type === "new_story" ? m.newStory
+    : type === "occasion" ? m.occasion
+    : type === "reaction_update" ? m.reactionSaved
+    : wish ? m.wishSaved(wish.topic) : m.wishSavedGeneric;
   const story = event.storyId ? stories.get(event.storyId) : undefined;
   return { eventId, type, occurredAt,
-    detail: story ? `${detail} "${story.title}" by ${story.storyteller}.` : detail,
+    detail: story ? m.withStory(detail, story.title, story.storyteller) : detail,
     ...(story && { storyId: story.id }) };
 }
 
@@ -207,7 +210,7 @@ export class DemoUpdateController {
     return this.recordFinished(deviceKey, story.id, eventId);
   }
 
-  async next(deviceKey: string): Promise<NextResult> {
+  async next(deviceKey: string, locale: SkillLocale = "en-US"): Promise<NextResult> {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { stored, state } = await this.state(deviceKey);
       const active = state.completions.some((item) => item.promptedAt !== null && item.handledAt === null);
@@ -220,7 +223,7 @@ export class DemoUpdateController {
         continue;
       }
       const event = state.events.filter((item) => item.readAt === null).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0];
-      return event ? { event: publicEvent(event, this.stories, state.wishes) } : {};
+      return event ? { event: publicEvent(event, this.stories, state.wishes, locale) } : {};
     }
     throw new DemoUpdateError("update_unavailable");
   }
@@ -282,10 +285,10 @@ export class DemoUpdateController {
     throw new DemoUpdateError("update_unavailable");
   }
 
-  async inbox(deviceKey: string): Promise<{ events: DemoEvent[] }> {
+  async inbox(deviceKey: string, locale: SkillLocale = "en-US"): Promise<{ events: DemoEvent[] }> {
     const { state } = await this.state(deviceKey);
     return { events: state.events.filter((item) => item.readAt === null).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-      .map((event) => publicEvent(event, this.stories, state.wishes)) };
+      .map((event) => publicEvent(event, this.stories, state.wishes, locale)) };
   }
 
   async markEvent(deviceKey: string, eventId: string, action: "read" | "dismiss"): Promise<{ status: "read" | "dismissed" }> {

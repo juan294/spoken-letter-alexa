@@ -1,12 +1,14 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { randomToken, sha256Hex } from "@spoken-letter-alexa/shared";
+import { type DemoTopic, randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { Agent, type Model } from "@strands-agents/sdk";
 import { z } from "zod";
+
+import { AGENT_MESSAGES } from "./messages.ts";
 
 export const DEMO_DRAFT_TTL_SECONDS = 2 * 60 * 60;
 export const DEMO_DRAFT_LIMIT = 10;
 
-export type DraftTheme = "bedtime" | "space" | "ocean" | "forest" | "animals" | "friendship" | "mermaids";
+export type DraftTheme = DemoTopic;
 
 const choicesSchema = z.object({
   place: z.enum(["quiet shore", "forest path", "starry sky", "cozy room", "sunny meadow"]),
@@ -92,19 +94,35 @@ export class DemoDraftError extends Error {
   }
 }
 
+/**
+ * A Spanish word pattern. JavaScript's `\b` treats accented letters as non-word characters, so
+ * the boundary is spelled out with Unicode letter classes.
+ */
+const spanishWords = (alternatives: string): RegExp => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, "u");
+
+/** English and Spanish words for each theme; the first matching theme wins. */
+const THEME_PATTERNS: [DraftTheme, RegExp][] = [
+  ["bedtime", /\b(bedtime|bed time|sleep|sleepy|goodnight)\b/u],
+  ["bedtime", spanishWords("dormir|buenas noches")],
+  ["space", /\b(space|stars?|rockets?|planets?|moon)\b/u],
+  ["space", spanishWords("espacio|estrellas?|cohetes?|planetas?|luna")],
+  ["mermaids", /\b(mermaids?|merpeople)\b/u],
+  ["mermaids", spanishWords("sirenas?")],
+  ["ocean", /\b(ocean|sea|beach|waves?)\b/u],
+  ["ocean", spanishWords("océanos?|oceanos?|mar|mares|playas?|olas?")],
+  ["forest", /\b(forest|woods?|trees?)\b/u],
+  ["forest", spanishWords("bosques?|árbol|árboles|arbol|arboles")],
+  ["animals", /\b(animals?|cats?|dogs?|birds?)\b/u],
+  ["animals", spanishWords("animal|animales|gat[oa]s?|perr[oa]s?|pájaros?|pajaros?")],
+  ["friendship", /\b(friendship|friends?)\b/u],
+  ["friendship", spanishWords("amistad|amig[oa]s?")],
+];
+
 /** Speech is used only to choose a controlled topic; no part of it reaches the model or store. */
 export function canonicalTheme(speech: string): DraftTheme | null {
-  const words = speech.normalize("NFKC").toLocaleLowerCase("en-US");
-  const matches: [DraftTheme, RegExp][] = [
-    ["bedtime", /\b(bedtime|bed time|sleep|sleepy|goodnight)\b/u],
-    ["space", /\b(space|stars?|rockets?|planets?|moon)\b/u],
-    ["mermaids", /\b(mermaids?|merpeople)\b/u],
-    ["ocean", /\b(ocean|sea|beach|waves?)\b/u],
-    ["forest", /\b(forest|woods?|trees?)\b/u],
-    ["animals", /\b(animals?|cats?|dogs?|birds?)\b/u],
-    ["friendship", /\b(friendship|friends?)\b/u],
-  ];
-  return matches.find(([, pattern]) => pattern.test(words))?.[0] ?? null;
+  // Plain NFKC lowercase is locale-neutral for English and Spanish (plan, phase-3.md step 4).
+  const words = speech.normalize("NFKC").toLowerCase();
+  return THEME_PATTERNS.find(([, pattern]) => pattern.test(words))?.[0] ?? null;
 }
 
 /** Bedrock chooses safe outline components; the renderer alone creates persisted prose. */
@@ -122,8 +140,8 @@ export function createModelDraftGenerator(model: Model): DraftGenerator {
   };
 }
 
-function outlineFor(theme: DraftTheme, choices: DraftChoices): string {
-  return `Theme: ${theme}. Setting: a ${choices.place}. Middle: a ${choices.challenge}. Ending: ${choices.ending} brings everyone home.`;
+function outlineFor(theme: DraftTheme, choices: DraftChoices, locale: SkillLocale): string {
+  return AGENT_MESSAGES[locale].drafts.outline(theme, choices.place, choices.challenge, choices.ending);
 }
 
 function publicReceipt(stored: StoredReceipt): DemoDraftReceipt {
@@ -147,7 +165,8 @@ export class DemoDraftController {
     }
   }
 
-  async save(deviceKey: string, requestId: string, speechTheme: string): Promise<DemoDraftReceipt> {
+  /** The outline is rendered once, in the request locale, and stored as text (plan D7). */
+  async save(deviceKey: string, requestId: string, speechTheme: string, locale: SkillLocale = "en-US"): Promise<DemoDraftReceipt> {
     const requestDigest = sha256Hex(requestId);
     let prepared: { theme: DraftTheme; outline: string; draftId: string } | null = null;
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -165,7 +184,7 @@ export class DemoDraftController {
         if (!theme) throw new DemoDraftError("unsupported_theme");
         try {
           const choices = choicesSchema.parse(await this.options.generator(theme));
-          prepared = { theme, outline: outlineFor(theme, choices), draftId: randomToken(12) };
+          prepared = { theme, outline: outlineFor(theme, choices, locale), draftId: randomToken(12) };
         } catch {
           throw new DemoDraftError("draft_unavailable");
         }

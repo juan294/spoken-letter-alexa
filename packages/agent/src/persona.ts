@@ -1,3 +1,5 @@
+import { type SkillLocale } from "@spoken-letter-alexa/shared";
+
 /** The simulated Alexa+ persona (phase-5.md section 1). The parent is the speaker. */
 export const ALEXA_PERSONA = [
   "You are a warm, brief voice assistant in a family home. Speak in one or two short sentences.",
@@ -14,6 +16,21 @@ export const ALEXA_PERSONA = [
   "Every tool result carries a JSON text block with the ids and fields you need; use it.",
   "Tool names may carry a prefix such as spoken-letter___; treat them as the tools above.",
 ].join(" ");
+
+/** Appended last to every es-ES turn's system prompt, so the cached persona prefix is unchanged (plan SS5). */
+export const SPANISH_LANGUAGE_LINE = "Always reply in Spanish (Spain), using tú. Keep story titles and storyteller names exactly as written.";
+
+/** The reply-language instruction for a locale; en-US has none, so its prompt stays byte-identical. */
+export function languageLine(locale: SkillLocale): string {
+  return locale === "es-ES" ? SPANISH_LANGUAGE_LINE : "";
+}
+
+/** The full system prompt for a turn: persona, cached catalog, then the language line. */
+export function systemPromptFor(catalog: string | undefined, locale: SkillLocale): string {
+  const line = languageLine(locale);
+  const base = personaWithCatalog(catalog);
+  return line ? `${base}\n\n${line}` : base;
+}
 
 /**
  * The persona plus a device session's cached catalog (Phase 2 section 1). The catalog is a

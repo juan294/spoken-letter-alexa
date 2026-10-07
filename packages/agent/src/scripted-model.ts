@@ -15,6 +15,7 @@ import {
   type StreamOptions,
 } from "@strands-agents/sdk";
 
+import { SPANISH_LANGUAGE_LINE } from "./persona.ts";
 import { type TurnOutput } from "./schema.ts";
 
 const STRUCTURED_OUTPUT_TOOL = "strands_structured_output";
@@ -50,13 +51,50 @@ function firstJson<T extends object>(items: Block[] | undefined, key: keyof T & 
   return null;
 }
 
+/** Word boundaries spelled out, since `\b` treats accented letters as non-word characters. */
+const words = (alternatives: string): RegExp => new RegExp(`(?<![\\p{L}])(?:${alternatives})(?![\\p{L}])`, "iu");
+const SPANISH_PLAY = words("pon|ponme|ponla|reproduce|escuchar|escucha|oír|léeme");
+// "más nueva" is the superlative ("the newest"), a play request like English "newest".
+const SPANISH_LIST = words("qué|cuál|cuáles|lista|disponibles?|(?<!más\\s)nuev[ao]s?");
+const SPANISH_NEXT = words("otra|otro|siguiente|distinta|más");
+
 function wantsPlayback(text: string): boolean {
-  return /\b(play|listen|hear|put on)\b/i.test(text) && !/\b(what|which|list|new|available)\b/i.test(text);
+  return (/\b(play|listen|hear|put on)\b/i.test(text) || SPANISH_PLAY.test(text))
+    && !/\b(what|which|list|new|available)\b/i.test(text) && !SPANISH_LIST.test(text);
 }
 
 function wantsNext(text: string): boolean {
-  return /\b(another|next|different|else)\b/i.test(text);
+  return /\b(another|next|different|else)\b/i.test(text) || SPANISH_NEXT.test(text);
 }
+
+type Replies = {
+  unreachable: string;
+  none: string;
+  listed: (count: number, title: string, storyteller: string) => string;
+  playing: (title: string, storyteller: string) => string;
+  unavailable: string;
+  done: string;
+};
+
+/** The scripted replies; Spanish when the system prompt carries the Spanish language line (plan SS5). */
+const REPLIES: Record<"en" | "es", Replies> = {
+  en: {
+    unreachable: "I couldn't reach the family stories just now. Try again in a moment.",
+    none: "No stories have been delivered yet. Deliver one in Spoken Letter first.",
+    listed: (count, title, storyteller) => `You have ${count} delivered ${count === 1 ? "story" : "stories"}. The newest is "${title}" by ${storyteller}.`,
+    playing: (title, storyteller) => `Here is "${title}" in ${storyteller}'s voice.`,
+    unavailable: "That story's recording is not available right now. Try another one.",
+    done: "Done.",
+  },
+  es: {
+    unreachable: "No he podido acceder a las historias familiares. Inténtalo de nuevo en un momento.",
+    none: "Todavía no te ha llegado ninguna historia. Primero entrega una en Spoken Letter.",
+    listed: (count, title, storyteller) => `Tienes ${count} ${count === 1 ? "historia" : "historias"}. La más nueva es "${title}", de ${storyteller}.`,
+    playing: (title, storyteller) => `Aquí tienes "${title}", con la voz de ${storyteller}.`,
+    unavailable: "La grabación de esa historia no está disponible ahora mismo. Prueba con otra.",
+    done: "Hecho.",
+  },
+};
 
 /** Counts stories already played in the conversation so "another" moves on. */
 function playedCount(messages: Message[]): number {
@@ -83,6 +121,7 @@ export class ScriptedModel extends Model {
     const last = messages.at(-1);
     const userText = [...messages].reverse().flatMap((m) => (m.role === "user" ? blocks(m) : [])).find((b) => b.type === "textBlock")?.text ?? "";
     const structuredTool = options?.toolSpecs?.find((spec) => spec.name === STRUCTURED_OUTPUT_TOOL)?.name;
+    const replies = REPLIES[typeof options?.systemPrompt === "string" && options.systemPrompt.includes(SPANISH_LANGUAGE_LINE) ? "es" : "en"];
 
     const toolResult = last?.role === "user" ? blocks(last).find((b) => b.type === "toolResultBlock") : undefined;
     const previousToolUse = toolResult
@@ -114,18 +153,15 @@ export class ScriptedModel extends Model {
     if (!toolResult || !previousToolUse) {
       events = emitToolUse("list_family_stories", {});
     } else if (toolResult.status === "error" || firstJson<ErrorJson>(toolResult.content, "error")) {
-      events = emitReply({ say: "I couldn't reach the family stories just now. Try again in a moment.", play: null });
+      events = emitReply({ say: replies.unreachable, play: null });
     } else if (previousToolUse.name === "list_family_stories") {
       const list = firstJson<ListJson>(toolResult.content, "stories");
       const stories = list?.stories ?? [];
       const newest = stories[0];
       if (!newest) {
-        events = emitReply({ say: "No stories have been delivered yet. Deliver one in Spoken Letter first.", play: null });
+        events = emitReply({ say: replies.none, play: null });
       } else if (!wantsPlayback(userText)) {
-        events = emitReply({
-          say: `You have ${stories.length} delivered ${stories.length === 1 ? "story" : "stories"}. The newest is "${newest.title}" by ${newest.storyteller}.`,
-          play: null,
-        });
+        events = emitReply({ say: replies.listed(stories.length, newest.title, newest.storyteller), play: null });
       } else {
         const offset = wantsNext(userText) ? playedCount(messages) : 0;
         const pick = stories[offset % stories.length] ?? newest;
@@ -135,7 +171,7 @@ export class ScriptedModel extends Model {
       const story = firstJson<StoryWithAudioJson>(toolResult.content, "audio");
       events = story
         ? emitReply({
-            say: `Here is "${story.title}" in ${story.storyteller}'s voice.`,
+            say: replies.playing(story.title, story.storyteller),
             play: {
               id: story.id,
               url: story.audio.url,
@@ -145,9 +181,9 @@ export class ScriptedModel extends Model {
               artUrl: story.artUrl ?? null,
             },
           })
-        : emitReply({ say: "That story's recording is not available right now. Try another one.", play: null });
+        : emitReply({ say: replies.unavailable, play: null });
     } else {
-      events = emitReply({ say: "Done.", play: null });
+      events = emitReply({ say: replies.done, play: null });
     }
     for (const event of events) yield event;
     await Promise.resolve();

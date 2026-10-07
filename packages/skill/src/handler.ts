@@ -341,10 +341,12 @@ export function createHandler(options: HandlerOptions): SkillHandler {
 
     async function respond(): Promise<AlexaResponseEnvelope> {
       const deviceUserId = event.context.System.user.userId;
+      // The agent defaults to en-US, so English requests stay exactly as they were (plan D6).
+      const localeInput = locale === "en-US" ? {} : { locale };
       const nextDemoUpdate = async (): Promise<AlexaResponseEnvelope> => {
         if (!options.agent.demoNext) return ask(m.launch, m.reprompt, "welcome");
         try {
-          const next = await options.agent.demoNext({ deviceUserId });
+          const next = await options.agent.demoNext({ deviceUserId, ...localeInput });
           if (next.pendingReaction) {
             return { ...ask(m.reactionFor(next.pendingReaction.title), m.reactionReprompt, "reaction_prompt"), sessionAttributes: { demoFlow: "reaction" } };
           }
@@ -377,7 +379,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const command = async (input: Omit<PlaylistCommand, "deviceUserId">): Promise<AlexaResponseEnvelope> => {
         if (!playlist) return ask(m.noPlay, m.reprompt, "playback_control");
         try {
-          return playlistResult(await playlist({ deviceUserId, ...input }));
+          return playlistResult(await playlist({ deviceUserId, ...input, ...localeInput }));
         } catch (error) {
           failed(error);
           return type.startsWith("AudioPlayer.") ? EMPTY : ask(m.retry, m.reprompt, "playback_retry", "retry");
@@ -386,7 +388,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const saveDemoDraft = async (theme: string): Promise<AlexaResponseEnvelope> => {
         if (!options.agent.saveDraft) { unavailable(); return askForTheme(m.draftUnavailable, "theme_recovery"); }
         try {
-          await options.agent.saveDraft({ deviceUserId, requestId: event.request.requestId, theme });
+          await options.agent.saveDraft({ deviceUserId, requestId: event.request.requestId, theme, ...localeInput });
           return tell(m.draftSaved, undefined, "draft_saved");
         } catch (error) {
           failed(error);
@@ -411,7 +413,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const saveWish = async (topic: string, storyteller?: string): Promise<AlexaResponseEnvelope> => {
         if (!options.agent.demoWish) { unavailable(); return { ...ask(m.wishUnavailable, m.wishReprompt, "wish_retry", "retry"), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } }; }
         try {
-          const receipt: unknown = await options.agent.demoWish({ deviceUserId, requestId: event.request.requestId, topic, ...(storyteller && { storyteller }), confirmed: true });
+          const receipt: unknown = await options.agent.demoWish({ deviceUserId, requestId: event.request.requestId, topic, ...(storyteller && { storyteller }), confirmed: true, ...localeInput });
           if (!receipt || typeof receipt !== "object" || !("status" in receipt) || receipt.status !== "saved" || !("wishId" in receipt) || typeof receipt.wishId !== "string" || !receipt.wishId) throw new Error("incomplete demo wish receipt");
           return tell(m.wishSaved, undefined, "wish_saved");
         } catch (error) {
@@ -534,7 +536,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       if (intent === "UpdatesIntent") {
         if (!options.agent.demoInbox) { unavailable(); return ask(m.updatesUnavailable, m.reprompt, "updates_retry", "retry"); }
         try {
-          const inbox = await options.agent.demoInbox({ deviceUserId });
+          const inbox = await options.agent.demoInbox({ deviceUserId, ...localeInput });
           const eventItem = inbox.events[0];
           if (!eventItem) return tell(m.noUpdates, undefined, "updates", "no_action");
           const response = tell(eventItem.detail, undefined, "updates");
@@ -600,7 +602,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
         if (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent") {
           try {
-            const reply = await playlist({ deviceUserId, command: "next", ...tokenInput });
+            const reply = await playlist({ deviceUserId, command: "next", ...tokenInput, ...localeInput });
             if (!reply.fallbackToSuggestion) return playlistResult(reply);
           } catch (error) {
             failed(error);
@@ -630,7 +632,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           : undefined;
 
       try {
-        const reply = await options.agent.turn({ deviceUserId, text });
+        const reply = await options.agent.turn({ deviceUserId, text, ...localeInput });
         telemetry.tools = reply.toolCalls.map((call) => `${call.name}:${call.ms}ms`);
         telemetry.played = Boolean(reply.play);
         telemetry.storyId = reply.play?.id ?? null;
@@ -641,7 +643,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
         if (playOriented && reply.needsAnswer !== true && playlist && (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent")) {
           try {
-            return playlistResult(await playlist({ deviceUserId, command: "start", order: "newest" }));
+            return playlistResult(await playlist({ deviceUserId, command: "start", order: "newest", ...localeInput }));
           } catch (error) {
             failed(error);
             return ask(m.retry, m.reprompt, "playback_retry", "retry");

@@ -120,7 +120,7 @@ describe("es-ES slot resolution and catalog names", () => {
     expectSpanish(start);
     expect(speech(start)).toMatch(/sirenas/);
     const saved = await handler(intent("es-ES", "ThemeChoiceIntent", { drafttheme: { value: "sirenas", resolved: "mermaids" } }, start.sessionAttributes));
-    expect(saveDraft).toHaveBeenCalledExactlyOnceWith({ deviceUserId: USER, requestId: "amzn1.echo-api.request.es", theme: "mermaids" });
+    expect(saveDraft).toHaveBeenCalledExactlyOnceWith({ deviceUserId: USER, requestId: "amzn1.echo-api.request.es", theme: "mermaids", locale: "es-ES" });
     expect(speech(saved)).toMatch(/He guardado el borrador/);
     expectSpanish(saved);
   });
@@ -148,7 +148,7 @@ describe("es-ES slot resolution and catalog names", () => {
     expect(speech(fromTeller)).not.toContain("tía Whitney");
 
     const yes = await handler(intent("es-ES", "AMAZON.YesIntent", {}, fromTeller.sessionAttributes));
-    expect(demoWish).toHaveBeenCalledWith({ deviceUserId: USER, requestId: "amzn1.echo-api.request.es", topic: "mermaids", storyteller: "Aunt Whitney", confirmed: true });
+    expect(demoWish).toHaveBeenCalledWith({ deviceUserId: USER, requestId: "amzn1.echo-api.request.es", topic: "mermaids", storyteller: "Aunt Whitney", confirmed: true, locale: "es-ES" });
     expect(speech(yes)).toBe("He guardado tu deseo.");
   });
 
@@ -222,7 +222,7 @@ describe("es-ES catch-all routing (E4)", () => {
     const turn = vi.fn().mockResolvedValue({ say: "No la encuentro.", play: null, toolCalls: [] });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft, playlist, turn }) });
     await handler(intent("es-ES", "CatchAllIntent", { text: "pon la de Ignacio" }, { demoFlow: "draft" }));
-    expect(playlist).toHaveBeenCalledWith({ deviceUserId: USER, command: "title", title: "Ignacio" });
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: USER, command: "title", title: "Ignacio", locale: "es-ES" });
     expect(saveDraft).not.toHaveBeenCalled();
   });
 
@@ -257,11 +257,32 @@ describe("es-ES matchers stay no wider than en-US (review repairs)", () => {
     expect(response.response.directives?.[0]).toMatchObject({ type: "AudioPlayer.Play" });
   });
 
+  test("the Spanish superlative \"más nueva\" is a play request, but \"historias nuevas\" asks what is new", async () => {
+    vi.useFakeTimers();
+    try {
+      const progressiveFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+      const turn = vi.fn().mockImplementation(() => new Promise((resolve) => { setTimeout(() => { resolve({ say: "Aquí está.", play: PLAY, toolCalls: [] }); }, 700); }));
+      const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ turn }), progressiveFetch });
+      const filler = async (text: string) => {
+        const event = intent("es-ES", "CatchAllIntent", { text });
+        event.context.System = { ...event.context.System, apiEndpoint: "https://api.amazonalexa.com", apiAccessToken: "token" };
+        const pending = handler(event);
+        await vi.advanceTimersByTimeAsync(700);
+        await pending;
+        return (JSON.parse(progressiveFetch.mock.calls.at(-1)?.[1]?.body as string) as { directive: { speech: string } }).directive.speech;
+      };
+      expect(await filler("pon la historia más nueva")).toBe("Buscando esa historia.");
+      expect(await filler("pon las historias nuevas")).toBe("Voy a ver qué hay de nuevo.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("léeme and cuento carriers reduce to the title", async () => {
     const playlist = vi.fn().mockResolvedValue({ say: "Pongo la historia.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
     const turn = vi.fn().mockResolvedValue({ say: "No la encuentro.", play: null, toolCalls: [] });
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist, turn }) })(intent("es-ES", "CatchAllIntent", { text: "léeme el cuento de Ignacio" }));
-    expect(playlist).toHaveBeenCalledWith({ deviceUserId: USER, command: "title", title: "Ignacio" });
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: USER, command: "title", title: "Ignacio", locale: "es-ES" });
     expect(response.response.directives?.[0]).toMatchObject({ audioItem: { metadata: { subtitle: "leída por Grandpa Juan" } } });
   });
 
@@ -294,6 +315,40 @@ describe("es-ES storyteller aliases (Phase 2)", () => {
   test.each(["tía Whitney", "la tía Whitney"])("an unresolved Spanish storyteller slot %s still maps to the catalog name", async (storyteller) => {
     const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("es-ES", "WishFromStorytellerIntent", { wishtopic: "sirenas", storyteller }));
     expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
+  });
+});
+
+describe("es-ES requests carry the locale to the agent (Phase 3)", () => {
+  test("launch, turns, playlist, inbox, drafts and wishes send es-ES; reactions and events do not need it", async () => {
+    const agent = fakeAgent({
+      demoNext: vi.fn().mockResolvedValue({}),
+      demoInbox: vi.fn().mockResolvedValue({ events: [] }),
+      playlist: vi.fn().mockResolvedValue({ action: "none", say: "Nada." }),
+      saveDraft: vi.fn().mockResolvedValue({ status: "saved" }),
+      demoReact: vi.fn().mockResolvedValue({ status: "dismissed" }),
+    });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    await handler(request("es-ES", { type: "LaunchRequest" }));
+    await handler(intent("es-ES", "WhatIsNewIntent"));
+    await handler(intent("es-ES", "PlayAllIntent"));
+    await handler(intent("es-ES", "UpdatesIntent"));
+    await handler(intent("es-ES", "StartStoryIntent", { theme: "el espacio" }));
+    await handler(intent("es-ES", "AMAZON.CancelIntent", {}, { demoFlow: "reaction" }));
+    expect(agent.demoNext).toHaveBeenCalledWith({ deviceUserId: USER, locale: "es-ES" });
+    expect(agent.turn).toHaveBeenCalledWith({ deviceUserId: USER, text: "what family stories are new?", locale: "es-ES" });
+    expect(agent.playlist).toHaveBeenCalledWith({ deviceUserId: USER, command: "start", order: "shuffle", locale: "es-ES" });
+    expect(agent.demoInbox).toHaveBeenCalledWith({ deviceUserId: USER, locale: "es-ES" });
+    expect(agent.saveDraft).toHaveBeenCalledWith({ deviceUserId: USER, requestId: "amzn1.echo-api.request.es", theme: "el espacio", locale: "es-ES" });
+    expect(agent.demoReact).toHaveBeenCalledWith({ deviceUserId: USER, requestId: "amzn1.echo-api.request.es", choice: "dismiss" });
+  });
+
+  test("an en-US request sends no locale, so English bodies are unchanged", async () => {
+    const agent = fakeAgent({ demoNext: vi.fn().mockResolvedValue({}) });
+    const handler = createHandler({ skillId: SKILL_ID, agent });
+    await handler(request("en-US", { type: "LaunchRequest" }));
+    await handler(intent("en-US", "WhatIsNewIntent"));
+    expect(agent.demoNext).toHaveBeenCalledWith({ deviceUserId: USER });
+    expect(agent.turn).toHaveBeenCalledWith({ deviceUserId: USER, text: "what family stories are new?" });
   });
 });
 

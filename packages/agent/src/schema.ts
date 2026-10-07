@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { AGENT_MESSAGES } from "./messages.ts";
+
 /** What the agent hands the simulator: never prose to parse. */
 export const playSchema = z.object({
   id: z.string().min(1).describe("The story id from get_family_story, untouched"),
@@ -27,4 +29,5 @@ export type TurnOutput = z.infer<typeof turnOutputSchema>;
 
 export type ToolTrace = { name: string; ms: number; era: string; ok: boolean };
 
-export const FALLBACK_SAY = "I can't reach Spoken Letter right now. Try again in a moment, or reconnect it in the Alexa app.";
+/** The en-US turn fallback; every locale's line lives in `messages.ts`. */
+export const FALLBACK_SAY = AGENT_MESSAGES["en-US"].fallbackSay;

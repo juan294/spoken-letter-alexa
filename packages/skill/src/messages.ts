@@ -1,4 +1,6 @@
-import type { SkillLocale } from "@spoken-letter-alexa/shared";
+import { DEMO_TOPICS, type DemoTopic, type SkillLocale, SPANISH_TOPIC_PHRASES } from "@spoken-letter-alexa/shared";
+
+export { DEMO_TOPICS, type DemoTopic };
 
 /**
  * Every line the skill speaks, per locale (plan D5). A locale missing a key fails `tsc`.
@@ -61,16 +63,6 @@ export type Messages = {
 
 const EN_WISH_START = "To start a wish, say I want a story about space.";
 const ES_WISH_START = "Para pedir un deseo, di quiero una historia sobre el espacio.";
-
-/** The canonical `DemoTopic` values, shared by both locales (plan D4). */
-export const DEMO_TOPICS = ["mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime"] as const;
-export type DemoTopic = (typeof DEMO_TOPICS)[number];
-
-/** How each canonical topic follows "una historia" in a Spanish sentence. */
-const SPANISH_TOPICS: Record<DemoTopic, string> = {
-  mermaids: "sobre sirenas", space: "sobre el espacio", ocean: "sobre el mar", forest: "sobre el bosque",
-  animals: "sobre animales", friendship: "sobre la amistad", bedtime: "para dormir",
-};
 
 export const MESSAGES: Record<SkillLocale, Messages> = {
   "en-US": {
@@ -168,7 +160,7 @@ export const MESSAGES: Record<SkillLocale, Messages> = {
     wishTopicQuestion: "¿De qué quieres que trate tu historia?",
     wishTopicStart: `¿De qué quieres que trate tu historia? ${ES_WISH_START}`,
     whoFrom: "¿De quién quieres una historia?",
-    wishConfirm: (topic, storyteller) => `¿Guardo tu deseo de una historia${storyteller ? ` de ${storyteller}` : ""} ${SPANISH_TOPICS[topic]}? Di sí o no.`,
+    wishConfirm: (topic, storyteller) => `¿Guardo tu deseo de una historia${storyteller ? ` de ${storyteller}` : ""} ${SPANISH_TOPIC_PHRASES[topic]}? Di sí o no.`,
     updatesUnavailable: "Tus novedades no están disponibles ahora mismo.",
     noUpdates: "No tienes novedades sin leer.",
     updatesFailed: "No he podido leer tus novedades ahora mismo. Inténtalo de nuevo en un momento.",
@@ -259,7 +251,8 @@ export const MATCHERS: Record<SkillLocale, Matchers> = {
     createStory: spanishPattern(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)\b(?!\s+que\b).*\b(?:historia|cuento)\b`),
     themeAbout: spanishPattern(String.raw`\b(?:sobre|acerca\s+de)\s+(.+)$`),
     play: spanishPattern(String.raw`\b(?:pon|ponme|ponla|pónmela|reproduce|escuchar|escucha|oír|oir|léeme|cuéntame)\b`),
-    notPlay: spanishPattern(String.raw`\b(?:qué|cuál|cuáles|lista|nuevas?|nuevos?|disponibles?)\b`),
+    // "más nueva" is the superlative ("the newest"), a play request like English "newest".
+    notPlay: spanishPattern(String.raw`\b(?:qué|cuál|cuáles|lista|disponibles?|(?<!más\s)nuev[ao]s?)\b`),
     titleCarriers: [
       spanishPattern(String.raw`^(?:por\s+favor\s+)?(?:pon(?:me)?|reproduce|quiero\s+escuchar|escuchar|escucha|oír|oir|léeme|cuéntame)\s+`),
       spanishPattern(String.raw`^(?:(?:la|una|el|un)\s+)?(?:(?:historia|cuento)\s+)?(?:(?:que\s+se\s+llama|llamad[ao]|del?)\s+)?`),

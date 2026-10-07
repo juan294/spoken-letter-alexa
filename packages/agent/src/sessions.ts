@@ -1,5 +1,5 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { randomToken, sha256Hex } from "@spoken-letter-alexa/shared";
+import { randomToken, sha256Hex, SKILL_LOCALES, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { type MessageData } from "@strands-agents/sdk";
 
 export const SESSION_TTL_SECONDS = 2 * 60 * 60;
@@ -22,7 +22,11 @@ export type AgentSession = {
   catalog?: string;
   /** Epoch seconds `catalog` was fetched. */
   catalogFetchedAt?: number;
+  /** The request locale of the latest session open (plan D6, SS6); absent means en-US. */
+  locale?: SkillLocale;
 };
+
+const isSkillLocale = (value: unknown): value is SkillLocale => SKILL_LOCALES.some((locale) => locale === value);
 
 export interface SessionStore {
   put(session: AgentSession): Promise<void>;
@@ -100,6 +104,7 @@ export class DynamoSessionStore implements SessionStore {
     const item = result.Item;
     if (!item || typeof item.expiresAt !== "number" || item.expiresAt <= this.now()) return null;
     const mode: unknown = item.mode;
+    const locale: unknown = item.locale;
     return {
       id: String(item.id ?? item.sessionId),
       mode: mode === "linked" || mode === "device" ? mode : "demo",
@@ -110,6 +115,7 @@ export class DynamoSessionStore implements SessionStore {
       expiresAt: item.expiresAt,
       ...(typeof item.catalog === "string" && { catalog: item.catalog }),
       ...(typeof item.catalogFetchedAt === "number" && { catalogFetchedAt: item.catalogFetchedAt }),
+      ...(isSkillLocale(locale) && { locale }),
     };
   }
 }

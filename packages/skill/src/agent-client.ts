@@ -1,10 +1,15 @@
+import { type SkillLocale } from "@spoken-letter-alexa/shared";
+
 import { type Play } from "./audio.ts";
 
 export type ToolTrace = { name: string; ms: number; era: string; ok: boolean };
 
 export type AgentReply = { say: string; play: Play | null; needsAnswer?: boolean; toolCalls: ToolTrace[] };
 
-export type PlaylistCommand = {
+/** Sent only for a non-default locale (plan D6); the agent treats an omitted locale as en-US. */
+type WithLocale = { locale?: SkillLocale };
+
+export type PlaylistCommand = WithLocale & {
   deviceUserId: string;
   command: "start" | "title" | "next" | "previous" | "restart" | "resume" | "reset" | "nearlyFinished" | "finished";
   order?: "shuffle" | "newest";
@@ -39,15 +44,15 @@ export type DemoInbox = { events: { eventId: string; type: string; detail: strin
 
 export type AgentClient = {
   /** One line of text for the device user; the agent keeps the conversation per user. */
-  turn: (input: { deviceUserId: string; text: string }) => Promise<AgentReply>;
+  turn: (input: { deviceUserId: string; text: string } & WithLocale) => Promise<AgentReply>;
   playlist?: (input: PlaylistCommand) => Promise<PlaylistReply>;
-  saveDraft?: (input: { deviceUserId: string; requestId: string; theme: string }) => Promise<DraftReceipt>;
+  saveDraft?: (input: { deviceUserId: string; requestId: string; theme: string } & WithLocale) => Promise<DraftReceipt>;
   latestDraft?: (input: { deviceUserId: string }) => Promise<LatestDraft>;
-  demoNext?: (input: { deviceUserId: string }) => Promise<DemoNext>;
+  demoNext?: (input: { deviceUserId: string } & WithLocale) => Promise<DemoNext>;
   demoReact?: (input: { deviceUserId: string; requestId: string; choice: "like" | "love" | "dismiss" }) => Promise<DemoReaction>;
-  demoWish?: (input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true }) => Promise<DemoWish>;
+  demoWish?: (input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true } & WithLocale) => Promise<DemoWish>;
   demoEvent?: (input: { deviceUserId: string; eventId: string; action: "read" | "dismiss" }) => Promise<DemoEvent>;
-  demoInbox?: (input: { deviceUserId: string }) => Promise<DemoInbox>;
+  demoInbox?: (input: { deviceUserId: string } & WithLocale) => Promise<DemoInbox>;
   demoPlaybackFinished?: (input: { deviceUserId: string; observedToken: string; eventId: string }) => Promise<{ status: "recorded" | "duplicate" | "ignored" }>;
 };
 
@@ -76,13 +81,14 @@ export class AgentHttpError extends Error {
 
 /**
  * The agent is the only thing the skill talks to. Sessions are opened with
- * `{ mode: "device", deviceUserId }` and remembered per user for the life of the Lambda
- * container; a `session_not_found` (expired on the server) reopens once.
+ * `{ mode: "device", deviceUserId }` (plus `locale` when not en-US) and remembered per user for
+ * the life of the Lambda container; a `session_not_found` (expired on the server) reopens once,
+ * and a turn in a different locale reopens so the server stores the new one (plan SS6).
  */
 export function createAgentClient(options: AgentClientOptions): AgentClient {
   const base = options.baseUrl.replace(/\/$/, "");
   const fetchImpl = options.fetch ?? fetch;
-  const sessions = new Map<string, string>();
+  const sessions = new Map<string, { sessionId: string; locale: SkillLocale | undefined }>();
 
   async function post<T>(path: string, body: unknown, signal: AbortSignal, headers: Record<string, string> = {}): Promise<T> {
     const response = await fetchImpl(`${base}${path}`, {
@@ -105,12 +111,12 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
     return parsed as T;
   }
 
-  async function sessionFor(deviceUserId: string, signal: AbortSignal, fresh = false): Promise<string> {
+  async function sessionFor(deviceUserId: string, locale: SkillLocale | undefined, signal: AbortSignal, fresh = false): Promise<string> {
     const known = sessions.get(deviceUserId);
-    if (known !== undefined && !fresh) return known;
-    const session = await post<SessionBody>("/agent/session", { mode: "device", deviceUserId }, signal);
+    if (known !== undefined && known.locale === locale && !fresh) return known.sessionId;
+    const session = await post<SessionBody>("/agent/session", { mode: "device", deviceUserId, ...(locale && { locale }) }, signal);
     if (typeof session.sessionId !== "string") throw new AgentHttpError(200, "malformed", "agent session reply has no sessionId");
-    sessions.set(deviceUserId, session.sessionId);
+    sessions.set(deviceUserId, { sessionId: session.sessionId, locale });
     return session.sessionId;
   }
 
@@ -127,7 +133,7 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   }
   return {
     ...(skillSecret && {
-      demoNext: (input: { deviceUserId: string }): Promise<DemoNext> => skillPost("/agent/demo/next", input),
+      demoNext: (input: { deviceUserId: string } & WithLocale): Promise<DemoNext> => skillPost("/agent/demo/next", input),
       async demoReact(input: { deviceUserId: string; requestId: string; choice: "like" | "love" | "dismiss" }): Promise<DemoReaction> {
         const reply: unknown = await skillPost("/agent/demo/reaction", input);
         if (!reply || typeof reply !== "object" || !("status" in reply) || (reply.status !== "saved" && reply.status !== "dismissed")) {
@@ -138,7 +144,7 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
         }
         return reply as DemoReaction;
       },
-      async demoWish(input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true }): Promise<DemoWish> {
+      async demoWish(input: { deviceUserId: string; requestId: string; topic: string; storyteller?: string; confirmed: true } & WithLocale): Promise<DemoWish> {
         const reply: unknown = await skillPost("/agent/demo/wish", input);
         if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved" || !("wishId" in reply) || typeof reply.wishId !== "string" || !("topic" in reply) || typeof reply.topic !== "string") {
           throw new AgentHttpError(200, "malformed", "agent wish reply is incomplete");
@@ -146,9 +152,9 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
         return reply as DemoWish;
       },
       demoEvent: (input: { deviceUserId: string; eventId: string; action: "read" | "dismiss" }): Promise<DemoEvent> => skillPost("/agent/demo/event", input),
-      demoInbox: (input: { deviceUserId: string }): Promise<DemoInbox> => skillPost("/agent/demo/inbox", input),
+      demoInbox: (input: { deviceUserId: string } & WithLocale): Promise<DemoInbox> => skillPost("/agent/demo/inbox", input),
       demoPlaybackFinished: (input: { deviceUserId: string; observedToken: string; eventId: string }): Promise<{ status: "recorded" | "duplicate" | "ignored" }> => skillPost("/agent/demo/playback-finished", input),
-      async saveDraft(input: { deviceUserId: string; requestId: string; theme: string }): Promise<DraftReceipt> {
+      async saveDraft(input: { deviceUserId: string; requestId: string; theme: string } & WithLocale): Promise<DraftReceipt> {
         const reply: unknown = await skillPost("/agent/demo/draft", input);
         if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved" || !("draftId" in reply) || typeof reply.draftId !== "string" || !("outline" in reply) || typeof reply.outline !== "string" || !("theme" in reply) || typeof reply.theme !== "string") {
           throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
@@ -173,19 +179,19 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
         return reply;
       },
     }),
-    async turn({ deviceUserId, text }) {
+    async turn({ deviceUserId, text, locale }) {
       const controller = new AbortController();
       const timer = setTimeout(() => {
         controller.abort();
       }, options.timeoutMs);
       try {
-        let sessionId = await sessionFor(deviceUserId, controller.signal);
+        let sessionId = await sessionFor(deviceUserId, locale, controller.signal);
         let reply: TurnBody;
         try {
           reply = await post<TurnBody>("/agent/turn", { sessionId, text }, controller.signal);
         } catch (error) {
           if (!(error instanceof AgentHttpError && error.status === 404 && error.code === "session_not_found")) throw error;
-          sessionId = await sessionFor(deviceUserId, controller.signal, true);
+          sessionId = await sessionFor(deviceUserId, locale, controller.signal, true);
           reply = await post<TurnBody>("/agent/turn", { sessionId, text }, controller.signal);
         }
         if (typeof reply.say !== "string" || !Array.isArray(reply.toolCalls)) throw new AgentHttpError(200, "malformed", "agent turn reply is not a turn");

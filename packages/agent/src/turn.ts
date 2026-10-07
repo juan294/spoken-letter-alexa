@@ -1,9 +1,10 @@
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { log } from "@spoken-letter-alexa/shared";
+import { log, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { Agent, AfterToolCallEvent, BeforeToolCallEvent, McpClient, type MessageData, type Model, type Usage } from "@strands-agents/sdk";
 
+import { AGENT_MESSAGES } from "./messages.ts";
 import { personaWithCatalog } from "./persona.ts";
-import { FALLBACK_SAY, type Play, type ToolTrace, turnOutputSchema } from "./schema.ts";
+import { type Play, type ToolTrace, turnOutputSchema } from "./schema.ts";
 
 /** The MCP TypeScript SDK 1.x client speaks the 2025-era protocol (legacy `initialize`). */
 export const CLIENT_ERA = "legacy";
@@ -28,6 +29,8 @@ export type TurnOptions = {
    * always get an unshared, disconnected-after-use client.
    */
   reuseMcpClient?: boolean | undefined;
+  /** Selects the fallback reply's language; the system prompt carries the reply-language instruction. */
+  locale?: SkillLocale | undefined;
 };
 
 /** Bedrock tokens for one turn, summed over its model calls. Cache fields are 0 when Bedrock reports none. */
@@ -109,6 +112,7 @@ function freshMcpClient(mcpUrl: string, accessToken: string, fetchImpl: typeof f
  */
 export async function runTurn(options: TurnOptions, text: string): Promise<TurnResult> {
   const toolCalls: ToolTrace[] = [];
+  const fallbackSay = AGENT_MESSAGES[options.locale ?? "en-US"].fallbackSay;
   const started = new Map<string, number>();
   const reuse = options.reuseMcpClient === true;
   const mcp = reuse ? mcpClientFor(options.mcpUrl, options.accessToken, options.fetch) : freshMcpClient(options.mcpUrl, options.accessToken, options.fetch);
@@ -143,12 +147,12 @@ export async function runTurn(options: TurnOptions, text: string): Promise<TurnR
     const usage = turnUsage(agent.metrics.accumulatedUsage);
     if (!parsed.success) {
       log.warn("agent_output_invalid", { issues: parsed.error.issues.length });
-      return { say: FALLBACK_SAY, play: null, toolCalls, history, usage };
+      return { say: fallbackSay, play: null, toolCalls, history, usage };
     }
     return { say: parsed.data.say, play: parsed.data.play, needsAnswer: parsed.data.needsAnswer ?? false, toolCalls, history, usage };
   } catch (error) {
     log.warn("agent_turn_failed", { message: error instanceof Error ? error.message : String(error), toolCalls: toolCalls.length });
-    return { say: FALLBACK_SAY, play: null, toolCalls, history: options.history ?? [], usage: turnUsage(agent.metrics.accumulatedUsage) };
+    return { say: fallbackSay, play: null, toolCalls, history: options.history ?? [], usage: turnUsage(agent.metrics.accumulatedUsage) };
   } finally {
     if (!reuse) await mcp.disconnect().catch(() => undefined);
   }
