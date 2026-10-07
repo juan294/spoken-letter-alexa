@@ -213,7 +213,7 @@ export function assertNoCarrierCollision(playSamples: string[], catchAllSamples:
   }
 }
 
-const SLOT_PLACEHOLDER = /\{([a-zA-Z0-9_]+)\}/g;
+export const SLOT_PLACEHOLDER = /\{([a-zA-Z0-9_]+)\}/g;
 
 /**
  * Every `{slot}` referenced in an intent's samples must be declared on that intent, or

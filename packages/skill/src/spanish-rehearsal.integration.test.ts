@@ -11,6 +11,7 @@ import { ISSUER, MCP_URL, mcpHarness, TEST_STORIES } from "../../agent/src/test-
 import englishModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
 import { createAgentClient } from "./agent-client.ts";
+import { type InteractionModel, SLOT_PLACEHOLDER } from "./model/generate.ts";
 import { type AlexaRequestEnvelope, type AlexaResponseEnvelope, createHandler } from "./handler.ts";
 
 // Phase 4 local rehearsal (phase-4.md R1–R5): the real handler, the real HTTP client and the
@@ -22,7 +23,8 @@ const SKILL_ID = "amzn1.ask.skill.local-rehearsal";
 const DEVICE_ID = "amzn1.ask.account.local-rehearsal";
 const SECRET = "local-rehearsal-command-secret";
 const BASE = "http://skill-rehearsal.local";
-const CATALOG_TEXT = [...TEST_STORIES.flatMap((story) => [story.title, story.storyteller])];
+const CATALOG_TEXT = TEST_STORIES.flatMap((story) => [story.title, story.storyteller]);
+const titleOf = (id: string | undefined) => TEST_STORIES.find((story) => story.id === id)?.title;
 const ENGLISH = /\b(?:you|the|your|is|was|playing|saved|ready|story|stories|there|ask|try|say|what|which|okay)\b/i;
 
 type Slot = { name: string; value: string; resolutions?: unknown };
@@ -35,7 +37,11 @@ const BUILT_INS: Record<SkillLocale, Record<string, string>> = {
     "sí": "AMAZON.YesIntent", no: "AMAZON.NoIntent", cancela: "AMAZON.CancelIntent", ayuda: "AMAZON.HelpIntent",
   },
 };
-const MODELS = { "en-US": englishModel, "es-ES": spanishModel };
+const MODELS: Record<SkillLocale, InteractionModel> = { "en-US": englishModel, "es-ES": spanishModel };
+
+/** A sample as an anchored pattern, each `{slot}` a lazy capture. */
+const samplePattern = (sample: string): RegExp =>
+  new RegExp(`^${sample.split(SLOT_PLACEHOLDER).map((part, index) => (index % 2 === 1 ? "(.+?)" : part.replace(/[.*+?^$()|[\]\\]/g, "\\$&"))).join("")}$`, "iu");
 
 /**
  * A local stand-in for Amazon's NLU over a generated model: an utterance must match a sample
@@ -50,11 +56,10 @@ function understand(utterance: string, locale: SkillLocale): { name: string; slo
   const { intents, types } = MODELS[locale].interactionModel.languageModel;
   let best: { name: string; slots: Record<string, Slot>; literal: number } | null = null;
   for (const intent of intents) {
-    const declared = new Map(("slots" in intent ? intent.slots : []).map((slot) => [slot.name, slot.type]));
+    const declared = new Map((intent.slots ?? []).map((slot) => [slot.name, slot.type]));
     for (const sample of intent.samples) {
-      const names = [...sample.matchAll(/\{(\w+)\}/g)].map((match) => match[1] ?? "");
-      const pattern = new RegExp(`^${sample.split(/\{\w+\}/).map((part) => part.replace(/[.*+?^$()|[\]\\]/g, "\\$&")).join("(.+?)")}$`, "iu");
-      const match = pattern.exec(utterance);
+      const names = [...sample.matchAll(SLOT_PLACEHOLDER)].map((match) => match[1] ?? "");
+      const match = samplePattern(sample).exec(utterance);
       if (!match) continue;
       const slots: Record<string, Slot> = {};
       let resolvedAll = true;
@@ -63,11 +68,11 @@ function understand(utterance: string, locale: SkillLocale): { name: string; slo
         const type = declared.get(name) ?? "";
         if (type.startsWith("AMAZON.")) { slots[name] = { name, value }; continue; }
         const entry = types.find((item) => item.name === type)?.values.find((candidate) =>
-          [candidate.name.value, ...("synonyms" in candidate.name ? candidate.name.synonyms : [])].some((spoken) => spoken.toLocaleLowerCase("es-ES") === value.toLocaleLowerCase("es-ES")));
+          [candidate.name.value, ...(candidate.name.synonyms ?? [])].some((spoken) => spoken.toLocaleLowerCase(locale) === value.toLocaleLowerCase(locale)));
         if (!entry) { resolvedAll = false; break; }
         slots[name] = { name, value, resolutions: { resolutionsPerAuthority: [{ status: { code: "ER_SUCCESS_MATCH" }, values: [{ value: { name: entry.name.value } }] }] } };
       }
-      const literal = sample.replace(/\{\w+\}/g, "").length;
+      const literal = sample.replace(SLOT_PLACEHOLDER, "").length;
       if (resolvedAll && (!best || literal > best.literal)) best = { name: intent.name, slots, literal };
     }
   }
@@ -119,11 +124,9 @@ async function rehearsal(locale: SkillLocale) {
     if (play) audio = { token: play.audioItem.stream.token, offsetInMilliseconds: play.audioItem.stream.offsetInMilliseconds };
     return response;
   };
-  const titleOf = (id: string | undefined) => TEST_STORIES.find((story) => story.id === id)?.title;
   return {
     drafts, updates, sessions, bodies, responses,
     playlistState: () => playlist.get(deviceSessionId(DEVICE_ID)),
-    titleOf,
     audio: () => audio,
     launch: () => { attributes = {}; sessionIndex += 1; return submit(envelope({ type: "LaunchRequest" }, true)); },
     say: (utterance: string) => submit(envelope({ type: "IntentRequest", intent: understand(utterance, locale) })),
@@ -190,7 +193,7 @@ describe.each(["es-ES", "en-US"] as const)("R1 and R3 journeys in %s (R5 for en-
     const play = await h.say(words.playAll);
     const started = await h.playlistState();
     expect(started?.index).toBe(0);
-    expect(speechOf(play)).toBe(lines.play(h.titleOf(started?.ids[0]) ?? ""));
+    expect(speechOf(play)).toBe(lines.play(titleOf(started?.ids[0]) ?? ""));
     expect(h.audio()?.token).toMatch(new RegExp(`^pl_${started?.generation}_0_`));
     const pause = await h.say(words.pause);
     expect(pause.response.directives).toEqual([{ type: "AudioPlayer.Stop" }]);
@@ -198,14 +201,14 @@ describe.each(["es-ES", "en-US"] as const)("R1 and R3 journeys in %s (R5 for en-
     const resume = await h.say(words.resume);
     expect(resume.response.outputSpeech).toBeUndefined();
     expect(resume.response.directives?.[0]).toMatchObject({ type: "AudioPlayer.Play",
-      audioItem: { stream: { offsetInMilliseconds: 42_000 }, metadata: { title: h.titleOf(started?.ids[0]), subtitle: lines.subtitle } } });
+      audioItem: { stream: { offsetInMilliseconds: 42_000 }, metadata: { title: titleOf(started?.ids[0]), subtitle: lines.subtitle } } });
     const resumed = await h.playlistState();
     expect(resumed).toMatchObject({ ids: started?.ids, index: 0, generation: (started?.generation ?? 0) + 1 });
     expect(h.audio()?.token).toMatch(new RegExp(`^pl_${resumed?.generation}_0_`));
     const next = await h.say(words.next);
     const advanced = await h.playlistState();
     expect(advanced).toMatchObject({ ids: started?.ids, index: 1, generation: (resumed?.generation ?? 0) + 1 });
-    expect(speechOf(next)).toBe(lines.next(h.titleOf(started?.ids[1]) ?? ""));
+    expect(speechOf(next)).toBe(lines.next(titleOf(started?.ids[1]) ?? ""));
     expect(h.audio()?.token).toMatch(new RegExp(`^pl_${advanced?.generation}_1_`));
     if (locale === "es-ES") for (const response of h.responses) expectSpanish(response);
   });
@@ -215,7 +218,7 @@ describe.each(["es-ES", "en-US"] as const)("R1 and R3 journeys in %s (R5 for en-
     expect(speechOf(await h.say(words.wish))).toBe(lines.wishProposed);
     expect(speechOf(await h.say(words.yes))).toBe(lines.wishSaved);
     await h.say(words.playAll);
-    const finishedTitle = h.titleOf((await h.playlistState())?.ids[0]) ?? "";
+    const finishedTitle = titleOf((await h.playlistState())?.ids[0]) ?? "";
     await h.finished();
     expect(speechOf(await h.launch())).toBe(lines.reactionPrompt(finishedTitle));
     expect(speechOf(await h.say(words.love))).toBe(lines.reactionSaved);
