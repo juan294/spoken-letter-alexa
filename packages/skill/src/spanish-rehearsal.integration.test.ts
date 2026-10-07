@@ -1,4 +1,4 @@
-import { log } from "@spoken-letter-alexa/shared";
+import { log, type SkillLocale, spanishPattern } from "@spoken-letter-alexa/shared";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { MemoryDemoDraftStore } from "../../agent/src/demo-drafts.ts";
@@ -8,13 +8,15 @@ import { createAgentApp } from "../../agent/src/routes.ts";
 import { ScriptedModel } from "../../agent/src/scripted-model.ts";
 import { deviceSessionId, MemorySessionStore } from "../../agent/src/sessions.ts";
 import { ISSUER, MCP_URL, mcpHarness, TEST_STORIES } from "../../agent/src/test-support.ts";
+import englishModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
 import { createAgentClient } from "./agent-client.ts";
 import { type AlexaRequestEnvelope, type AlexaResponseEnvelope, createHandler } from "./handler.ts";
 
-// Phase 4 local rehearsal (phase-4.md R1–R4): the real handler, the real HTTP client and the
-// Hono agent routes with in-memory stores and the scripted model, driven by Spanish
-// utterances. R5 is the English rehearsal in session-recovery.integration.test.ts, unmodified.
+// Phase 4 local rehearsal (phase-4.md R1–R5): the real handler, the real HTTP client and the
+// Hono agent routes with in-memory stores and the scripted model, driven by spoken utterances.
+// R1 and R3 also run with en-US requests and English utterances against exact English lines
+// (R5), next to the unmodified English rehearsal in session-recovery.integration.test.ts.
 
 const SKILL_ID = "amzn1.ask.skill.local-rehearsal";
 const DEVICE_ID = "amzn1.ask.account.local-rehearsal";
@@ -25,21 +27,27 @@ const ENGLISH = /\b(?:you|the|your|is|was|playing|saved|ready|story|stories|ther
 
 type Slot = { name: string; value: string; resolutions?: unknown };
 
-/** Built-in intents a Spanish speaker reaches without a custom sample. */
-const BUILT_INS: Record<string, string> = {
-  pausa: "AMAZON.PauseIntent", "continúa": "AMAZON.ResumeIntent", siguiente: "AMAZON.NextIntent",
-  "sí": "AMAZON.YesIntent", no: "AMAZON.NoIntent", cancela: "AMAZON.CancelIntent", ayuda: "AMAZON.HelpIntent",
+/** Built-in intents a speaker reaches without a custom sample. */
+const BUILT_INS: Record<SkillLocale, Record<string, string>> = {
+  "en-US": { pause: "AMAZON.PauseIntent", resume: "AMAZON.ResumeIntent", next: "AMAZON.NextIntent", yes: "AMAZON.YesIntent", no: "AMAZON.NoIntent" },
+  "es-ES": {
+    pausa: "AMAZON.PauseIntent", "continúa": "AMAZON.ResumeIntent", siguiente: "AMAZON.NextIntent",
+    "sí": "AMAZON.YesIntent", no: "AMAZON.NoIntent", cancela: "AMAZON.CancelIntent", ayuda: "AMAZON.HelpIntent",
+  },
 };
+const MODELS = { "en-US": englishModel, "es-ES": spanishModel };
 
 /**
- * A local stand-in for Amazon's NLU over the generated es-ES model: an utterance must match a
- * sample exactly (slots as wildcards), custom slots must resolve against their type's values
- * and synonyms, and the most literal match wins. Anything else is AMAZON.FallbackIntent.
+ * A local stand-in for Amazon's NLU over a generated model: an utterance must match a sample
+ * exactly (slots as wildcards), custom slots must resolve against their type's values and
+ * synonyms, and the most literal match wins. Anything else is AMAZON.FallbackIntent. It is
+ * stricter than Amazon's NLU, which also routes near matches and unresolved custom slots
+ * (Phase 4 device acceptance covers that).
  */
-function understand(utterance: string): { name: string; slots: Record<string, Slot> } {
-  const builtIn = BUILT_INS[utterance.toLocaleLowerCase("es-ES")];
+function understand(utterance: string, locale: SkillLocale): { name: string; slots: Record<string, Slot> } {
+  const builtIn = BUILT_INS[locale][utterance.toLocaleLowerCase(locale)];
   if (builtIn) return { name: builtIn, slots: {} };
-  const { intents, types } = spanishModel.interactionModel.languageModel;
+  const { intents, types } = MODELS[locale].interactionModel.languageModel;
   let best: { name: string; slots: Record<string, Slot>; literal: number } | null = null;
   for (const intent of intents) {
     const declared = new Map(("slots" in intent ? intent.slots : []).map((slot) => [slot.name, slot.type]));
@@ -66,8 +74,9 @@ function understand(utterance: string): { name: string; slots: Record<string, Sl
   return best ? { name: best.name, slots: best.slots } : { name: "AMAZON.FallbackIntent", slots: {} };
 }
 
-async function rehearsal() {
+async function rehearsal(locale: SkillLocale) {
   const mcp = await mcpHarness();
+  const playlist = new MemoryPlaylistStore();
   const drafts = new MemoryDemoDraftStore();
   const updates = new MemoryDemoUpdateStore();
   const sessions = new MemorySessionStore();
@@ -78,7 +87,7 @@ async function rehearsal() {
     deviceMcp: { url: MCP_URL, fetch: mcp.fetch }, sessions,
     speech: { synthesize: () => Promise.resolve(null) }, transcribe: () => Promise.resolve(""),
     demoToken: mcp.serviceToken, offline: true,
-    playlist: { store: new MemoryPlaylistStore(), secret: SECRET },
+    playlist: { store: playlist, secret: SECRET },
     drafts: { store: drafts, generator: () => Promise.resolve({ place: "quiet shore", challenge: "small mystery", ending: "kindness" }) },
     updates: { store: updates, stories, seed: [
       { eventId: "evt-lighthouse", type: "new_story", occurredAt: "2026-09-02T20:05:00.000Z", storyId: "st_lighthouse", detail: "A new story is ready." },
@@ -92,6 +101,7 @@ async function rehearsal() {
   };
   const handler = createHandler({ skillId: SKILL_ID, agent: createAgentClient({ baseUrl: BASE, fetch: network, timeoutMs: 7_000, skillSecret: SECRET }) });
   let attributes: Record<string, string> = {};
+  const responses: AlexaResponseEnvelope[] = [];
   let audio: { token: string; offsetInMilliseconds: number } | undefined;
   let requestIndex = 0;
   let sessionIndex = 1;
@@ -99,20 +109,24 @@ async function rehearsal() {
     version: "1.0",
     session: { new: isNew, sessionId: `es-session-${sessionIndex}`, application: { applicationId: SKILL_ID }, user: { userId: DEVICE_ID }, attributes },
     context: { System: { application: { applicationId: SKILL_ID }, user: { userId: DEVICE_ID } }, ...(audio && { AudioPlayer: audio }) },
-    request: { requestId: `es-request-${++requestIndex}`, timestamp: "2026-10-07T12:00:00Z", locale: "es-ES", ...request } as AlexaRequestEnvelope["request"],
+    request: { requestId: `es-request-${++requestIndex}`, timestamp: "2026-10-07T12:00:00Z", locale, ...request } as AlexaRequestEnvelope["request"],
   });
   const submit = async (event: AlexaRequestEnvelope) => {
     const response = await handler(event);
+    responses.push(response);
     if (event.request.type === "IntentRequest" || event.request.type === "LaunchRequest") attributes = response.sessionAttributes ?? {};
     const play = response.response.directives?.find((directive) => directive.type === "AudioPlayer.Play");
     if (play) audio = { token: play.audioItem.stream.token, offsetInMilliseconds: play.audioItem.stream.offsetInMilliseconds };
     return response;
   };
+  const titleOf = (id: string | undefined) => TEST_STORIES.find((story) => story.id === id)?.title;
   return {
-    drafts, updates, sessions, bodies,
+    drafts, updates, sessions, bodies, responses,
+    playlistState: () => playlist.get(deviceSessionId(DEVICE_ID)),
+    titleOf,
     audio: () => audio,
     launch: () => { attributes = {}; sessionIndex += 1; return submit(envelope({ type: "LaunchRequest" }, true)); },
-    say: (utterance: string) => submit(envelope({ type: "IntentRequest", intent: understand(utterance) })),
+    say: (utterance: string) => submit(envelope({ type: "IntentRequest", intent: understand(utterance, locale) })),
     paused: (offsetInMilliseconds: number) => { if (audio) audio = { ...audio, offsetInMilliseconds }; },
     finished: () => submit(envelope({ type: "AudioPlayer.PlaybackFinished", token: audio?.token })),
   };
@@ -131,43 +145,99 @@ function expectSpanish(response: AlexaResponseEnvelope) {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("Spanish rehearsal through the real handler, client and routes (phase-4.md)", () => {
-  test("every rehearsal utterance is a sample in the generated es-ES model", () => {
-    for (const utterance of ["qué hay de nuevo", "pon mis historias", "vamos a crear una historia", "sirenas", "lee mi borrador",
-      "quiero una historia sobre el espacio", "me encanta", "envíale una historia a Ana", "cómo añado créditos"]) {
-      expect(understand(utterance).name, utterance).not.toBe("AMAZON.FallbackIntent");
-    }
-  });
+/** Lines the R1 and R3 journeys speak, per locale. Titles come from the playlist state, which is shuffled. */
+const LINES = {
+  "en-US": {
+    launch: 'A new story is ready. "A lighthouse for Mateo" by Grandpa Juan. You can say let\'s create a story.',
+    whatIsNew: 'You have 2 delivered stories. The newest is "A lighthouse for Mateo" by Grandpa Juan.',
+    play: (title: string) => `Playing ${title} by Grandpa Juan.`,
+    next: (title: string) => `Playing ${title}.`,
+    subtitle: "read by Grandpa Juan",
+    wishProposed: "Save a wish for a space story? Say yes or no.",
+    wishSaved: "I saved your wish.",
+    reactionPrompt: (title: string) => `Did you like or love ${title}?`,
+    reactionSaved: "I saved that you loved the story.",
+  },
+  "es-ES": {
+    launch: 'Ya tienes una historia nueva. "A lighthouse for Mateo", de Grandpa Juan. Puedes decir vamos a crear una historia.',
+    whatIsNew: 'Tienes 2 historias. La más reciente es "A lighthouse for Mateo", de Grandpa Juan.',
+    play: (title: string) => `Pongo ${title}, de Grandpa Juan.`,
+    next: (title: string) => `Pongo ${title}.`,
+    subtitle: "leída por Grandpa Juan",
+    wishProposed: "¿Guardo tu deseo de una historia sobre el espacio? Di sí o no.",
+    wishSaved: "He guardado tu deseo.",
+    reactionPrompt: (title: string) => `¿Te ha gustado o te ha encantado ${title}?`,
+    reactionSaved: "He guardado que te ha encantado la historia.",
+  },
+};
+const UTTERANCES = {
+  "en-US": { whatIsNew: "what is new", playAll: "play my stories", pause: "pause", resume: "resume", next: "next",
+    wish: "i want a story about space", yes: "yes", love: "i love that story" },
+  "es-ES": { whatIsNew: "qué hay de nuevo", playAll: "pon mis historias", pause: "pausa", resume: "continúa", next: "siguiente",
+    wish: "quiero una historia sobre el espacio", yes: "sí", love: "me encanta" },
+};
 
-  test("R1 launch, what is new, play, pause, resume and next stay Spanish and continue the playlist token", async () => {
-    const h = await rehearsal();
-    const launch = await h.launch();
-    expect(speechOf(launch)).toBe('Ya tienes una historia nueva. "A lighthouse for Mateo", de Grandpa Juan. Puedes decir vamos a crear una historia.');
-    const whatIsNew = await h.say("qué hay de nuevo");
+describe.each(["es-ES", "en-US"] as const)("R1 and R3 journeys in %s (R5 for en-US)", (locale) => {
+  const lines = LINES[locale];
+  const words = UTTERANCES[locale];
+
+  test("R1 launch, what is new, play, pause, resume and next continue one playlist with exact lines", async () => {
+    const h = await rehearsal(locale);
+    expect(speechOf(await h.launch())).toBe(lines.launch);
+    const whatIsNew = await h.say(words.whatIsNew);
+    expect(speechOf(whatIsNew)).toBe(lines.whatIsNew);
     expect(whatIsNew.response.directives).toBeUndefined();
-    expectSpanish(whatIsNew);
-    const play = await h.say("pon mis historias");
-    expectSpanish(play);
-    expect(speechOf(play)).toMatch(/^Pongo .+, de Grandpa Juan\.$/);
-    const first = h.audio();
-    expect(first?.token).toMatch(/^pl_/);
-    const pause = await h.say("pausa");
+    const play = await h.say(words.playAll);
+    const started = await h.playlistState();
+    expect(started?.index).toBe(0);
+    expect(speechOf(play)).toBe(lines.play(h.titleOf(started?.ids[0]) ?? ""));
+    expect(h.audio()?.token).toMatch(new RegExp(`^pl_${started?.generation}_0_`));
+    const pause = await h.say(words.pause);
     expect(pause.response.directives).toEqual([{ type: "AudioPlayer.Stop" }]);
     h.paused(42_000);
-    const resume = await h.say("continúa");
+    const resume = await h.say(words.resume);
     expect(resume.response.outputSpeech).toBeUndefined();
-    expect(resume.response.directives?.[0]).toMatchObject({ type: "AudioPlayer.Play", audioItem: { stream: { offsetInMilliseconds: 42_000 }, metadata: { subtitle: "leída por Grandpa Juan" } } });
-    const resumedToken = h.audio()?.token;
-    expect(resumedToken).toMatch(/^pl_\d+_0_/);
-    const next = await h.say("siguiente");
-    expectSpanish(next);
-    expect(speechOf(next)).toMatch(/^Pongo .+\.$/);
-    expect(h.audio()?.token).toMatch(/^pl_\d+_1_/);
-    expect(h.audio()?.token).not.toBe(resumedToken);
+    expect(resume.response.directives?.[0]).toMatchObject({ type: "AudioPlayer.Play",
+      audioItem: { stream: { offsetInMilliseconds: 42_000 }, metadata: { title: h.titleOf(started?.ids[0]), subtitle: lines.subtitle } } });
+    const resumed = await h.playlistState();
+    expect(resumed).toMatchObject({ ids: started?.ids, index: 0, generation: (started?.generation ?? 0) + 1 });
+    expect(h.audio()?.token).toMatch(new RegExp(`^pl_${resumed?.generation}_0_`));
+    const next = await h.say(words.next);
+    const advanced = await h.playlistState();
+    expect(advanced).toMatchObject({ ids: started?.ids, index: 1, generation: (resumed?.generation ?? 0) + 1 });
+    expect(speechOf(next)).toBe(lines.next(h.titleOf(started?.ids[1]) ?? ""));
+    expect(h.audio()?.token).toMatch(new RegExp(`^pl_${advanced?.generation}_1_`));
+    if (locale === "es-ES") for (const response of h.responses) expectSpanish(response);
+  });
+
+  test("R3 a confirmed wish and a reaction after a finished story save one receipt each with exact confirmations", async () => {
+    const h = await rehearsal(locale);
+    expect(speechOf(await h.say(words.wish))).toBe(lines.wishProposed);
+    expect(speechOf(await h.say(words.yes))).toBe(lines.wishSaved);
+    await h.say(words.playAll);
+    const finishedTitle = h.titleOf((await h.playlistState())?.ids[0]) ?? "";
+    await h.finished();
+    expect(speechOf(await h.launch())).toBe(lines.reactionPrompt(finishedTitle));
+    expect(speechOf(await h.say(words.love))).toBe(lines.reactionSaved);
+    const state = await h.updates.get(deviceSessionId(DEVICE_ID));
+    expect(state?.wishes.map((wish) => wish.topic)).toEqual(["space"]);
+    expect(state?.reactions.map((reaction) => reaction.choice)).toEqual(["love"]);
+    if (locale === "es-ES") for (const response of h.responses) expectSpanish(response);
+  });
+});
+
+describe("Spanish rehearsal through the real handler, client and routes (phase-4.md)", () => {
+  test.each([
+    ["qué hay de nuevo", "WhatIsNewIntent"], ["pon mis historias", "PlayAllIntent"], ["vamos a crear una historia", "StartStoryIntent"],
+    ["sirenas", "ThemeChoiceIntent"], ["lee mi borrador", "ReadDemoDraftIntent"], ["quiero una historia sobre el espacio", "WishStoryIntent"],
+    ["me encanta", "ReactToStoryIntent"], ["envíale una historia a Ana", "AppHandoffIntent"], ["cómo añado créditos", "CreditHelpIntent"],
+    ["algo que no tiene sentido", "AMAZON.FallbackIntent"],
+  ])("the generated es-ES model routes %s to %s", (utterance, intent) => {
+    expect(understand(utterance, "es-ES").name).toBe(intent);
   });
 
   test("R2 create, fallback, a bare Spanish theme and readback save one mermaid receipt read in Spanish", async () => {
-    const h = await rehearsal();
+    const h = await rehearsal("es-ES");
     const start = await h.say("vamos a crear una historia");
     expectSpanish(start);
     const fallback = await h.say("algo que no tiene sentido");
@@ -182,35 +252,22 @@ describe("Spanish rehearsal through the real handler, client and routes (phase-4
     expect(speechOf(read)).toBe("Tu borrador dice: Tema: las sirenas. Lugar: una orilla tranquila. Nudo: un pequeño misterio. Final: la bondad trae a todos de vuelta a casa.");
   });
 
-  test("R3 a confirmed wish and a reaction after a finished story save one receipt each, confirmed in Spanish", async () => {
-    const h = await rehearsal();
-    const proposed = await h.say("quiero una historia sobre el espacio");
-    expect(speechOf(proposed)).toBe("¿Guardo tu deseo de una historia sobre el espacio? Di sí o no.");
-    expect(speechOf(await h.say("sí"))).toBe("He guardado tu deseo.");
-    await h.say("pon mis historias");
-    await h.finished();
-    const prompt = await h.launch();
-    expectSpanish(prompt);
-    expect(speechOf(prompt)).toMatch(/^¿Te ha gustado o te ha encantado .+\?$/);
-    const reacted = await h.say("me encanta");
-    expect(speechOf(reacted)).toBe("He guardado que te ha encantado la historia.");
-    const state = await h.updates.get(deviceSessionId(DEVICE_ID));
-    expect(state?.wishes.map((wish) => wish.topic)).toEqual(["space"]);
-    expect(state?.reactions.map((reaction) => reaction.choice)).toEqual(["love"]);
-  });
-
   test("R4 a named send request and a credits question hand off without the name reaching replies, logs, the agent or storage", async () => {
-    const info = vi.spyOn(log, "info");
-    const warn = vi.spyOn(log, "warn");
-    const h = await rehearsal();
+    const logged = (["info", "warn", "error"] as const).map((level) => vi.spyOn(log, level));
+    const h = await rehearsal("es-ES");
     const handoff = await h.say("envíale una historia a Ana");
     expect(speechOf(handoff)).toBe("Puedo ayudarte a empezar una historia. Abre Spoken Letter para elegir quién la escucha y enviarla.");
     const credits = await h.say("cómo añado créditos");
     expect(speechOf(credits)).toBe("Puedes añadir créditos para historias en Spoken Letter.");
     await h.say("qué hay de nuevo");
-    for (const evidence of [speechOf(handoff), JSON.stringify(info.mock.calls), JSON.stringify(warn.mock.calls), h.bodies.join("\n"),
-      JSON.stringify(await h.sessions.get(deviceSessionId(DEVICE_ID))), JSON.stringify(await h.drafts.get(deviceSessionId(DEVICE_ID)))]) {
-      expect(evidence).not.toContain("Ana");
+    const session = await h.sessions.get(deviceSessionId(DEVICE_ID));
+    expect(session).not.toBeNull();
+    const name = spanishPattern(String.raw`\bana\b`);
+    for (const evidence of [JSON.stringify(h.responses), ...logged.map((spy) => JSON.stringify(spy.mock.calls)), h.bodies.join("\n"),
+      JSON.stringify(session), JSON.stringify((await h.drafts.get(deviceSessionId(DEVICE_ID))) ?? null),
+      JSON.stringify((await h.updates.get(deviceSessionId(DEVICE_ID))) ?? null)]) {
+      expect(evidence).not.toMatch(name);
     }
+    expect(logged[0]?.mock.calls.length).toBeGreaterThan(0);
   });
 });
