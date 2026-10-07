@@ -291,8 +291,8 @@ describe("es-ES storyteller aliases (Phase 2)", () => {
     },
   );
 
-  test("an unresolved Spanish storyteller slot still maps to the catalog name", async () => {
-    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("es-ES", "WishFromStorytellerIntent", { wishtopic: "sirenas", storyteller: "tía Whitney" }));
+  test.each(["tía Whitney", "la tía Whitney"])("an unresolved Spanish storyteller slot %s still maps to the catalog name", async (storyteller) => {
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("es-ES", "WishFromStorytellerIntent", { wishtopic: "sirenas", storyteller }));
     expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
   });
 });

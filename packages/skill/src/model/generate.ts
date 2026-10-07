@@ -255,11 +255,15 @@ const KINSHIP_SYNONYM_FORMS: Record<string, string[]> = {
   dad: ["daddy", "father"],
 };
 
-/** The Spanish kinship forms for the same English kinship words (plan D2: the catalog name is spoken as is). */
+/**
+ * The Spanish kinship forms for the same English kinship words (plan D2: the catalog name is
+ * spoken as is). Spain Spanish puts an article before tía and abuelo ("pídele a la tía Whitney"),
+ * and Alexa fills the slot with it, so those forms are synonyms too.
+ */
 const SPANISH_KINSHIP_FORMS: Record<string, string[]> = {
-  aunt: ["tía", "tita"],
-  grandma: ["abuela"],
-  grandpa: ["abuelo"],
+  aunt: ["tía", "tita", "la tía", "la tita"],
+  grandma: ["abuela", "la abuela"],
+  grandpa: ["abuelo", "el abuelo"],
   mom: ["mamá"],
   dad: ["papá"],
 };
@@ -311,7 +315,9 @@ export function generateExamplePhrases(stories: CatalogStoryteller[], locale: Sk
 export function withExamplePhrases(manifestText: string, locale: SkillLocale, phrases: readonly string[]): string {
   const localeStart = manifestText.indexOf(`"${locale}": {`);
   const key = localeStart === -1 ? -1 : manifestText.indexOf(`"examplePhrases": [`, localeStart);
-  if (key === -1) throw new Error(`skill.json has no ${locale} locale with examplePhrases`);
+  // The array must sit before the next locale key, never inside another locale's block.
+  const nextLocale = localeStart === -1 ? -1 : manifestText.slice(localeStart + 1).search(/"[a-z]{2}-[A-Z]{2}": \{/);
+  if (key === -1 || (nextLocale !== -1 && key > localeStart + 1 + nextLocale)) throw new Error(`skill.json has no ${locale} locale with examplePhrases`);
   const lineStart = manifestText.lastIndexOf("\n", key) + 1;
   const indent = manifestText.slice(lineStart, key);
   const open = key + `"examplePhrases": [`.length;
@@ -446,7 +452,11 @@ const SPANISH_SAMPLES: Record<string, string[]> = {
     "pon algo corto",
     "pon una historia para dormir",
     "pon algo para dormir",
+    "pon un cuento",
+    "pon un cuento para dormir",
     "pon la historia que mandó {storyteller}",
+    "pon la historia que ha mandado {storyteller}",
+    "pon la historia que me ha mandado {storyteller}",
     "ponga la historia que mandó {storyteller}",
     "pon la historia de {storyteller}",
     "pon la historia que hizo {storyteller}",
@@ -503,7 +513,10 @@ const SPANISH_SAMPLES: Record<string, string[]> = {
   StartStoryIntent: [
     "vamos a crear una historia",
     "crea una historia",
+    "crea un cuento",
     "haz una historia",
+    "inventa una historia",
+    "inventa un cuento sobre {theme}",
     "vamos a crear una historia para dormir",
     "crea una historia para dormir",
     "crea una historia sobre {theme}",
@@ -519,8 +532,13 @@ const SPANISH_SAMPLES: Record<string, string[]> = {
   ThemeIntent: ["sobre {theme}", "el tema es {theme}", "que sea sobre {theme}"],
   HelpTopicIntent: ["ayuda con {topic}", "cómo puedo {topic}", "háblame de {topic}"],
   ReadDemoDraftIntent: ["lee mi borrador", "qué dice mi borrador", "qué hay en mi borrador", "cuál es mi borrador"],
-  WishStoryIntent: ["quiero una historia sobre {wishtopic}", "me gustaría una historia sobre {wishtopic}"],
-  WishFromStorytellerIntent: ["pide a {storyteller} otra historia sobre {wishtopic}", "quiero otra historia sobre {wishtopic} de {storyteller}"],
+  WishStoryIntent: ["quiero una historia sobre {wishtopic}", "quiero un cuento sobre {wishtopic}", "me gustaría una historia sobre {wishtopic}"],
+  WishFromStorytellerIntent: [
+    "pide a {storyteller} otra historia sobre {wishtopic}",
+    "pídele a {storyteller} otra historia sobre {wishtopic}",
+    "pídele a {storyteller} otro cuento sobre {wishtopic}",
+    "quiero otra historia sobre {wishtopic} de {storyteller}",
+  ],
   AppHandoffIntent: [
     "envía una historia a {listeneralias}",
     "manda una historia a {listeneralias}",

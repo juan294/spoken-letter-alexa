@@ -49,7 +49,11 @@
             "pon algo corto",
             "pon una historia para dormir",
             "pon algo para dormir",
+            "pon un cuento",
+            "pon un cuento para dormir",
             "pon la historia que mandó {storyteller}",
+            "pon la historia que ha mandado {storyteller}",
+            "pon la historia que me ha mandado {storyteller}",
             "ponga la historia que mandó {storyteller}",
             "pon la historia de {storyteller}",
             "pon la historia que hizo {storyteller}",
@@ -111,7 +115,10 @@
           "samples": [
             "vamos a crear una historia",
             "crea una historia",
+            "crea un cuento",
             "haz una historia",
+            "inventa una historia",
+            "inventa un cuento sobre {theme}",
             "vamos a crear una historia para dormir",
             "crea una historia para dormir",
             "crea una historia sobre {theme}",
@@ -183,6 +190,7 @@
           ],
           "samples": [
             "quiero una historia sobre {wishtopic}",
+            "quiero un cuento sobre {wishtopic}",
             "me gustaría una historia sobre {wishtopic}"
           ]
         },
@@ -200,6 +208,8 @@
           ],
           "samples": [
             "pide a {storyteller} otra historia sobre {wishtopic}",
+            "pídele a {storyteller} otra historia sobre {wishtopic}",
+            "pídele a {storyteller} otro cuento sobre {wishtopic}",
             "quiero otra historia sobre {wishtopic} de {storyteller}"
           ]
         },
@@ -374,6 +384,8 @@
                 "value": "Aunt Whitney",
                 "synonyms": [
                   "Whitney",
+                  "la tita Whitney",
+                  "la tía Whitney",
                   "tita Whitney",
                   "tía Whitney"
                 ]

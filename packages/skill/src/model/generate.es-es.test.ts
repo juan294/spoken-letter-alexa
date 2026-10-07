@@ -56,12 +56,25 @@ describe("es-ES interaction model", () => {
     expect(esByName.CatchAllIntent?.samples).toEqual(expect.arrayContaining(["por favor {text}", "puedes {text}", "pide a spoken letter que {text}"]));
   });
 
-  test("M4 every es-ES sample passes the Spanish safety filter, except the fixed handoff and credit explanations", () => {
-    const exempt = new Set([...(esByName.AppHandoffIntent?.samples ?? []), ...(esByName.CreditHelpIntent?.samples ?? [])]);
+  test("M4 every es-ES sample passes the Spanish safety filter; the fixed handoff and credit explanations may name only their own fragment", () => {
+    // Mirrors the en-US exemption ("send" for handoff, "credit" for credit help): only that fragment is masked.
+    const ownFragment = new Map([
+      ...(esByName.AppHandoffIntent?.samples ?? []).map((sample) => [sample, "enviar"] as const),
+      ...(esByName.CreditHelpIntent?.samples ?? []).map((sample) => [sample, "crédito"] as const),
+    ]);
     for (const sample of esIntents.flatMap((intent) => intent.samples)) {
       expect(sample).toMatch(/^[a-zñáéíóúü0-9 {}']+$/u);
-      if (!exempt.has(sample)) expect(utteranceAllowed(sample, "es-ES"), sample).toBe(true);
+      const fragment = ownFragment.get(sample);
+      const checked = fragment ? sample.replaceAll(fragment, "") : sample;
+      expect(utteranceAllowed(checked, "es-ES"), sample).toBe(true);
     }
+  });
+
+  test("Spanish tale and perfect-tense phrasings are covered", () => {
+    expect(esByName.PlayStoryIntent?.samples).toEqual(expect.arrayContaining(["pon un cuento", "pon un cuento para dormir", "pon la historia que ha mandado {storyteller}"]));
+    expect(esByName.StartStoryIntent?.samples).toEqual(expect.arrayContaining(["crea un cuento", "inventa una historia", "inventa un cuento sobre {theme}"]));
+    expect(esByName.WishStoryIntent?.samples).toContain("quiero un cuento sobre {wishtopic}");
+    expect(esByName.WishFromStorytellerIntent?.samples).toEqual(expect.arrayContaining(["pídele a {storyteller} otra historia sobre {wishtopic}", "pídele a {storyteller} otro cuento sobre {wishtopic}"]));
   });
 
   test.each([
@@ -98,14 +111,14 @@ describe("es-ES interaction model", () => {
     expect(synonyms("DemoTopic", "bedtime")).toContain("dormir");
     expect(synonyms("ReactionChoice", "love")).toContain("encanta");
     expect(synonyms("ReactionChoice", "like")).toContain("ha gustado");
-    expect(synonyms("StorytellerName", "Aunt Whitney")).toEqual(expect.arrayContaining(["Whitney", "tía Whitney", "tita Whitney"]));
+    expect(synonyms("StorytellerName", "Aunt Whitney")).toEqual(expect.arrayContaining(["Whitney", "tía Whitney", "tita Whitney", "la tía Whitney", "la tita Whitney"]));
   });
 
   test("M6 Spanish kinship forms follow the English kinship word", () => {
     const type = storytellerSlotType([{ storyteller: "Grandma Rosa" }, { storyteller: "Dad Leo" }, { storyteller: "Juan" }], "es-ES");
     expect(type.values).toEqual([
       { name: { value: "Dad Leo", synonyms: ["Leo", "papá Leo"] } },
-      { name: { value: "Grandma Rosa", synonyms: ["Rosa", "abuela Rosa"] } },
+      { name: { value: "Grandma Rosa", synonyms: ["Rosa", "abuela Rosa", "la abuela Rosa"] } },
       { name: { value: "Juan" } },
     ]);
   });
@@ -149,6 +162,11 @@ describe("withExamplePhrases", () => {
     expect(after.manifest.publishingInformation.locales["es-ES"]?.examplePhrases).toEqual(["Alexa, abre spoken letter", "dos", "tres"]);
     expect(after.manifest.publishingInformation.locales["en-US"]).toEqual(before.manifest.publishingInformation.locales["en-US"]);
     expect(text.split("\n").length).toBe(committed.split("\n").length);
+  });
+
+  test("never rewrites another locale's phrases when the named locale has none", () => {
+    const text = '{"en-US": {"name": "x"}, "es-ES": {"examplePhrases": ["a"]}}';
+    expect(() => withExamplePhrases(text, "en-US", ["b"])).toThrow(/en-US/);
   });
 
   test("a missing locale fails loudly", () => {
