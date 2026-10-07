@@ -211,7 +211,8 @@ export type Matchers = {
 
 /** A Unicode word boundary: JavaScript's `\b` treats accented letters as non-word characters. */
 const WORD_BOUNDARY = String.raw`(?:(?<=[\p{L}\p{N}])(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?=[\p{L}\p{N}]))`;
-const es = (source: string): RegExp => new RegExp(source.replaceAll(String.raw`\b`, WORD_BOUNDARY), "iu");
+/** A case-insensitive Unicode pattern whose `\b` is a letter-or-digit boundary, accented letters included. */
+export const spanishPattern = (source: string): RegExp => new RegExp(source.replaceAll(String.raw`\b`, WORD_BOUNDARY), "iu");
 
 export const MATCHERS: Record<SkillLocale, Matchers> = {
   "en-US": {
@@ -240,31 +241,31 @@ export const MATCHERS: Record<SkillLocale, Matchers> = {
   },
   "es-ES": {
     topics: [
-      ["mermaids", es(String.raw`\bsirenas?\b`)], ["space", es(String.raw`\b(?:espacio|estrellas?|planetas?)\b`)],
-      ["ocean", es(String.raw`\b(?:océanos?|oceanos?|mar|mares|playas?)\b`)], ["forest", es(String.raw`\bbosques?\b`)],
-      ["animals", es(String.raw`\b(?:animal|animales|gat[oa]s?|perr[oa]s?)\b`)], ["friendship", es(String.raw`\b(?:amig[oa]s?|amistad)\b`)],
-      ["bedtime", es(String.raw`\bdormir\b`)],
+      ["mermaids", spanishPattern(String.raw`\bsirenas?\b`)], ["space", spanishPattern(String.raw`\b(?:espacio|estrellas?|planetas?)\b`)],
+      ["ocean", spanishPattern(String.raw`\b(?:océanos?|oceanos?|mar|mares|playas?)\b`)], ["forest", spanishPattern(String.raw`\bbosques?\b`)],
+      ["animals", spanishPattern(String.raw`\b(?:animal|animales|gat[oa]s?|perr[oa]s?)\b`)], ["friendship", spanishPattern(String.raw`\b(?:amig[oa]s?|amistad)\b`)],
+      ["bedtime", spanishPattern(String.raw`\bdormir\b`)],
     ],
-    askStoryteller: es(String.raw`^p[ií]de(?:le|les)?\s+(?:a\s+(?:la\s+|el\s+)?|al\s+)(.+?)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b`),
-    wish: es(String.raw`^(?:quiero|me\s+gustar[ií]a|deseo)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b.*\b(?:sobre|acerca\s+de)\b`),
+    askStoryteller: spanishPattern(String.raw`^p[ií]de(?:le|les)?\s+(?:a\s+(?:la\s+|el\s+)?|al\s+)(.+?)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b`),
+    wish: spanishPattern(String.raw`^(?:quiero|me\s+gustar[ií]a|deseo)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b.*\b(?:sobre|acerca\s+de)\b`),
     // Imperatives and infinitives only: "la historia que mandó" asks to play, not to send, and
     // the present tense after "que" ("la que me envía la abuela") describes a story, not a command.
-    send: es(String.raw`(?<!\bque\s+(?:me\s+|nos\s+|te\s+|le\s+)?)\b(?:env[ií]a(?:le|les|la|sela|selo)?|enviar(?:le|les|la)?|m[aá]nda(?:le|les|la|sela|selo)?|mandar(?:le|les|la)?|entr[eé]ga(?:le|les|la)?|entregar(?:le|les|la)?)\b`),
-    createFor: es(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)(?:me|le|les)?\b(?!\s+que\b).*\bpara\b(?!\s+(?:la\s+hora\s+de\s+)?dormir)`),
-    credits: es(String.raw`\b(?:cr[eé]ditos?|cobrar|cobro|comprar|pagar|pago)\b`),
-    howToCreate: es(String.raw`\b(?:c[oó]mo|ayuda|ay[uú]dame)\b.*\b(?:cre[ao]|crear|hago|hacer|borrador)\b`),
-    explicitTheme: es(String.raw`^(?:sobre|de|el\s+tema\s+es|que\s+sea\s+(?:sobre|de)|hazla\s+sobre)\s+(.+)$`),
-    bareTheme: es(String.raw`^(?:(?:el|la|los|las)\s+)?(?:sirenas|espacio|océano|oceano|mar|bosque|animales|amistad|hora\s+de\s+dormir)$`),
-    createStory: es(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)\b(?!\s+que\b).*\b(?:historia|cuento)\b`),
-    themeAbout: es(String.raw`\b(?:sobre|acerca\s+de)\s+(.+)$`),
-    play: es(String.raw`\b(?:pon|ponme|ponla|pónmela|reproduce|escuchar|escucha|oír|oir|léeme|cuéntame)\b`),
-    notPlay: es(String.raw`\b(?:qué|cuál|cuáles|lista|nuevas?|nuevos?|disponibles?)\b`),
+    send: spanishPattern(String.raw`(?<!\bque\s+(?:me\s+|nos\s+|te\s+|le\s+)?)\b(?:env[ií]a(?:le|les|la|sela|selo)?|enviar(?:le|les|la)?|m[aá]nda(?:le|les|la|sela|selo)?|mandar(?:le|les|la)?|entr[eé]ga(?:le|les|la)?|entregar(?:le|les|la)?)\b`),
+    createFor: spanishPattern(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)(?:me|le|les)?\b(?!\s+que\b).*\bpara\b(?!\s+(?:la\s+hora\s+de\s+)?dormir)`),
+    credits: spanishPattern(String.raw`\b(?:cr[eé]ditos?|cobrar|cobro|comprar|pagar|pago)\b`),
+    howToCreate: spanishPattern(String.raw`\b(?:c[oó]mo|ayuda|ay[uú]dame)\b.*\b(?:cre[ao]|crear|hago|hacer|borrador)\b`),
+    explicitTheme: spanishPattern(String.raw`^(?:sobre|de|el\s+tema\s+es|que\s+sea\s+(?:sobre|de)|hazla\s+sobre)\s+(.+)$`),
+    bareTheme: spanishPattern(String.raw`^(?:(?:el|la|los|las)\s+)?(?:sirenas|espacio|océano|oceano|mar|bosque|animales|amistad|hora\s+de\s+dormir)$`),
+    createStory: spanishPattern(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)\b(?!\s+que\b).*\b(?:historia|cuento)\b`),
+    themeAbout: spanishPattern(String.raw`\b(?:sobre|acerca\s+de)\s+(.+)$`),
+    play: spanishPattern(String.raw`\b(?:pon|ponme|ponla|pónmela|reproduce|escuchar|escucha|oír|oir|léeme|cuéntame)\b`),
+    notPlay: spanishPattern(String.raw`\b(?:qué|cuál|cuáles|lista|nuevas?|nuevos?|disponibles?)\b`),
     titleCarriers: [
-      es(String.raw`^(?:por\s+favor\s+)?(?:pon(?:me)?|reproduce|quiero\s+escuchar|escuchar|escucha|oír|oir|léeme|cuéntame)\s+`),
-      es(String.raw`^(?:(?:la|una|el|un)\s+)?(?:(?:historia|cuento)\s+)?(?:(?:que\s+se\s+llama|llamad[ao]|del?)\s+)?`),
+      spanishPattern(String.raw`^(?:por\s+favor\s+)?(?:pon(?:me)?|reproduce|quiero\s+escuchar|escuchar|escucha|oír|oir|léeme|cuéntame)\s+`),
+      spanishPattern(String.raw`^(?:(?:la|una|el|un)\s+)?(?:(?:historia|cuento)\s+)?(?:(?:que\s+se\s+llama|llamad[ao]|del?)\s+)?`),
     ],
-    shortTitle: es(String.raw`^(?:la\s+)?historia\s+(?:del?\s+)?(.+)$`),
-    like: es(String.raw`^(?:me\s+)?(?:gusta|gustó|ha\s+gustado|gustado)$`),
-    love: es(String.raw`^(?:me\s+)?(?:encanta|encantó|ha\s+encantado|encantado)$`),
+    shortTitle: spanishPattern(String.raw`^(?:la\s+)?historia\s+(?:del?\s+)?(.+)$`),
+    like: spanishPattern(String.raw`^(?:me\s+)?(?:gusta|gustó|ha\s+gustado|gustado)$`),
+    love: spanishPattern(String.raw`^(?:me\s+)?(?:encanta|encantó|ha\s+encantado|encantado)$`),
   },
 };

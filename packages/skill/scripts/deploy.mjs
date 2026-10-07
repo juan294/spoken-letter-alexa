@@ -39,16 +39,13 @@ const uri = manifest.manifest?.apis?.custom?.endpoint?.uri;
 if (uri !== EXPECTED_ARN) fail(`skill.json endpoint is ${uri}; expected ${EXPECTED_ARN} (SkillStack)`);
 console.log(`ok: skill.json endpoint is ${EXPECTED_ARN}`);
 
+// SKILL_LOCALES in packages/shared/src/locale.ts; this plain-Node script cannot import the TypeScript source.
 const LOCALES = ["en-US", "es-ES"];
-for (const name of LOCALES) {
-  const modelPath = path.join(pkgRoot, `skill-package/interactionModels/custom/${name}.json`);
-  if (!existsSync(modelPath)) fail(`${name} interaction model missing: run pnpm -F skill generate`);
-}
-console.log(`ok: interaction models present (${LOCALES.join(", ")})`);
-
 // `file://` icon URIs are resolved inside the uploaded package, so a missing or misnamed
 // file fails at Amazon's import rather than here. Catch it before the upload.
 for (const name of LOCALES) {
+  const modelPath = path.join(pkgRoot, `skill-package/interactionModels/custom/${name}.json`);
+  if (!existsSync(modelPath)) fail(`${name} interaction model missing: run pnpm -F skill generate`);
   const locale = manifest.manifest?.publishingInformation?.locales?.[name];
   if (!locale) fail(`skill.json has no ${name} locale`);
   for (const key of ["smallIconUri", "largeIconUri"]) {
@@ -58,7 +55,7 @@ for (const name of LOCALES) {
     if (!existsSync(asset)) fail(`${name} ${key} points at skill-package/${value.slice("file://".length)}, which does not exist`);
   }
 }
-console.log("ok: 108 px and 512 px locale icons present for every locale");
+console.log(`ok: interaction models and 108 px and 512 px icons present (${LOCALES.join(", ")})`);
 
 const version = spawnSync("ask", ["--version"], { encoding: "utf8" });
 const askVersion = version.stdout?.trim() ?? "";

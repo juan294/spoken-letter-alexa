@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseFixtureCatalog, TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
-import { CLASS_C_DENYLIST, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { CLASS_C_DENYLIST, SKILL_LOCALES, type SkillLocale } from "@spoken-letter-alexa/shared";
+
+import { spanishPattern } from "../messages.ts";
 
 export type ModelSlot = { name: string; type: string };
 export type ModelIntent = { name: string; slots?: ModelSlot[]; samples: string[] };
@@ -15,12 +17,13 @@ export type InteractionModel = {
 };
 
 /** `skill-package/interactionModels/custom/<locale>.json`, committed and drift-checked. */
-export const MODEL_PATHS: Record<SkillLocale, string> = {
-  "en-US": path.resolve(import.meta.dirname, "../../skill-package/interactionModels/custom/en-US.json"),
-  "es-ES": path.resolve(import.meta.dirname, "../../skill-package/interactionModels/custom/es-ES.json"),
-};
+export const MODEL_PATHS = Object.fromEntries(SKILL_LOCALES.map((locale) =>
+  [locale, path.resolve(import.meta.dirname, `../../skill-package/interactionModels/custom/${locale}.json`)])) as Record<SkillLocale, string>;
 export const MODEL_PATH = MODEL_PATHS["en-US"];
-export const TRAINING_PATH = path.resolve(import.meta.dirname, "../../skill-package/training/en-US.jsonl");
+/** Recorded phrasings per locale; a locale with no file (es-ES today) has none. */
+export const TRAINING_PATHS = Object.fromEntries(SKILL_LOCALES.map((locale) =>
+  [locale, path.resolve(import.meta.dirname, `../../skill-package/training/${locale}.jsonl`)])) as Record<SkillLocale, string>;
+export const TRAINING_PATH = TRAINING_PATHS["en-US"];
 /** `fixtures/stories.json` at the repo root — the same catalog the MCP server serves. */
 export const FIXTURES_PATH = path.resolve(import.meta.dirname, "../../../../fixtures/stories.json");
 
@@ -171,35 +174,20 @@ const BUILT_IN_INTENTS = [
 
 const CHILD_WORDS = /\b(kid|kids|child|children|son|daughter|grandson|granddaughter)\b/;
 
-/**
- * es-ES safety tables (plan, Scope and invariants). Word boundaries are spelled out because
- * `\b` treats accented letters as non-word characters. The shared `CLASS_C_DENYLIST` governs
- * tool metadata in English; Spanish samples are checked against both lists.
- */
-const SPANISH_CHILD_WORDS = /(?<![\p{L}])(?:niño|niña|niños|niñas|hijo|hija|hijos|hijas|nieto|nieta|nietos|nietas|crío|cría|peque)(?![\p{L}])/u;
-const SPANISH_DENYLIST = ["enviar", "descargar", "comprar", "crédito", "pagar", "destinatario", "borrar", "eliminar", "quitar", "admin"];
-
-/** Each locale's utterance alphabet: lowercase letters, digits, spaces, apostrophes, slot braces. */
-const ALPHABETS: Record<SkillLocale, { allowed: RegExp; other: RegExp }> = {
-  "en-US": { allowed: /^[a-z0-9 {}']+$/, other: /[^a-z0-9 {}']/g },
-  "es-ES": { allowed: /^[a-zñáéíóúü0-9 {}']+$/u, other: /[^a-zñáéíóúü0-9 {}']/gu },
-};
-
 function normaliseUtterance(text: string, locale: SkillLocale): string {
-  const lower = locale === "en-US" ? text.toLowerCase() : text.normalize("NFC").toLocaleLowerCase(locale);
-  return lower
-    .replace(ALPHABETS[locale].other, " ")
+  const tables = LOCALE_TABLES[locale];
+  return tables.lowercase(text)
+    .replace(tables.alphabet.other, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /** Recorded phrasings are filtered exactly as the fixed lists are asserted. */
 export function utteranceAllowed(sample: string, locale: SkillLocale = "en-US"): boolean {
-  if (!ALPHABETS[locale].allowed.test(sample)) return false;
-  // Each locale's own child words: the English "son" is the Spanish "they are".
-  if ((locale === "en-US" ? CHILD_WORDS : SPANISH_CHILD_WORDS).test(sample)) return false;
-  if (/record|audio/.test(sample)) return false;
-  if (locale === "es-ES" && (sample.includes("grab") || SPANISH_DENYLIST.some((fragment) => sample.includes(fragment)))) return false;
+  const tables = LOCALE_TABLES[locale];
+  if (!tables.alphabet.allowed.test(sample)) return false;
+  if (tables.childWords.test(sample)) return false;
+  if (tables.deniedFragments.some((fragment) => sample.includes(fragment))) return false;
   return CLASS_C_DENYLIST.every((denied) => !sample.includes(denied.fragment));
 }
 
@@ -275,16 +263,14 @@ const SPANISH_KINSHIP_FORMS: Record<string, string[]> = {
  * recognized kinship term, its other common forms ("Auntie Whitney").
  */
 export function storytellerSlotType(stories: CatalogStoryteller[], locale: SkillLocale = "en-US"): ModelSlotType {
+  const { kinshipForms, kinshipSpoken } = LOCALE_TABLES[locale];
   const distinct = [...new Set(stories.map((story) => story.storyteller))].sort();
   const values = distinct.map((storyteller) => {
     const [kinshipWord, ...rest] = storyteller.split(" ");
     const bareName = rest.join(" ");
-    const forms = locale === "en-US" ? KINSHIP_SYNONYM_FORMS : SPANISH_KINSHIP_FORMS;
-    const kinshipVariants = bareName ? (forms[kinshipWord?.toLowerCase() ?? ""] ?? []) : [];
-    // English capitalizes the kinship word as a title ("Auntie Whitney"); Spanish writes it in lower case ("tía Whitney").
-    const spoken = (variant: string) => (locale === "en-US" ? `${variant.charAt(0).toUpperCase()}${variant.slice(1)}` : variant);
+    const kinshipVariants = bareName ? (kinshipForms[kinshipWord?.toLowerCase() ?? ""] ?? []) : [];
     const synonyms = bareName
-      ? [bareName, ...kinshipVariants.map((variant) => `${spoken(variant)} ${bareName}`)].sort()
+      ? [bareName, ...kinshipVariants.map((variant) => `${kinshipSpoken(variant)} ${bareName}`)].sort()
       : [];
     return { name: { value: storyteller, ...(synonyms.length > 0 && { synonyms }) } };
   });
@@ -294,18 +280,7 @@ export function storytellerSlotType(stories: CatalogStoryteller[], locale: Skill
 /** The store listing's fixed three-entry `examplePhrases`, generated so it never drifts from what actually works. */
 export function generateExamplePhrases(stories: CatalogStoryteller[], locale: SkillLocale = "en-US"): [string, string, string] {
   const [storyteller] = [...new Set(stories.map((story) => story.storyteller))].sort();
-  if (locale === "es-ES") {
-    return [
-      "Alexa, abre spoken letter",
-      `Alexa, pide a spoken letter que ponga la historia que mandó ${storyteller ?? "tu familia"}`,
-      "Alexa, pide a spoken letter qué hay de nuevo",
-    ];
-  }
-  return [
-    "Alexa, open spoken letter",
-    `Alexa, ask spoken letter to play the story ${storyteller ?? "your family"} sent`,
-    "Alexa, ask spoken letter what is new",
-  ];
+  return LOCALE_TABLES[locale].examplePhrases(storyteller);
 }
 
 /**
@@ -334,7 +309,8 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
     return { name: intent.name, ...(intent.slots && { slots: intent.slots }), samples: [...intent.samples] };
   });
 
-  const catchAll = new Set(locale === "en-US" ? CATCH_ALL_SAMPLES : SPANISH_SAMPLES.CatchAllIntent);
+  const tables = LOCALE_TABLES[locale];
+  const catchAll = new Set(tables.catchAll);
   for (const line of input.training) {
     const sample = normaliseUtterance(line, locale);
     if (sample && utteranceAllowed(sample, locale)) catchAll.add(sample);
@@ -399,14 +375,17 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
     { name: "StartPlaylistOverIntent", samples: ["start the playlist over", "restart the playlist", "play the playlist from the beginning"] },
   );
 
-  if (locale === "es-ES") {
-    // Same intents, slots and order as en-US (plan D8); only the samples are Spanish.
+  if (tables.samples) {
+    // Same intents, slots and order as en-US (plan D8); only the samples change.
+    const unused = new Set(Object.keys(tables.samples));
     for (const intent of intents) {
       if (intent.name === "CatchAllIntent") continue;
-      const samples = SPANISH_SAMPLES[intent.name];
-      if (!samples) throw new Error(`intent ${intent.name} has no es-ES samples: add them to SPANISH_SAMPLES in packages/skill/src/model/generate.ts`);
+      const samples = tables.samples[intent.name];
+      if (!samples) throw new Error(`intent ${intent.name} has no ${locale} samples: add them to the ${locale} table in packages/skill/src/model/generate.ts`);
       intent.samples = [...samples];
+      unused.delete(intent.name);
     }
+    if (unused.size > 0) throw new Error(`${locale} samples name unknown intents: ${[...unused].join(", ")}`);
   }
 
   const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];
@@ -419,22 +398,20 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
     interactionModel: {
       languageModel: { invocationName: INVOCATION_NAME, intents, types: [
         storytellerSlotType(input.stories, locale),
-        ...(locale === "en-US" ? [
-          { name: "DemoTopic", values: [
-            { name: { value: "mermaids", synonyms: ["mermaid"] } },
-            { name: { value: "space", synonyms: ["star", "stars", "planet", "planets"] } },
-            { name: { value: "ocean", synonyms: ["sea", "beach"] } },
-            { name: { value: "forest", synonyms: ["wood", "woods"] } },
-            { name: { value: "animals", synonyms: ["animal", "cat", "cats", "dog", "dogs"] } },
-            { name: { value: "friendship", synonyms: ["friend", "friends"] } },
-            { name: { value: "bedtime", synonyms: ["sleep"] } },
-          ] },
-          { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] },
-        ] : SPANISH_TYPES),
+        ...tables.types,
       ] },
     },
   };
 }
+
+/** es-ES catch-all carriers: intent-neutral, like the en-US ones, and never a prefix of a `PlayStoryIntent` sample. */
+const SPANISH_CATCH_ALL_SAMPLES = [
+  "por favor {text}",
+  "puedes {text}",
+  "podrías {text}",
+  "pide a spoken letter que {text}",
+  "dile a spoken letter que {text}",
+];
 
 /**
  * es-ES samples per intent (plan D8, phase-2.md step 2): the same intents and slots as en-US,
@@ -503,13 +480,6 @@ const SPANISH_SAMPLES: Record<string, string[]> = {
     "qué escucho ahora",
     "cuál es la siguiente historia",
   ],
-  CatchAllIntent: [
-    "por favor {text}",
-    "puedes {text}",
-    "podrías {text}",
-    "pide a spoken letter que {text}",
-    "dile a spoken letter que {text}",
-  ],
   StartStoryIntent: [
     "vamos a crear una historia",
     "crea una historia",
@@ -572,3 +542,74 @@ const SPANISH_TYPES: ModelSlotType[] = [
     { name: { value: "love", synonyms: ["encanta", "encantó", "ha encantado"] } },
   ] },
 ];
+
+const ENGLISH_TYPES: ModelSlotType[] = [
+  { name: "DemoTopic", values: [
+    { name: { value: "mermaids", synonyms: ["mermaid"] } },
+    { name: { value: "space", synonyms: ["star", "stars", "planet", "planets"] } },
+    { name: { value: "ocean", synonyms: ["sea", "beach"] } },
+    { name: { value: "forest", synonyms: ["wood", "woods"] } },
+    { name: { value: "animals", synonyms: ["animal", "cat", "cats", "dog", "dogs"] } },
+    { name: { value: "friendship", synonyms: ["friend", "friends"] } },
+    { name: { value: "bedtime", synonyms: ["sleep"] } },
+  ] },
+  { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] },
+];
+
+type LocaleTables = {
+  lowercase: (text: string) => string;
+  /** Alexa's utterance alphabet for the locale: lowercase letters, digits, spaces, apostrophes, slot braces. */
+  alphabet: { allowed: RegExp; other: RegExp };
+  /** Each locale's own child words: the English "son" is the Spanish "they are". */
+  childWords: RegExp;
+  /** Substrings refused on top of the shared `CLASS_C_DENYLIST`. */
+  deniedFragments: readonly string[];
+  kinshipForms: Record<string, string[]>;
+  kinshipSpoken: (variant: string) => string;
+  /** Samples per intent; null keeps the en-US literals above. */
+  samples: Record<string, string[]> | null;
+  catchAll: readonly string[];
+  types: ModelSlotType[];
+  examplePhrases: (storyteller: string | undefined) => [string, string, string];
+};
+
+/**
+ * Everything that differs by locale (plan D8). es-ES safety lists follow the plan's Scope and
+ * invariants; Spanish samples are checked against these and the shared `CLASS_C_DENYLIST`.
+ */
+const LOCALE_TABLES: Record<SkillLocale, LocaleTables> = {
+  "en-US": {
+    lowercase: (text) => text.toLowerCase(),
+    alphabet: { allowed: /^[a-z0-9 {}']+$/, other: /[^a-z0-9 {}']/g },
+    childWords: CHILD_WORDS,
+    deniedFragments: ["record", "audio"],
+    kinshipForms: KINSHIP_SYNONYM_FORMS,
+    // English capitalizes the kinship word as a title ("Auntie Whitney").
+    kinshipSpoken: (variant) => `${variant.charAt(0).toUpperCase()}${variant.slice(1)}`,
+    samples: null,
+    catchAll: CATCH_ALL_SAMPLES,
+    types: ENGLISH_TYPES,
+    examplePhrases: (storyteller) => [
+      "Alexa, open spoken letter",
+      `Alexa, ask spoken letter to play the story ${storyteller ?? "your family"} sent`,
+      "Alexa, ask spoken letter what is new",
+    ],
+  },
+  "es-ES": {
+    lowercase: (text) => text.normalize("NFC").toLocaleLowerCase("es-ES"),
+    alphabet: { allowed: /^[a-zñáéíóúü0-9 {}']+$/u, other: /[^a-zñáéíóúü0-9 {}']/gu },
+    childWords: spanishPattern(String.raw`\b(?:niño|niña|niños|niñas|hijo|hija|hijos|hijas|nieto|nieta|nietos|nietas|crío|cría|peque)\b`),
+    deniedFragments: ["record", "audio", "grab", "enviar", "descargar", "comprar", "crédito", "pagar", "destinatario", "borrar", "eliminar", "quitar", "admin"],
+    kinshipForms: SPANISH_KINSHIP_FORMS,
+    // Spanish writes the kinship word in lower case ("tía Whitney").
+    kinshipSpoken: (variant) => variant,
+    samples: SPANISH_SAMPLES,
+    catchAll: SPANISH_CATCH_ALL_SAMPLES,
+    types: SPANISH_TYPES,
+    examplePhrases: (storyteller) => [
+      "Alexa, abre spoken letter",
+      `Alexa, pide a spoken letter que ponga la historia que mandó ${storyteller ?? "tu familia"}`,
+      "Alexa, pide a spoken letter qué hay de nuevo",
+    ],
+  },
+};

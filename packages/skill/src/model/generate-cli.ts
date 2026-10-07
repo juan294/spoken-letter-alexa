@@ -1,6 +1,6 @@
 // `pnpm -F skill generate`: rebuild skill-package/interactionModels/custom/{en-US,es-ES}.json
 // from the tool metadata, the fixture catalog and the recorded phrasings in
-// skill-package/training/en-US.jsonl (es-ES has no training file). Also refreshes each
+// skill-package/training/en-US.jsonl (a locale with no training file has none). Also refreshes each
 // locale's examplePhrases in skill.json in place, so the store listing never drifts from what
 // the model actually supports and the hand-formatted manifest is otherwise untouched.
 // Deterministic; the test suite fails when any committed file drifts from this output.
@@ -9,15 +9,14 @@ import path from "node:path";
 
 import { SKILL_LOCALES } from "@spoken-letter-alexa/shared";
 
-import { generateExamplePhrases, generateInteractionModel, loadStories, MODEL_PATHS, readTraining, withExamplePhrases } from "./generate.ts";
+import { generateExamplePhrases, generateInteractionModel, loadStories, MODEL_PATHS, readTraining, TRAINING_PATHS, withExamplePhrases } from "./generate.ts";
 
 const SKILL_MANIFEST_PATH = path.resolve(import.meta.dirname, "../../skill-package/skill.json");
 
-const training = readTraining();
 const stories = loadStories();
 let manifest = readFileSync(SKILL_MANIFEST_PATH, "utf8");
 for (const locale of SKILL_LOCALES) {
-  const localeTraining = locale === "en-US" ? training : [];
+  const localeTraining = readTraining(TRAINING_PATHS[locale]);
   const model = generateInteractionModel({ locale, training: localeTraining, stories });
   const modelPath = MODEL_PATHS[locale];
   mkdirSync(path.dirname(modelPath), { recursive: true });
