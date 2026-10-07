@@ -120,6 +120,42 @@ Gate on `ccc4812`:
 - The failed receipt is kept outside the repository at `<scratchpad>/p3-verify-attempt1-failed.log` and `p3-verification-attempt1-failed.json`.
 - en-US: no pre-existing test changed. Every English literal moved verbatim (reviewer compared them character by character), and the en-US system prompt is byte-identical.
 
+## Phase 4: local rehearsal (release steps pending)
+
+Commits: `437a628` (rehearsal and model gap), `4fc1b8f` (review repairs), `4bcc6be` (simplify).
+
+`packages/skill/src/spanish-rehearsal.integration.test.ts` drives the real handler, the real agent client and the Hono agent routes (in-memory playlist, draft, update and session stores; the scripted model). Utterances go through a local stand-in for Amazon's NLU built from the generated models. An utterance must match a sample exactly, custom slots must resolve against their type's values and synonyms, and the most literal match wins. This is stricter than Amazon's NLU, so a pass here does not over-claim device routing.
+
+| ID | Result |
+| --- | --- |
+| R1 | es-ES and en-US: exact launch, what's-new, play and next lines. The playlist store keeps the same ids while the index goes 0 → 0 (resume at 42 s) → 1, the generation goes up by one at each step, and the tokens follow `pl_<generation>_<index>_`. The resumed card says "leída por Grandpa Juan" |
+| R2 | One `mermaids` receipt after a fallback and a bare "sirenas"; readback is "Tu borrador dice: Tema: las sirenas. …" |
+| R3 | es-ES and en-US: exact wish and reaction confirmations; the updates store holds exactly one `space` wish and one `love` reaction |
+| R4 | Handoff and credits help. "Ana" (Unicode word, any case) is absent from every response (speech, reprompt, attributes), the info, warn and error logs, every agent request body, and the session, draft and updates stores |
+| R5 | The unmodified English rehearsal (`session-recovery.integration.test.ts`) passes, and R1/R3 also run with en-US requests against exact English lines built from the unchanged en-US catalog |
+
+The rehearsal found a model gap: "envíale una historia a {listeneralias}" fell back. The "envíale" and "mándale" handoff samples were added, and es-ES.json was regenerated.
+
+Independent review of `437a628`: CHANGES REQUESTED (playlist continuity was not proven, titles were not exact, R4 coverage was incomplete, R5 was too narrow, and routing was only checked as "not Fallback"). All were fixed in `4fc1b8f`. Re-review: APPROVE. Simplify (four angles in one reviewer): applied the shared `SLOT_PLACEHOLDER` (now exported), typed models, a module-level `titleOf`, and lowercasing in the request locale. Skipped: a shared rehearsal-support module and a common envelope builder, because the English rehearsal must stay unmodified, so only one file could use them.
+
+Final gate on `4bcc6be`: all 5 checks passed (718 unit tests, CDK synth, 8 of 8 E2E). Identity sha256 `5ecc870b…b972`, 637 files, unchanged before and after.
+
+### Release checklist: not executed (each step needs its own Owner authorization)
+
+1. Local merge into `develop` was authorized by the Owner's request and is done at the end of this session. Merging into `main` per `docs/release.md` is not done.
+2. `pnpm run deploy` (CDK). The API must deploy before or with the skill Lambda (SS4). Then read back both Lambda code hashes.
+3. `pnpm -F @spoken-letter-alexa/skill run deploy` (`ask deploy`). Then read back both locales' models and the development enablement. Discard the ASK CLI's reformatting of `skill.json`. The dry run passes (M8).
+4. Device acceptance on the office Echo Show 5 in Spanish (Spain) with Alexa+, by voice, R1–R4. Record the time, the language of each reply, and the `skill_turn` lines. Then the English regression. Also check on the device: whether nonsense speech during a pending draft reaches `ThemeChoiceIntent` (with `ER_SUCCESS_NO_MATCH`) rather than Fallback (the handler already covers both); "crea una historia para dormir" vs the handoff sample; "pon otra" vs "ponla otra vez".
+5. Record the evidence in these notes and the friction log.
+
+### Pending Owner decisions and follow-ups
+
+- Copy review of every Spanish string: `packages/skill/src/messages.ts`, `packages/agent/src/messages.ts`, the scripted replies in `packages/agent/src/scripted-model.ts`, the language line in `packages/agent/src/persona.ts`, and the es-ES manifest text in `skill.json` (Phases 1 and 3 exit criteria).
+- Acceptance of Phases 1–4. After Phase 2 acceptance, delete `probe/es-es-locale` and `/Users/juan/code/spoken-letter-alexa-es-probe`; both were left in place.
+- Example phrase wording: the plan's "pide a spoken letter qué hay de nuevo" vs "pregunta a spoken letter qué hay de nuevo".
+- Optional: extra Spanish child words beyond the plan's list ("nene", "nena", "bebé"), and accent folding if an es-ES training file is ever added.
+- Known risk (Phase 3, finding 3): a language switch that lands on a different warm Lambda container keeps the old session locale until that container's cache reopens. If seen on a device, send `locale` on the turn body as an override.
+
 ## Deviations
 
 - Plan said existing English assertions stay unmodified. Found `proactive-events.test.ts` asserted `localizedAttributes: [{ locale: "en-US" }]` exactly. Chose to update that one assertion to both locales. Why: D10 and oracle E8 require the es-ES entry, so this test cannot pass unchanged.
