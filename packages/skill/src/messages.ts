@@ -62,10 +62,10 @@ export type Messages = {
 const EN_WISH_START = "To start a wish, say I want a story about space.";
 const ES_WISH_START = "Para pedir un deseo, di quiero una historia sobre el espacio.";
 
-/** How each canonical topic is said inside a Spanish sentence. */
+/** How each canonical topic follows "una historia" in a Spanish sentence. */
 const SPANISH_TOPICS: Record<string, string> = {
-  mermaids: "sirenas", space: "el espacio", ocean: "el mar", forest: "el bosque",
-  animals: "animales", friendship: "la amistad", bedtime: "la hora de dormir",
+  mermaids: "sobre sirenas", space: "sobre el espacio", ocean: "sobre el mar", forest: "sobre el bosque",
+  animals: "sobre animales", friendship: "sobre la amistad", bedtime: "para dormir",
 };
 
 export const MESSAGES: Record<SkillLocale, Messages> = {
@@ -124,13 +124,13 @@ export const MESSAGES: Record<SkillLocale, Messages> = {
   "es-ES": {
     reprompt: "Puedes decir: pon mis historias, o preguntar qué hay de nuevo.",
     launch: "Spoken Letter. ¿Qué historia familiar quieres escuchar?",
-    help: "Puedes decir pon mis historias, preguntar qué hay de nuevo, o decir vamos a crear una historia. Para enviar historias y para los créditos, usa Spoken Letter. ¿Qué prefieres?",
+    help: "Puedes decir pon mis historias, preguntar qué hay de nuevo, o decir vamos a crear una historia. Para enviar historias o añadir créditos, usa Spoken Letter. ¿Qué prefieres?",
     retry: "Sigo buscando esa historia. Vuelve a pedírmela en un momento.",
     nothingToResume: "No hay nada que reanudar. Primero pide una historia familiar.",
     nothingToPlay: "¿Qué historia familiar quieres escuchar? Puedes decir: pon mis historias.",
     nothingToGoBackTo: "Esa era la primera. Pide otra historia.",
     oneAtATime: "Pongo las historias familiares de una en una.",
-    noPlay: "¿Qué historia de las que te han llegado quieres escuchar? Puedes decir un título, o decir pon mis historias.",
+    noPlay: "¿Qué historia de las que te han llegado quieres escuchar? Puedes decir un título o pon mis historias.",
     themePrompt: "¿De qué quieres que trate tu historia? Puedes decir sirenas o el espacio.",
     draftUnavailable: "No se ha guardado ningún borrador. Puedes probar otro tema en un momento.",
     draftUnsupported: "No se ha guardado ningún borrador. Prueba con un tema como sirenas o el espacio.",
@@ -151,7 +151,7 @@ export const MESSAGES: Record<SkillLocale, Messages> = {
     wishRecoveryRepeated: "Di sí para guardar tu deseo, o di cancelar.",
     generalRecoveryRepeated: "Di vamos a crear una historia, pon mis historias, o cancelar.",
     progressivePlay: "Buscando esa historia.",
-    progressiveNews: "Mirando qué hay de nuevo.",
+    progressiveNews: "Voy a ver qué hay de nuevo.",
     reactionFor: (title) => `¿Te ha gustado o te ha encantado ${title}?`,
     updateDetail: (detail) => `${detail} Puedes decir vamos a crear una historia.`,
     draftSaved: "He guardado el borrador de tu historia. Abre Spoken Letter para elegir quién la escucha y terminarla.",
@@ -164,7 +164,7 @@ export const MESSAGES: Record<SkillLocale, Messages> = {
     wishTopicQuestion: "¿De qué quieres que trate tu historia?",
     wishTopicStart: `¿De qué quieres que trate tu historia? ${ES_WISH_START}`,
     whoFrom: "¿De quién quieres una historia?",
-    wishConfirm: (topic, storyteller) => `¿Guardo tu deseo: una historia sobre ${SPANISH_TOPICS[topic] ?? topic}${storyteller ? ` de ${storyteller}` : ""}? Di sí o no.`,
+    wishConfirm: (topic, storyteller) => `¿Guardo tu deseo de una historia${storyteller ? ` de ${storyteller}` : ""} ${SPANISH_TOPICS[topic] ?? `sobre ${topic}`}? Di sí o no.`,
     updatesUnavailable: "Tus novedades no están disponibles ahora mismo.",
     noUpdates: "No tienes novedades sin leer.",
     updatesFailed: "No he podido leer tus novedades ahora mismo. Inténtalo de nuevo en un momento.",
@@ -241,22 +241,23 @@ export const MATCHERS: Record<SkillLocale, Matchers> = {
       ["animals", es(String.raw`\b(?:animal|animales|gat[oa]s?|perr[oa]s?)\b`)], ["friendship", es(String.raw`\b(?:amig[oa]s?|amistad)\b`)],
       ["bedtime", es(String.raw`\bdormir\b`)],
     ],
-    askStoryteller: es(String.raw`^p[ií]de(?:le|les)?\s+a\s+(.+?)\s+(?:una|otra)\s+historia\b`),
-    wish: es(String.raw`^(?:quiero|me\s+gustar[ií]a|deseo)\s+(?:una|otra)\s+historia\b.*\b(?:sobre|de)\b`),
-    // Imperatives and infinitives only: "la historia que mandó" asks to play, not to send.
-    send: es(String.raw`\b(?:env[ií]a(?:le|les|la|sela|selo)?|enviar(?:le|les|la)?|m[aá]nda(?:le|les|la|sela|selo)?|mandar(?:le|les|la)?|entr[eé]ga(?:le|les|la)?|entregar(?:le|les|la)?)\b`),
-    createFor: es(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)(?:me|le|les)?\b.*\bpara\b(?!\s+(?:la\s+hora\s+de\s+)?dormir)`),
-    credits: es(String.raw`\b(?:cr[eé]ditos?|cobrar?|cobro|comprar?|pagar?|pago)\b`),
+    askStoryteller: es(String.raw`^p[ií]de(?:le|les)?\s+al?\s+(.+?)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b`),
+    wish: es(String.raw`^(?:quiero|me\s+gustar[ií]a|deseo)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b.*\b(?:sobre|acerca\s+de)\b`),
+    // Imperatives and infinitives only: "la historia que mandó" asks to play, not to send, and
+    // the present tense after "que" ("la que me envía la abuela") describes a story, not a command.
+    send: es(String.raw`(?<!\bque\s+(?:me\s+|nos\s+|te\s+|le\s+)?)\b(?:env[ií]a(?:le|les|la|sela|selo)?|enviar(?:le|les|la)?|m[aá]nda(?:le|les|la|sela|selo)?|mandar(?:le|les|la)?|entr[eé]ga(?:le|les|la)?|entregar(?:le|les|la)?)\b`),
+    createFor: es(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)(?:me|le|les)?\b(?!\s+que\b).*\bpara\b(?!\s+(?:la\s+hora\s+de\s+)?dormir)`),
+    credits: es(String.raw`\b(?:cr[eé]ditos?|cobrar|cobro|comprar|pagar|pago)\b`),
     howToCreate: es(String.raw`\b(?:c[oó]mo|ayuda|ay[uú]dame)\b.*\b(?:cre[ao]|crear|hago|hacer|borrador)\b`),
     explicitTheme: es(String.raw`^(?:sobre|de|el\s+tema\s+es|que\s+sea\s+(?:sobre|de)|hazla\s+sobre)\s+(.+)$`),
     bareTheme: es(String.raw`^(?:(?:el|la|los|las)\s+)?(?:sirenas|espacio|océano|oceano|mar|bosque|animales|amistad|hora\s+de\s+dormir)$`),
-    createStory: es(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)\b.*\bhistoria\b`),
+    createStory: es(String.raw`\b(?:cre[ae]|crear|creemos|haz|hacer|hagamos)\b(?!\s+que\b).*\b(?:historia|cuento)\b`),
     themeAbout: es(String.raw`\b(?:sobre|acerca\s+de)\s+(.+)$`),
-    play: es(String.raw`\b(?:pon|ponme|ponla|pónmela|reproduce|escuchar|escucha|oír|oir)\b`),
+    play: es(String.raw`\b(?:pon|ponme|ponla|pónmela|reproduce|escuchar|escucha|oír|oir|léeme|cuéntame)\b`),
     notPlay: es(String.raw`\b(?:qué|cuál|cuáles|lista|nuevas?|nuevos?|disponibles?)\b`),
     titleCarriers: [
-      es(String.raw`^(?:por\s+favor\s+)?(?:pon(?:me)?|reproduce|quiero\s+escuchar|escuchar|escucha|oír|oir)\s+`),
-      es(String.raw`^(?:(?:la|una)\s+)?(?:historia\s+)?(?:(?:que\s+se\s+llama|llamada|del?)\s+)?`),
+      es(String.raw`^(?:por\s+favor\s+)?(?:pon(?:me)?|reproduce|quiero\s+escuchar|escuchar|escucha|oír|oir|léeme|cuéntame)\s+`),
+      es(String.raw`^(?:(?:la|una|el|un)\s+)?(?:(?:historia|cuento)\s+)?(?:(?:que\s+se\s+llama|llamad[ao]|del?)\s+)?`),
     ],
     shortTitle: es(String.raw`^(?:la\s+)?historia\s+(?:del?\s+)?(.+)$`),
     like: es(String.raw`^(?:me\s+)?(?:gusta|gustó|ha\s+gustado|gustado)$`),

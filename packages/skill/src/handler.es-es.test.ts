@@ -239,6 +239,48 @@ describe("es-ES catch-all routing (E4)", () => {
   });
 });
 
+describe("es-ES matchers stay no wider than en-US (review repairs)", () => {
+  test.each([
+    "haz que suene la historia sobre el mar",
+    "puedes hacer que suene la historia sobre sirenas",
+    "pon la historia que me envía la abuela",
+    "pon la que manda el abuelo",
+    "quiero una historia de la abuela",
+    "pon la historia de la compra",
+  ])("%s plays instead of writing, handing off, wishing or giving credits help", async (text) => {
+    const saveDraft = vi.fn();
+    const turn = vi.fn().mockResolvedValue({ say: "Aquí está.", play: PLAY, toolCalls: [] });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft, turn }) })(intent("es-ES", "CatchAllIntent", { text }));
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(turn).toHaveBeenCalledOnce();
+    expect(response.sessionAttributes).toEqual({});
+    expect(response.response.directives?.[0]).toMatchObject({ type: "AudioPlayer.Play" });
+  });
+
+  test("léeme and cuento carriers reduce to the title", async () => {
+    const playlist = vi.fn().mockResolvedValue({ say: "Pongo la historia.", action: "play", play: PLAY, token: "server-token", playBehavior: "REPLACE_ALL" });
+    const turn = vi.fn().mockResolvedValue({ say: "No la encuentro.", play: null, toolCalls: [] });
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist, turn }) })(intent("es-ES", "CatchAllIntent", { text: "léeme el cuento de Ignacio" }));
+    expect(playlist).toHaveBeenCalledWith({ deviceUserId: USER, command: "title", title: "Ignacio" });
+    expect(response.response.directives?.[0]).toMatchObject({ audioItem: { metadata: { subtitle: "leída por Grandpa Juan" } } });
+  });
+
+  test("a resumed story card keeps the Spanish subtitle", async () => {
+    const { encodeStreamToken } = await import("./audio.ts");
+    const event = request("es-ES", { type: "IntentRequest", intent: { name: "AMAZON.ResumeIntent" } }, {}, encodeStreamToken(PLAY));
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(event);
+    expect(response.response.directives?.[0]).toMatchObject({ audioItem: { stream: { offsetInMilliseconds: 1000 }, metadata: { subtitle: "leída por Grandpa Juan" } } });
+  });
+
+  test("the wish confirmation names the storyteller before the topic and says bedtime naturally", async () => {
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent() });
+    const fromTeller = await handler(intent("es-ES", "WishFromStorytellerIntent", { wishtopic: { value: "sirenas", resolved: "mermaids" }, storyteller: { value: "tía Whitney", resolved: "Aunt Whitney" } }));
+    expect(speech(fromTeller)).toBe("¿Guardo tu deseo de una historia de Aunt Whitney sobre sirenas? Di sí o no.");
+    const bedtime = await handler(intent("es-ES", "WishStoryIntent", { wishtopic: { value: "dormir", resolved: "bedtime" } }));
+    expect(speech(bedtime)).toBe("¿Guardo tu deseo de una historia para dormir? Di sí o no.");
+  });
+});
+
 describe("es-ES locale resolution and playback (E5)", () => {
   test.each([
     [undefined, "Spoken Letter. Which family story would you like?"],
