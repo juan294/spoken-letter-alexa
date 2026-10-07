@@ -255,7 +255,8 @@ export class DemoUpdateController {
     throw new DemoUpdateError("update_unavailable");
   }
 
-  async wish(deviceKey: string, requestId: string, speechTopic: string, storytellerQuery: string | undefined, confirmed: boolean): Promise<WishResult> {
+  async wish(deviceKey: string, requestId: string, speechTopic: string, storytellerQuery: string | undefined, confirmed: boolean,
+    locale: SkillLocale = "en-US"): Promise<WishResult> {
     if (!confirmed) throw new DemoUpdateError("confirmation_required");
     const requestDigest = sha256Hex(requestId);
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -263,7 +264,7 @@ export class DemoUpdateController {
       const prior = state.wishes.find((item) => item.requestDigest === requestDigest);
       if (prior) return { status: "saved", wishId: prior.wishId, topic: prior.topic, ...(prior.storyteller && { storyteller: prior.storyteller }) };
       if (state.wishes.length >= UPDATE_LIMIT) throw new DemoUpdateError("update_limit_reached");
-      const topic = canonicalTheme(speechTopic);
+      const topic = canonicalTheme(speechTopic, locale);
       if (!topic) throw new DemoUpdateError("unsupported_topic");
       let storyteller: string | null = null;
       if (storytellerQuery) {

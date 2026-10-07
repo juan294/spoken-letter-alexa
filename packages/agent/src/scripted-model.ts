@@ -56,7 +56,7 @@ const words = (alternatives: string): RegExp => new RegExp(`(?<![\\p{L}])(?:${al
 const SPANISH_PLAY = words("pon|ponme|ponla|reproduce|escuchar|escucha|oír|léeme");
 // "más nueva" is the superlative ("the newest"), a play request like English "newest".
 const SPANISH_LIST = words("qué|cuál|cuáles|lista|disponibles?|(?<!más\\s)nuev[ao]s?");
-const SPANISH_NEXT = words("otra|otro|siguiente|distinta|más");
+const SPANISH_NEXT = words("otra|otro|siguiente|distinta");
 
 function wantsPlayback(text: string): boolean {
   return (/\b(play|listen|hear|put on)\b/i.test(text) || SPANISH_PLAY.test(text))
@@ -88,8 +88,8 @@ const REPLIES: Record<"en" | "es", Replies> = {
   },
   es: {
     unreachable: "No he podido acceder a las historias familiares. Inténtalo de nuevo en un momento.",
-    none: "Todavía no te ha llegado ninguna historia. Primero entrega una en Spoken Letter.",
-    listed: (count, title, storyteller) => `Tienes ${count} ${count === 1 ? "historia" : "historias"}. La más nueva es "${title}", de ${storyteller}.`,
+    none: "Todavía no te ha llegado ninguna historia. Primero envía una desde Spoken Letter.",
+    listed: (count, title, storyteller) => `Tienes ${count} ${count === 1 ? "historia" : "historias"}. La más reciente es "${title}", de ${storyteller}.`,
     playing: (title, storyteller) => `Aquí tienes "${title}", con la voz de ${storyteller}.`,
     unavailable: "La grabación de esa historia no está disponible ahora mismo. Prueba con otra.",
     done: "Hecho.",

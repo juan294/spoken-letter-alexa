@@ -104,10 +104,10 @@ export const AGENT_MESSAGES: Record<SkillLocale, AgentMessages> = {
   "es-ES": {
     playlist: {
       playbackChanged: "La reproducción ha cambiado. Pídemelo otra vez.",
-      noStoriesYet: "Todavía no te ha llegado ninguna historia. Vuelve a intentarlo cuando haya una lista.",
+      noStoriesYet: "Todavía no te ha llegado ninguna historia. Vuelve a intentarlo cuando te llegue alguna.",
       onlyFirst: (limit, example) => `Ahora solo puedo buscar entre las ${limit} primeras historias que te han llegado. Prueba con un título más reciente, como ${example ?? "una de tus historias"}.`,
       titleNotFound: (example) => `No encuentro esa historia. Puedes pedir ${example ?? "tus historias"}.`,
-      whichTitle: (title, matches) => `¿Qué historia de ${title} quieres? Tengo ${matches.map((story) => `${story.title}, de ${story.storyteller}`).join(" y ")}.`,
+      whichTitle: (_title, matches) => `¿Cuál quieres? Tengo ${matches.map((story) => `${story.title}, de ${story.storyteller}`).join(" y ")}.`,
       whichStoryteller: (names) => `¿De quién la quieres? Tengo historias de ${names.join(" y ")}.`,
       noStoryByStoryteller: "No encuentro ninguna historia de esa persona. Pide tus historias para oír lo que tienes.",
       recordingUnavailable: "Esa grabación no está disponible ahora mismo. Inténtalo de nuevo en un momento.",
@@ -122,9 +122,9 @@ export const AGENT_MESSAGES: Record<SkillLocale, AgentMessages> = {
     updates: {
       newStory: "Ya tienes una historia nueva.",
       occasion: "Se acerca un cumpleaños en la familia. Puedes crear una historia para la ocasión.",
-      reactionSaved: "Se ha guardado tu reacción.",
-      wishSaved: (topic) => `Se ha guardado tu deseo de una historia ${SPANISH_TOPIC_PHRASES[topic]}.`,
-      wishSavedGeneric: "Se ha guardado tu deseo de una historia.",
+      reactionSaved: "He guardado tu reacción.",
+      wishSaved: (topic) => `He guardado tu deseo de una historia ${SPANISH_TOPIC_PHRASES[topic]}.`,
+      wishSavedGeneric: "He guardado tu deseo de una historia.",
       withStory: (detail, title, storyteller) => `${detail} "${title}", de ${storyteller}.`,
     },
     drafts: {

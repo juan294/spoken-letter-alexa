@@ -102,7 +102,7 @@ describe("localized agent routes (B1, B2)", () => {
     expect(wish.status).toBe(200);
     expect(wish.body).toMatchObject({ status: "saved", topic: "bedtime" });
     const inbox = await post("/agent/demo/inbox", { deviceUserId: DEVICE, locale: "es-ES" });
-    expect((inbox.body.events as { detail: string }[]).map((item) => item.detail)).toContain("Se ha guardado tu deseo de una historia para dormir.");
+    expect((inbox.body.events as { detail: string }[]).map((item) => item.detail)).toContain("He guardado tu deseo de una historia para dormir.");
   });
 
   test("B2 an omitted locale answers in English and an unknown extra field is accepted", async () => {
@@ -122,14 +122,25 @@ describe("Spanish drafts (B5, B6)", () => {
     ["sirenas", "mermaids"], ["estrellas", "space"], ["el mar", "ocean"], ["bosque", "forest"], ["perros", "animals"],
     ["amigos", "friendship"], ["hora de dormir", "bedtime"], ["las sirenas", "mermaids"], ["el océano", "ocean"],
     ["dinosaurios", null], ["dragones amables", null], ["María", null],
-  ])("B5 canonicalTheme(%s) is %s", (speech, theme) => {
-    expect(canonicalTheme(speech)).toBe(theme);
+    ["que sea de perros", "animals"], ["perros que sea bonita", "animals"], ["mermaids", "mermaids"], ["bedtime", "bedtime"],
+  ])("B5 canonicalTheme(%s, es-ES) is %s", (speech, theme) => {
+    expect(canonicalTheme(speech, "es-ES")).toBe(theme);
   });
 
-  test("B5 the English rows are unchanged", () => {
+  test("B5 the English rows are unchanged and Spanish words never change an English result", () => {
     expect(canonicalTheme("a sleepy bedtime story")).toBe("bedtime");
     expect(canonicalTheme("rockets and the moon")).toBe("space");
     expect(canonicalTheme("dinosaurs")).toBeNull();
+    expect(canonicalTheme("a story about Luna the cat")).toBe("animals");
+    expect(canonicalTheme("sirenas")).toBeNull();
+  });
+
+  test("SS3 a Spanish theme the table does not know is refused, never saved", async () => {
+    const { post } = await harness();
+    const refused = await post("/agent/demo/draft", { deviceUserId: DEVICE, requestId: "d1", theme: "dinosaurios", locale: "es-ES" });
+    expect(refused.status).toBe(422);
+    expect(refused.body.error).toBe("unsupported_theme");
+    expect((await post("/agent/demo/draft/latest", { deviceUserId: DEVICE })).body).toEqual({ status: "none" });
   });
 
   test("B6 a Spanish draft reads back in Spanish; an English draft reads back as stored", async () => {
@@ -172,6 +183,8 @@ describe("Spanish agent turns (B3, B4)", () => {
     const played = await post("/agent/turn", { sessionId: session.body.sessionId, text: "pon la historia más nueva" });
     spanish(played.body.say);
     expect(played.body.play).toMatchObject({ id: "st_lighthouse" });
+    const again = await post("/agent/turn", { sessionId: session.body.sessionId, text: "pon la más nueva" });
+    expect(again.body.play).toMatchObject({ id: "st_lighthouse" });
   });
 
   test("B4 the fallback reply is Spanish when the model fails", async () => {

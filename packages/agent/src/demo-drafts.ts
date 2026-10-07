@@ -1,5 +1,5 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { type DemoTopic, randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { DEMO_TOPICS, type DemoTopic, randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { Agent, type Model } from "@strands-agents/sdk";
 import { z } from "zod";
 
@@ -100,29 +100,45 @@ export class DemoDraftError extends Error {
  */
 const spanishWords = (alternatives: string): RegExp => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, "u");
 
-/** English and Spanish words for each theme; the first matching theme wins. */
-const THEME_PATTERNS: [DraftTheme, RegExp][] = [
-  ["bedtime", /\b(bedtime|bed time|sleep|sleepy|goodnight)\b/u],
-  ["bedtime", spanishWords("dormir|buenas noches")],
-  ["space", /\b(space|stars?|rockets?|planets?|moon)\b/u],
-  ["space", spanishWords("espacio|estrellas?|cohetes?|planetas?|luna")],
-  ["mermaids", /\b(mermaids?|merpeople)\b/u],
-  ["mermaids", spanishWords("sirenas?")],
-  ["ocean", /\b(ocean|sea|beach|waves?)\b/u],
-  ["ocean", spanishWords("océanos?|oceanos?|mar|mares|playas?|olas?")],
-  ["forest", /\b(forest|woods?|trees?)\b/u],
-  ["forest", spanishWords("bosques?|árbol|árboles|arbol|arboles")],
-  ["animals", /\b(animals?|cats?|dogs?|birds?)\b/u],
-  ["animals", spanishWords("animal|animales|gat[oa]s?|perr[oa]s?|pájaros?|pajaros?")],
-  ["friendship", /\b(friendship|friends?)\b/u],
-  ["friendship", spanishWords("amistad|amig[oa]s?")],
-];
+/**
+ * Each locale's words for each theme; the first matching theme wins. Kept apart by locale:
+ * English "sea" is the Spanish subjunctive ("que sea de perros"), and Spanish "luna" is a name
+ * in English ("Luna the cat").
+ */
+const THEME_PATTERNS: Record<SkillLocale, [DraftTheme, RegExp][]> = {
+  "en-US": [
+    ["bedtime", /\b(bedtime|bed time|sleep|sleepy|goodnight)\b/u],
+    ["space", /\b(space|stars?|rockets?|planets?|moon)\b/u],
+    ["mermaids", /\b(mermaids?|merpeople)\b/u],
+    ["ocean", /\b(ocean|sea|beach|waves?)\b/u],
+    ["forest", /\b(forest|woods?|trees?)\b/u],
+    ["animals", /\b(animals?|cats?|dogs?|birds?)\b/u],
+    ["friendship", /\b(friendship|friends?)\b/u],
+  ],
+  "es-ES": [
+    ["bedtime", spanishWords("dormir|buenas noches")],
+    ["space", spanishWords("espacio|estrellas?|cohetes?|planetas?|luna")],
+    ["mermaids", spanishWords("sirenas?")],
+    ["ocean", spanishWords("océanos?|oceanos?|mar|mares|playas?|olas?")],
+    ["forest", spanishWords("bosques?|árbol|árboles|arbol|arboles")],
+    ["animals", spanishWords("animal|animales|gat[oa]s?|perr[oa]s?|pájaros?|pajaros?")],
+    ["friendship", spanishWords("amistad|amig[oa]s?")],
+  ],
+};
 
-/** Speech is used only to choose a controlled topic; no part of it reaches the model or store. */
-export function canonicalTheme(speech: string): DraftTheme | null {
+const isDraftTheme = (value: string): value is DraftTheme => (DEMO_TOPICS as readonly string[]).includes(value);
+
+/**
+ * Speech is used only to choose a controlled topic; no part of it reaches the model or store.
+ * A Spanish request may also carry the canonical value Alexa resolved ("mermaids").
+ */
+export function canonicalTheme(speech: string, locale: SkillLocale = "en-US"): DraftTheme | null {
   // Plain NFKC lowercase is locale-neutral for English and Spanish (plan, phase-3.md step 4).
   const words = speech.normalize("NFKC").toLowerCase();
-  return THEME_PATTERNS.find(([, pattern]) => pattern.test(words))?.[0] ?? null;
+  const matched = THEME_PATTERNS[locale].find(([, pattern]) => pattern.test(words))?.[0];
+  if (matched) return matched;
+  const exact = words.trim();
+  return locale !== "en-US" && isDraftTheme(exact) ? exact : null;
 }
 
 /** Bedrock chooses safe outline components; the renderer alone creates persisted prose. */
@@ -180,7 +196,7 @@ export class DemoDraftController {
       if (prior) return publicReceipt(prior);
       if ((state?.receipts.length ?? 0) >= DEMO_DRAFT_LIMIT) throw new DemoDraftError("draft_limit_reached");
       if (!prepared) {
-        const theme = canonicalTheme(speechTheme);
+        const theme = canonicalTheme(speechTheme, locale);
         if (!theme) throw new DemoDraftError("unsupported_theme");
         try {
           const choices = choicesSchema.parse(await this.options.generator(theme));

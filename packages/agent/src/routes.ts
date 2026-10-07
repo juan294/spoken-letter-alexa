@@ -282,7 +282,7 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const parsed = wishBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "confirmation_required", message: "Confirm the general topic before I save your wish." }, 422);
     try { return c.json(await demoUpdates.wish(deviceSessionId(parsed.data.deviceUserId), parsed.data.requestId,
-      parsed.data.topic, parsed.data.storyteller, parsed.data.confirmed)); }
+      parsed.data.topic, parsed.data.storyteller, parsed.data.confirmed, parsed.data.locale)); }
     catch (error) { return updateError(error, c); }
   });
 
