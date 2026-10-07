@@ -85,3 +85,10 @@ describe("stream token", () => {
     expect(decodeStreamToken(legacy)).toEqual({ ...PLAY, id: null });
   });
 });
+
+describe("playDirective subtitle", () => {
+  test("names the storyteller in the request locale, English by default", () => {
+    expect(playDirective(PLAY).audioItem.metadata.subtitle).toBe("read by Grandpa Juan");
+    expect(playDirective(PLAY, 0, { locale: "es-ES" }).audioItem.metadata.subtitle).toBe("leída por Grandpa Juan");
+  });
+});

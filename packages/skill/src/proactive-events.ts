@@ -16,7 +16,7 @@ export function buildMessageAlert(input: { userId: string; eventId: string; occu
       name: "AMAZON.MessageAlert.Activated" as const,
       payload: { state: { status: "UNREAD" as const, freshness: "NEW" as const }, messageGroup: { creator: { name: "Spoken Letter" }, count: 1 } },
     },
-    localizedAttributes: [{ locale: "en-US" as const }],
+    localizedAttributes: [{ locale: "en-US" as const }, { locale: "es-ES" as const }],
     relevantAudience: { type: "Unicast" as const, payload: { user: input.userId } },
   };
 }

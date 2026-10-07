@@ -13,7 +13,7 @@ describe("Proactive Events development adapter", () => {
       referenceId: first.referenceId,
       expiryTime: "2026-09-28T13:00:00.000Z",
       event: { name: "AMAZON.MessageAlert.Activated", payload: { state: { status: "UNREAD", freshness: "NEW" }, messageGroup: { creator: { name: "Spoken Letter" }, count: 1 } } },
-      localizedAttributes: [{ locale: "en-US" }],
+      localizedAttributes: [{ locale: "en-US" }, { locale: "es-ES" }],
       relevantAudience: { type: "Unicast", payload: { user: USER_ID } },
     });
     expect(first.referenceId).toMatch(/^[a-f0-9]{64}$/);

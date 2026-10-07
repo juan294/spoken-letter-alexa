@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
 
-import { emfEnvelope, log } from "@spoken-letter-alexa/shared";
+import { emfEnvelope, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
+import { MATCHERS, MESSAGES, type Matchers, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 
-type Slot = { name: string; value?: string };
+/** Entity resolution for custom slot types: `ER_SUCCESS_MATCH` carries the canonical value (plan D4). */
+type SlotResolutions = { resolutionsPerAuthority?: { status?: { code?: string }; values?: { value?: { name?: string } }[] }[] };
+type Slot = { name: string; value?: string; resolutions?: SlotResolutions };
 
 export type AlexaRequestEnvelope = {
   version: string;
@@ -64,46 +67,29 @@ export type HandlerOptions = {
 
 export type SkillHandler = (event: AlexaRequestEnvelope) => Promise<AlexaResponseEnvelope>;
 
-const REPROMPT = "You can say: play my stories, or ask what is new.";
-const LAUNCH = "Spoken Letter. Which family story would you like?";
-const HELP = "You can say play my stories, ask what is new, or say let's create a story. For delivery and credits, use Spoken Letter. Which would you like?";
-const RETRY = "I'm still looking for that one. Ask again in a moment.";
-const NOTHING_TO_RESUME = "There is nothing to resume. Ask for a family story first.";
-const NOTHING_TO_PLAY = "Which family story would you like? You can say: play my stories.";
-const NOTHING_TO_GO_BACK_TO = "That was the first one. Ask for another story instead.";
-const ONE_AT_A_TIME = "I play family stories one at a time.";
-const NO_PLAY = "Which delivered story would you like? You can name a title, or say play my stories.";
-const THEME_PROMPT = "What would you like your story to be about? You can say mermaids or space.";
-const DRAFT_UNAVAILABLE = "No draft was saved. You can try another theme in a moment.";
-const DRAFT_UNSUPPORTED = "No draft was saved. Try a theme such as mermaids or space.";
-const DRAFT_LIMIT = "No draft was saved. You can say read my draft, or try creating another later.";
-const REACTION_REPROMPT = "You can say I like it, I love it, or no.";
-const WISH_REPROMPT = "You can say yes or no.";
-const WISH_START = "To start a wish, say I want a story about space.";
-const NAMED_HANDOFF = "I can help you start a story. Open Spoken Letter to choose the listener and send it.";
-const CREDITS_HELP = "You can add story credits in Spoken Letter.";
-const CREATION_HELP = "To get started here, say let's create a story. You can finish your draft, record a story, and choose who to send it to in Spoken Letter.";
-const REACTION_UNAVAILABLE = "No reaction was saved. You can say like or love again.";
-const WISH_UNAVAILABLE = "No wish was saved. You can try again.";
 const storytellerValues = interactionModel.interactionModel.languageModel.types.find((type) => type.name === "StorytellerName")?.values ?? [];
 const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.value));
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
   [entry.name.value, ...entry.name.synonyms].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));
 
-/** Only fixture-safe topics cross the skill session boundary. */
-function safeDemoTopic(speech: string | undefined): string | null {
+const SAFE_TOPICS = new Set(["mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime"]);
+
+/** Only fixture-safe topics cross the skill session boundary. A resolved slot is already canonical. */
+function safeDemoTopic(speech: string | undefined, match: Matchers, locale: SkillLocale): string | null {
   if (!speech) return null;
-  const text = speech.toLocaleLowerCase("en-US");
-  const topics: [string, RegExp][] = [
-    ["mermaids", /\bmermaids?\b/], ["space", /\b(?:space|stars?|planets?)\b/],
-    ["ocean", /\b(?:ocean|sea|beach)\b/], ["forest", /\b(?:forest|woods?)\b/],
-    ["animals", /\b(?:animals?|cats?|dogs?)\b/], ["friendship", /\b(?:friends?|friendship)\b/],
-    ["bedtime", /\b(?:bedtime|sleep)\b/],
-  ];
-  return topics.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+  const text = speech.toLocaleLowerCase(locale);
+  if (SAFE_TOPICS.has(text)) return text;
+  return match.topics.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
 }
 
-const SAFE_TOPICS = new Set(["mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime"]);
+/** A resolved `ReactionChoice` is canonical; an unresolved one is matched as spoken. */
+function reactionChoice(spoken: string | undefined, match: Matchers, locale: SkillLocale): "like" | "love" | undefined {
+  const choice = spoken?.toLocaleLowerCase(locale);
+  if (choice === undefined) return undefined;
+  if (choice === "like" || match.like.test(choice)) return "like";
+  if (choice === "love" || match.love.test(choice)) return "love";
+  return undefined;
+}
 
 /** Rebuild only code-owned state; neither arbitrary attributes nor wish prose can survive. */
 function validatedSession(attributes: Record<string, string> | undefined): Record<string, string> {
@@ -120,32 +106,32 @@ function validatedSession(attributes: Record<string, string> | undefined): Recor
   return state;
 }
 
-function recoverFlow(state: Record<string, string>, fallback: boolean): AlexaResponseEnvelope {
+function recoverFlow(m: Messages, state: Record<string, string>, fallback: boolean): AlexaResponseEnvelope {
   const count = fallback ? (state.fallbackCount ? "2" : "1") : undefined;
   const repeated = count === "2";
   const next = { ...state };
   delete next.fallbackCount;
   if (count) next.fallbackCount = count;
-  let text = HELP;
-  let reprompt = REPROMPT;
+  let text = m.help;
+  let reprompt = m.reprompt;
   if (state.demoFlow === "draft") {
-    text = repeated ? "Say about mermaids to choose a theme, or say cancel." : THEME_PROMPT;
-    reprompt = THEME_PROMPT;
+    text = repeated ? m.draftRecoveryRepeated : m.themePrompt;
+    reprompt = m.themePrompt;
   } else if (state.demoFlow === "reaction") {
-    text = repeated ? "Say I love that story, or say cancel." : "Did you like or love that story?";
-    reprompt = REACTION_REPROMPT;
+    text = repeated ? m.reactionRecoveryRepeated : m.reactionPrompt;
+    reprompt = m.reactionReprompt;
   } else if (state.demoFlow === "wish") {
-    text = repeated ? "Say yes to save your wish, or say cancel." : "Would you like to save your wish? Say yes or no.";
-    reprompt = WISH_REPROMPT;
+    text = repeated ? m.wishRecoveryRepeated : m.wishRecovery;
+    reprompt = m.wishReprompt;
   } else if (repeated) {
-    text = "Say let's create a story, play my stories, or cancel.";
+    text = m.generalRecoveryRepeated;
   }
   return { ...question(text, reprompt), sessionAttributes: next };
 }
 
 /** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
-function progressiveText(playOriented: boolean): string {
-  return playOriented ? "Looking for that one." : "Checking what's new.";
+function progressiveText(m: Messages, playOriented: boolean): string {
+  return playOriented ? m.progressivePlay : m.progressiveNews;
 }
 
 function escapeSsml(text: string): string {
@@ -171,19 +157,19 @@ function speak(text: string, options: { reprompt?: string; endSession: boolean; 
 const EMPTY: AlexaResponseEnvelope = { version: "1.0", response: {} };
 
 /** A question stays open with the caller's flow-specific reprompt. */
-const question = (text: string, reprompt = REPROMPT) => speak(text, { reprompt, endSession: false });
+const question = (text: string, reprompt: string) => speak(text, { reprompt, endSession: false });
 /** A closing line, optionally with playback: the session ends. */
 const closing = (text: string, directives?: AudioDirective[]) => speak(text, { endSession: true, ...(directives && { directives }) });
 /** Playback control without speech. */
 const audioControl = (directives: AudioDirective[]): AlexaResponseEnvelope => ({ version: "1.0", response: { directives, shouldEndSession: true } });
-const themeQuestion = (text = THEME_PROMPT): AlexaResponseEnvelope => ({ ...question(text, THEME_PROMPT), sessionAttributes: { demoFlow: "draft" } });
+const themeQuestion = (m: Messages, text = m.themePrompt): AlexaResponseEnvelope => ({ ...question(text, m.themePrompt), sessionAttributes: { demoFlow: "draft" } });
 
 /** Resume, start over and repeat all decode the current AudioPlayer token and re-issue a play directive, differing only in the offset. */
-function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number): AlexaResponseEnvelope {
+function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number, m: Messages, locale: SkillLocale): AlexaResponseEnvelope {
   const token = event.context.AudioPlayer?.token;
   const play = token ? decodeStreamToken(token) : null;
-  if (!play) return question(NOTHING_TO_RESUME);
-  return audioControl([playDirective(play, offsetInMilliseconds)]);
+  if (!play) return question(m.nothingToResume, m.reprompt);
+  return audioControl([playDirective(play, offsetInMilliseconds, { locale })]);
 }
 
 function slotValue(event: AlexaRequestEnvelope, name: string): string | undefined {
@@ -191,13 +177,19 @@ function slotValue(event: AlexaRequestEnvelope, name: string): string | undefine
   return value === undefined || value === "" ? undefined : value;
 }
 
+/** The canonical value of a custom-type slot when Alexa resolved it, otherwise the raw value (plan D4). */
+function resolvedValue(event: AlexaRequestEnvelope, name: string): string | undefined {
+  const authorities = event.request.intent?.slots?.[name]?.resolutions?.resolutionsPerAuthority ?? [];
+  for (const authority of authorities) {
+    const canonical = authority.status?.code === "ER_SUCCESS_MATCH" ? authority.values?.[0]?.value?.name?.trim() : undefined;
+    if (canonical) return canonical;
+  }
+  return slotValue(event, name);
+}
+
 /** Best-effort title from a play request that Alexa routed through CatchAllIntent. */
-function catchAllTitle(text: string): string | undefined {
-  const stripped = text
-    .replace(/^(?:please\s+)?(?:play|put on|listen to|hear)\s+/i, "")
-    .replace(/^(?:(?:the|a)\s+)?(?:story\s+)?(?:called\s+)?/i, "")
-    .replace(/\s+one$/i, "")
-    .trim();
+function catchAllTitle(text: string, match: Matchers): string | undefined {
+  const stripped = match.titleCarriers.reduce((rest, carrier) => rest.replace(carrier, ""), text).trim();
   return stripped && stripped !== text && stripped.length <= 200 ? stripped : undefined;
 }
 
@@ -229,12 +221,12 @@ type IntentText = {
 };
 
 /** The one line of text the agent receives for an intent (phase-9.md section 2). */
-function textForIntent(event: AlexaRequestEnvelope): IntentText | null {
+function textForIntent(event: AlexaRequestEnvelope, match: Matchers): IntentText | null {
   const name = event.request.intent?.name;
   switch (name) {
     case "PlayStoryIntent": {
       const title = slotValue(event, "title");
-      const storyteller = slotValue(event, "storyteller");
+      const storyteller = resolvedValue(event, "storyteller");
       if (title && storyteller) return { text: `play the story ${title} by ${storyteller}`, playOriented: true };
       if (title) return { text: `play the story ${title}`, playOriented: true };
       if (storyteller) return { text: `play the story ${storyteller} sent`, playOriented: true };
@@ -251,7 +243,7 @@ function textForIntent(event: AlexaRequestEnvelope): IntentText | null {
       const text = slotValue(event, "text");
       return text === undefined ? null : {
         text,
-        playOriented: /\b(play|hear|listen|put on)\b/i.test(text) && !/\b(what|which|list|new|available)\b/i.test(text),
+        playOriented: match.play.test(text) && !match.notPlay.test(text),
       };
     }
     default:
@@ -310,6 +302,9 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       throw new Error(`Rejected request for application id ${JSON.stringify(applicationId)}`);
     }
     const { type } = event.request;
+    const locale = resolveLocale(event.request.locale);
+    const m = MESSAGES[locale];
+    const match = MATCHERS[locale];
     const started = performance.now();
     const state = validatedSession(event.session?.attributes);
     const telemetry: Telemetry = {
@@ -327,41 +322,41 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       telemetry.interactionResult = telemetry.outcome === "ok" ? result : "retry";
       return response;
     };
-    const ask = (text: string, reprompt = REPROMPT, key: ResponseKey = "general_prompt", result: InteractionResult = "awaiting_input") =>
+    const ask = (text: string, reprompt = m.reprompt, key: ResponseKey = "general_prompt", result: InteractionResult = "awaiting_input") =>
       mark(key, result, question(text, reprompt));
     const tell = (text: string, directives?: AudioDirective[], key: ResponseKey = "general_prompt", result: InteractionResult = "completed") =>
       mark(key, result, closing(text, directives));
     const control = (directives: AudioDirective[]) => mark("playback_control", "completed", audioControl(directives));
     const resume = (offset: number) => {
-      const response = resumablePlay(event, offset);
+      const response = resumablePlay(event, offset, m, locale);
       return mark("playback_control", response.response.directives ? "completed" : "awaiting_input", response);
     };
-    const askForTheme = (text = THEME_PROMPT, key: ResponseKey = "theme_prompt") => mark(key, "awaiting_input", themeQuestion(text));
+    const askForTheme = (text = m.themePrompt, key: ResponseKey = "theme_prompt") => mark(key, "awaiting_input", themeQuestion(m, text));
     const recovery = (state: Record<string, string>, fallback: boolean) => {
       const flow = flowOf(state);
       const key: ResponseKey = flow === "draft" ? "theme_recovery" : flow === "reaction" ? "reaction_recovery" : flow === "wish" ? "wish_recovery" : "general_recovery";
-      return mark(key, fallback ? "fallback" : "awaiting_input", recoverFlow(state, fallback));
+      return mark(key, fallback ? "fallback" : "awaiting_input", recoverFlow(m, state, fallback));
     };
 
     async function respond(): Promise<AlexaResponseEnvelope> {
       const deviceUserId = event.context.System.user.userId;
       const nextDemoUpdate = async (): Promise<AlexaResponseEnvelope> => {
-        if (!options.agent.demoNext) return ask(LAUNCH, REPROMPT, "welcome");
+        if (!options.agent.demoNext) return ask(m.launch, m.reprompt, "welcome");
         try {
           const next = await options.agent.demoNext({ deviceUserId });
           if (next.pendingReaction) {
-            return { ...ask(`Did you like or love ${next.pendingReaction.title}?`, REACTION_REPROMPT, "reaction_prompt"), sessionAttributes: { demoFlow: "reaction" } };
+            return { ...ask(m.reactionFor(next.pendingReaction.title), m.reactionReprompt, "reaction_prompt"), sessionAttributes: { demoFlow: "reaction" } };
           }
           if (next.event) {
-            const response = ask(`${next.event.detail} You can say let's create a story.`, REPROMPT, "updates");
+            const response = ask(m.updateDetail(next.event.detail), m.reprompt, "updates");
             if (options.agent.demoEvent) await options.agent.demoEvent({ deviceUserId, eventId: next.event.eventId, action: "read" });
             return response;
           }
         } catch (error) {
           failed(error);
-          return ask(LAUNCH, REPROMPT, "welcome");
+          return ask(m.launch, m.reprompt, "welcome");
         }
-        return ask(LAUNCH, REPROMPT, "welcome");
+        return ask(m.launch, m.reprompt, "welcome");
       };
       if (type === "LaunchRequest") return nextDemoUpdate();
       const playlist = options.agent.playlist;
@@ -371,55 +366,56 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           telemetry.storyId = reply.play.id;
           const directive = playDirective(reply.play, reply.offsetInMilliseconds ?? 0, {
             token: reply.token,
+            locale,
             ...(reply.playBehavior === "ENQUEUE" && reply.expectedPreviousToken && { expectedPreviousToken: reply.expectedPreviousToken }),
           });
           return reply.say ? tell(reply.say, [directive], "playback_control") : control([directive]);
         }
-        return reply.say ? ask(reply.say, REPROMPT, "playback_control") : EMPTY;
+        return reply.say ? ask(reply.say, m.reprompt, "playback_control") : EMPTY;
       };
       const command = async (input: Omit<PlaylistCommand, "deviceUserId">): Promise<AlexaResponseEnvelope> => {
-        if (!playlist) return ask(NO_PLAY, REPROMPT, "playback_control");
+        if (!playlist) return ask(m.noPlay, m.reprompt, "playback_control");
         try {
           return playlistResult(await playlist({ deviceUserId, ...input }));
         } catch (error) {
           failed(error);
-          return type.startsWith("AudioPlayer.") ? EMPTY : ask(RETRY, REPROMPT, "playback_retry", "retry");
+          return type.startsWith("AudioPlayer.") ? EMPTY : ask(m.retry, m.reprompt, "playback_retry", "retry");
         }
       };
       const saveDemoDraft = async (theme: string): Promise<AlexaResponseEnvelope> => {
-        if (!options.agent.saveDraft) { unavailable(); return askForTheme(DRAFT_UNAVAILABLE, "theme_recovery"); }
+        if (!options.agent.saveDraft) { unavailable(); return askForTheme(m.draftUnavailable, "theme_recovery"); }
         try {
           await options.agent.saveDraft({ deviceUserId, requestId: event.request.requestId, theme });
-          return tell("I saved your story draft. Open Spoken Letter to choose the listener and finish it.", undefined, "draft_saved");
+          return tell(m.draftSaved, undefined, "draft_saved");
         } catch (error) {
           failed(error);
-          if (error instanceof AgentHttpError && error.code === "unsupported_theme") return askForTheme(DRAFT_UNSUPPORTED, "theme_recovery");
-          if (error instanceof AgentHttpError && error.code === "draft_limit_reached") return ask(DRAFT_LIMIT, "You can say read my draft.", "draft_limit", "retry");
-          return askForTheme(DRAFT_UNAVAILABLE, "theme_recovery");
+          if (error instanceof AgentHttpError && error.code === "unsupported_theme") return askForTheme(m.draftUnsupported, "theme_recovery");
+          if (error instanceof AgentHttpError && error.code === "draft_limit_reached") return ask(m.draftLimit, m.draftLimitReprompt, "draft_limit", "retry");
+          return askForTheme(m.draftUnavailable, "theme_recovery");
         }
       };
       const saveReaction = async (choice: "like" | "love" | "dismiss"): Promise<AlexaResponseEnvelope> => {
-        if (!options.agent.demoReact) { unavailable(); return { ...ask(REACTION_UNAVAILABLE, REACTION_REPROMPT, "reaction_retry", "retry"), sessionAttributes: { demoFlow: "reaction" } }; }
+        if (!options.agent.demoReact) { unavailable(); return { ...ask(m.reactionUnavailable, m.reactionReprompt, "reaction_retry", "retry"), sessionAttributes: { demoFlow: "reaction" } }; }
         try {
           const reply: unknown = await options.agent.demoReact({ deviceUserId, requestId: event.request.requestId, choice });
           if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== (choice === "dismiss" ? "dismissed" : "saved")) throw new Error("incomplete demo reaction receipt");
           if (choice !== "dismiss" && (!("reactionId" in reply) || typeof reply.reactionId !== "string" || !reply.reactionId || !("storyId" in reply) || typeof reply.storyId !== "string" || !reply.storyId || !("choice" in reply) || reply.choice !== choice)) throw new Error("incomplete demo reaction receipt");
-          return choice === "dismiss" ? tell("Okay. Maybe next time.", undefined, "reaction_dismissed", "canceled") : tell(`I saved that you ${choice === "love" ? "loved" : "liked"} the story.`, undefined, "reaction_saved");
+          return choice === "dismiss" ? tell(m.reactionDismissed, undefined, "reaction_dismissed", "canceled") : tell(m.reactionSaved(choice), undefined, "reaction_saved");
         } catch (error) {
           failed(error);
-          if (error instanceof AgentHttpError && error.code === "no_pending_reaction") return tell("There is no completed story waiting for a reaction.", undefined, "reaction_missing", "no_action");
-          return { ...ask(REACTION_UNAVAILABLE, REACTION_REPROMPT, "reaction_retry", "retry"), sessionAttributes: { demoFlow: "reaction" } };
+          if (error instanceof AgentHttpError && error.code === "no_pending_reaction") return tell(m.noPendingReaction, undefined, "reaction_missing", "no_action");
+          return { ...ask(m.reactionUnavailable, m.reactionReprompt, "reaction_retry", "retry"), sessionAttributes: { demoFlow: "reaction" } };
         }
       };
       const saveWish = async (topic: string, storyteller?: string): Promise<AlexaResponseEnvelope> => {
-        if (!options.agent.demoWish) { unavailable(); return { ...ask(WISH_UNAVAILABLE, WISH_REPROMPT, "wish_retry", "retry"), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } }; }
+        if (!options.agent.demoWish) { unavailable(); return { ...ask(m.wishUnavailable, m.wishReprompt, "wish_retry", "retry"), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } }; }
         try {
           const receipt: unknown = await options.agent.demoWish({ deviceUserId, requestId: event.request.requestId, topic, ...(storyteller && { storyteller }), confirmed: true });
           if (!receipt || typeof receipt !== "object" || !("status" in receipt) || receipt.status !== "saved" || !("wishId" in receipt) || typeof receipt.wishId !== "string" || !receipt.wishId) throw new Error("incomplete demo wish receipt");
-          return tell("I saved your wish.", undefined, "wish_saved");
+          return tell(m.wishSaved, undefined, "wish_saved");
         } catch (error) {
           failed(error);
-          return { ...ask(WISH_UNAVAILABLE, WISH_REPROMPT, "wish_retry", "retry"), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } };
+          return { ...ask(m.wishUnavailable, m.wishReprompt, "wish_retry", "retry"), sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(storyteller && { demoStoryteller: storyteller }) } };
         }
       };
       if (type === "SessionEndedRequest") return EMPTY;
@@ -449,7 +445,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
       }
       if (type.startsWith("AudioPlayer.") || type.startsWith("PlaybackController.")) return EMPTY;
-      if (type !== "IntentRequest") return ask(HELP);
+      if (type !== "IntentRequest") return ask(m.help);
 
       const intent = event.request.intent?.name ?? "";
       const observed = event.context.AudioPlayer?.token;
@@ -465,13 +461,13 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         case "AMAZON.PauseIntent":
         case "AMAZON.StopIntent":
         case "AMAZON.CancelIntent":
-          if (pendingDraft) return tell("Okay. No draft was saved.", undefined, "canceled", "canceled");
+          if (pendingDraft) return tell(m.draftCanceled, undefined, "canceled", "canceled");
           if (pendingReaction) return saveReaction("dismiss");
-          if (pendingWish) return tell("Okay. No wish was saved.", undefined, "canceled", "canceled");
+          if (pendingWish) return tell(m.wishCanceled, undefined, "canceled", "canceled");
           return mark("playback_control", "canceled", control([STOP_DIRECTIVE]));
         case "AMAZON.ResumeIntent":
           if (playlist) {
-            if (!observed) return ask(NOTHING_TO_RESUME);
+            if (!observed) return ask(m.nothingToResume);
             return command({ command: "resume", observedToken: observed, offsetInMilliseconds: event.context.AudioPlayer?.offsetInMilliseconds ?? 0 });
           }
           return resume(event.context.AudioPlayer?.offsetInMilliseconds ?? 0);
@@ -482,89 +478,88 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           return resume(0);
         case "AMAZON.PreviousIntent":
           if (playlist) return command({ command: "previous", ...tokenInput });
-          return ask(NOTHING_TO_GO_BACK_TO);
+          return ask(m.nothingToGoBackTo);
         case "AMAZON.LoopOnIntent":
         case "AMAZON.LoopOffIntent":
         case "AMAZON.ShuffleOnIntent":
         case "AMAZON.ShuffleOffIntent":
           // Acknowledged, not silently ignored — a skill that answers nothing reads as broken.
-          return ask(ONE_AT_A_TIME);
+          return ask(m.oneAtATime);
         case "AMAZON.HelpIntent":
-          if (event.session?.attributes?.demoFlow === "wish" && !pendingWish) return ask(WISH_START, WISH_START, "wish_start");
+          if (event.session?.attributes?.demoFlow === "wish" && !pendingWish) return ask(m.wishStart, m.wishStart, "wish_start");
           return recovery(state, false);
         case "AMAZON.FallbackIntent":
-          if (event.session?.attributes?.demoFlow === "wish" && !pendingWish) return ask(WISH_START, WISH_START, "wish_start");
+          if (event.session?.attributes?.demoFlow === "wish" && !pendingWish) return ask(m.wishStart, m.wishStart, "wish_start");
           return recovery(state, true);
         default:
           break;
       }
 
-      if (pendingDraft && intent === "AMAZON.NoIntent") return tell("Okay. No draft was saved.", undefined, "canceled", "canceled");
+      if (pendingDraft && intent === "AMAZON.NoIntent") return tell(m.draftCanceled, undefined, "canceled", "canceled");
       if (intent === "ThemeChoiceIntent") {
-        if (!pendingDraft) return pendingWish || pendingReaction ? recovery(state, false) : ask(CREATION_HELP, REPROMPT, "creation_help", "handoff");
-        const theme = slotValue(event, "drafttheme");
+        if (!pendingDraft) return pendingWish || pendingReaction ? recovery(state, false) : ask(m.creationHelp, m.reprompt, "creation_help", "handoff");
+        const theme = resolvedValue(event, "drafttheme");
         return theme ? saveDemoDraft(theme) : askForTheme();
       }
       if (pendingReaction && intent === "AMAZON.NoIntent") return saveReaction("dismiss");
       if (intent === "ReactToStoryIntent") {
-        const spokenChoice = slotValue(event, "choice")?.toLocaleLowerCase("en-US");
-        if (spokenChoice === "like" || spokenChoice === "liked") return saveReaction("like");
-        if (spokenChoice === "love" || spokenChoice === "loved") return saveReaction("love");
-        return { ...ask("Did you like or love that story?", REACTION_REPROMPT, "reaction_prompt"), sessionAttributes: { demoFlow: "reaction" } };
+        const choice = reactionChoice(resolvedValue(event, "choice"), match, locale);
+        if (choice) return saveReaction(choice);
+        return { ...ask(m.reactionPrompt, m.reactionReprompt, "reaction_prompt"), sessionAttributes: { demoFlow: "reaction" } };
       }
-      if (pendingWish && intent === "AMAZON.NoIntent") return tell("Okay. No wish was saved.", undefined, "canceled", "canceled");
+      if (pendingWish && intent === "AMAZON.NoIntent") return tell(m.wishCanceled, undefined, "canceled", "canceled");
       if (pendingWish && intent === "AMAZON.YesIntent") {
         const topic = state.demoTopic ?? null;
         const storyteller = state.demoStoryteller;
-        if (!topic || (storyteller && !SAFE_STORYTELLERS.has(storyteller))) return ask("What would you like your story to be about?");
+        if (!topic || (storyteller && !SAFE_STORYTELLERS.has(storyteller))) return ask(m.wishTopicQuestion);
         return saveWish(topic, storyteller);
       }
 
-      if (intent === "AMAZON.YesIntent" && !pendingWish) return ask(WISH_START, WISH_START, "wish_start");
+      if (intent === "AMAZON.YesIntent" && !pendingWish) return ask(m.wishStart, m.wishStart, "wish_start");
 
       const catchAll = intent === "CatchAllIntent" ? slotValue(event, "text") : undefined;
-      const catchAllAsk = catchAll ? /^ask\s+(.+?)\s+for\b.*\bstory\b/i.exec(catchAll) : null;
-      const catchAllWish = catchAll && /^i\s+(?:want|wish)\b.*\bstory\b.*\babout\b/i.test(catchAll);
-      if (intent === "WishFromStorytellerIntent" && !slotValue(event, "storyteller")) return ask("Who would you like a story from?", WISH_START, "wish_start");
+      const catchAllAsk = catchAll ? match.askStoryteller.exec(catchAll) : null;
+      const catchAllWish = catchAll && match.wish.test(catchAll);
+      if (intent === "WishFromStorytellerIntent" && !resolvedValue(event, "storyteller")) return ask(m.whoFrom, m.wishStart, "wish_start");
       if (intent === "WishStoryIntent" || intent === "WishFromStorytellerIntent" || catchAllWish || catchAllAsk) {
-        const topic = safeDemoTopic(slotValue(event, "wishtopic") ?? catchAll);
-        if (!topic) return ask(`What would you like your story to be about? ${WISH_START}`, WISH_START, "wish_start");
-        const rawStoryteller = slotValue(event, "storyteller") ?? catchAllAsk?.[1];
+        const topic = safeDemoTopic(resolvedValue(event, "wishtopic") ?? catchAll, match, locale);
+        if (!topic) return ask(m.wishTopicStart, m.wishStart, "wish_start");
+        const rawStoryteller = resolvedValue(event, "storyteller") ?? catchAllAsk?.[1];
         const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(rawStoryteller.toLocaleLowerCase("en-US")) : undefined;
-        if (rawStoryteller && !spokenStoryteller) return ask("Who would you like a story from?", WISH_START, "wish_start");
-        return { ...ask(`Save a wish for a ${topic} story${spokenStoryteller ? ` from ${spokenStoryteller}` : ""}? Say yes or no.`, WISH_REPROMPT, "wish_confirm"),
+        if (rawStoryteller && !spokenStoryteller) return ask(m.whoFrom, m.wishStart, "wish_start");
+        return { ...ask(m.wishConfirm(topic, spokenStoryteller), m.wishReprompt, "wish_confirm"),
           sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(spokenStoryteller && { demoStoryteller: spokenStoryteller }) } };
       }
       if (intent === "UpdatesIntent") {
-        if (!options.agent.demoInbox) { unavailable(); return ask("Your updates are unavailable right now.", REPROMPT, "updates_retry", "retry"); }
+        if (!options.agent.demoInbox) { unavailable(); return ask(m.updatesUnavailable, m.reprompt, "updates_retry", "retry"); }
         try {
           const inbox = await options.agent.demoInbox({ deviceUserId });
           const eventItem = inbox.events[0];
-          if (!eventItem) return tell("There are no unread updates.", undefined, "updates", "no_action");
+          if (!eventItem) return tell(m.noUpdates, undefined, "updates", "no_action");
           const response = tell(eventItem.detail, undefined, "updates");
           if (options.agent.demoEvent) await options.agent.demoEvent({ deviceUserId, eventId: eventItem.eventId, action: "read" });
           return response;
         } catch (error) {
           failed(error);
-          return ask("I couldn't read your updates right now. Try again in a moment.", REPROMPT, "updates_retry", "retry");
+          return ask(m.updatesFailed, m.reprompt, "updates_retry", "retry");
         }
       }
-      if (intent === "AppHandoffIntent") return ask(NAMED_HANDOFF, REPROMPT, "handoff", "handoff");
-      if (intent === "CreditHelpIntent") return ask(CREDITS_HELP, REPROMPT, "credits_help", "handoff");
-      if (catchAll && /\b(?:send|deliver)\b/i.test(catchAll)) return ask(NAMED_HANDOFF, REPROMPT, "handoff", "handoff");
-      if (catchAll && /\b(?:create|make)\b.*\bfor\b/i.test(catchAll)) return ask(NAMED_HANDOFF, REPROMPT, "handoff", "handoff");
+      if (intent === "AppHandoffIntent") return ask(m.namedHandoff, m.reprompt, "handoff", "handoff");
+      if (intent === "CreditHelpIntent") return ask(m.creditsHelp, m.reprompt, "credits_help", "handoff");
+      if (catchAll && match.send.test(catchAll)) return ask(m.namedHandoff, m.reprompt, "handoff", "handoff");
+      if (catchAll && match.createFor.test(catchAll)) return ask(m.namedHandoff, m.reprompt, "handoff", "handoff");
       const helpTopic = intent === "HelpTopicIntent" ? slotValue(event, "topic") : catchAll;
-      if (helpTopic && /\b(?:credit|credits|charge|purchase|buy)\b/i.test(helpTopic)) return ask(CREDITS_HELP, REPROMPT, "credits_help", "handoff");
-      if (catchAll && /\b(?:how|help)\b.*\b(?:create|make|draft)\b/i.test(catchAll)) return ask(CREATION_HELP, REPROMPT, "creation_help", "handoff");
-      if (intent === "HelpTopicIntent") return ask(CREATION_HELP, REPROMPT, "creation_help", "handoff");
+      if (helpTopic && match.credits.test(helpTopic)) return ask(m.creditsHelp, m.reprompt, "credits_help", "handoff");
+      if (catchAll && match.howToCreate.test(catchAll)) return ask(m.creationHelp, m.reprompt, "creation_help", "handoff");
+      if (intent === "HelpTopicIntent") return ask(m.creationHelp, m.reprompt, "creation_help", "handoff");
       if (intent === "ReadDemoDraftIntent") {
-        if (!options.agent.latestDraft) { unavailable(); return ask(DRAFT_UNAVAILABLE, REPROMPT, "draft_read_retry", "retry"); }
+        if (!options.agent.latestDraft) { unavailable(); return ask(m.draftUnavailable, m.reprompt, "draft_read_retry", "retry"); }
         try {
           const latest = await options.agent.latestDraft({ deviceUserId });
-          return latest.status === "saved" ? tell(`Your story draft says: ${latest.outline}`, undefined, "draft_read") : ask("There is no story draft yet. Say, let's create a story.", REPROMPT, "draft_missing");
+          return latest.status === "saved" ? tell(m.draftRead(latest.outline), undefined, "draft_read") : ask(m.noDraft, m.reprompt, "draft_missing");
         } catch (error) {
           failed(error);
-          return ask("I couldn't read your story draft right now. Try again in a moment.", REPROMPT, "draft_read_retry", "retry");
+          return ask(m.draftReadFailed, m.reprompt, "draft_read_retry", "retry");
         }
       }
       if (intent === "StartStoryIntent") {
@@ -576,12 +571,12 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         return theme ? saveDemoDraft(theme) : askForTheme();
       }
       if (pendingDraft && catchAll) {
-        const explicitTheme = /^(?:about|the theme is|make it about)\s+(.+)$/i.exec(catchAll)?.[1];
-        const bareTheme = /^(?:bedtime|space|ocean|forest|animals|friendship|mermaids)(?: story)?$/i.test(catchAll) ? catchAll : undefined;
+        const explicitTheme = match.explicitTheme.exec(catchAll)?.[1];
+        const bareTheme = match.bareTheme.test(catchAll) ? catchAll : undefined;
         if (explicitTheme || bareTheme) return saveDemoDraft(explicitTheme ?? bareTheme ?? "");
       }
-      if (catchAll && /\b(?:create|make)\b.*\bstory\b/i.test(catchAll)) {
-        const theme = /\babout\s+(.+)$/i.exec(catchAll)?.[1];
+      if (catchAll && match.createStory.test(catchAll)) {
+        const theme = match.themeAbout.exec(catchAll)?.[1];
         return theme ? saveDemoDraft(theme) : askForTheme();
       }
 
@@ -589,15 +584,15 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         if (intent === "PlayAllIntent") return command({ command: "start", order: "shuffle" });
         if (intent === "PlayNewStoriesIntent") return command({ command: "start", order: "newest" });
         if (intent === "PlayCreatorStoriesIntent") {
-          const storyteller = slotValue(event, "storyteller");
-          return storyteller ? command({ command: "start", order: "shuffle", storyteller }) : ask("Who would you like a story from?");
+          const storyteller = resolvedValue(event, "storyteller");
+          return storyteller ? command({ command: "start", order: "shuffle", storyteller }) : ask(m.whoFrom);
         }
         if (intent === "StartPlaylistOverIntent") return command({ command: "reset", ...tokenInput });
         if (intent === "PlayStoryIntent") {
           const title = slotValue(event, "title");
-          const storyteller = slotValue(event, "storyteller");
+          const storyteller = resolvedValue(event, "storyteller");
           if (title) {
-            const shortTitle = /^(?:the\s+)?(.+?)\s+story$/i.exec(title)?.[1];
+            const shortTitle = match.shortTitle.exec(title)?.[1];
             return command({ command: "title", title: shortTitle ?? title, ...(storyteller && { storyteller }) });
           }
           return command({ command: "start", order: "shuffle", ...(storyteller && { storyteller }) });
@@ -608,14 +603,14 @@ export function createHandler(options: HandlerOptions): SkillHandler {
             if (!reply.fallbackToSuggestion) return playlistResult(reply);
           } catch (error) {
             failed(error);
-            return ask(RETRY, REPROMPT, "playback_retry", "retry");
+            return ask(m.retry, m.reprompt, "playback_retry", "retry");
           }
           // Without an active playlist, preserve the existing suggestion behavior.
         }
       }
 
-      const intentText = textForIntent(event);
-      if (intentText === null) return ask(NOTHING_TO_PLAY);
+      const intentText = textForIntent(event, match);
+      if (intentText === null) return ask(m.nothingToPlay);
       const { text, playOriented } = intentText;
       telemetry.playOriented = playOriented;
       // Catch-all text can include a child's name. Keep it out of recording telemetry.
@@ -627,7 +622,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
               apiEndpoint,
               apiAccessToken,
               requestId: event.request.requestId,
-              text: progressiveText(playOriented),
+              text: progressiveText(m, playOriented),
               fetch: options.progressiveFetch,
             })
           : undefined;
@@ -637,9 +632,9 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         telemetry.tools = reply.toolCalls.map((call) => `${call.name}:${call.ms}ms`);
         telemetry.played = Boolean(reply.play);
         telemetry.storyId = reply.play?.id ?? null;
-        if (reply.play) return tell(reply.say, [playDirective(reply.play)], "agent_reply");
+        if (reply.play) return tell(reply.say, [playDirective(reply.play, 0, { locale })], "agent_reply");
         if (playOriented && reply.needsAnswer !== true && playlist && intent === "CatchAllIntent") {
-          const title = catchAllTitle(text);
+          const title = catchAllTitle(text, match);
           return await command(title ? { command: "title", title } : { command: "start", order: "newest" });
         }
         if (playOriented && reply.needsAnswer !== true && playlist && (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent")) {
@@ -647,13 +642,13 @@ export function createHandler(options: HandlerOptions): SkillHandler {
             return playlistResult(await playlist({ deviceUserId, command: "start", order: "newest" }));
           } catch (error) {
             failed(error);
-            return ask(RETRY, REPROMPT, "playback_retry", "retry");
+            return ask(m.retry, m.reprompt, "playback_retry", "retry");
           }
         }
-        return ask(playOriented && reply.needsAnswer !== true ? NO_PLAY : reply.say, REPROMPT, "agent_reply", reply.needsAnswer === true || playOriented ? "awaiting_input" : "completed");
+        return ask(playOriented && reply.needsAnswer !== true ? m.noPlay : reply.say, m.reprompt, "agent_reply", reply.needsAnswer === true || playOriented ? "awaiting_input" : "completed");
       } catch (error) {
         failed(error);
-        return ask(RETRY, REPROMPT, "playback_retry", "retry");
+        return ask(m.retry, m.reprompt, "playback_retry", "retry");
       } finally {
         // The agent settled — a progressive response would only be spoken over a still-open turn.
         progressive?.cancel();

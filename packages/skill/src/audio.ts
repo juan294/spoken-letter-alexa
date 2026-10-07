@@ -1,3 +1,7 @@
+import type { SkillLocale } from "@spoken-letter-alexa/shared";
+
+import { MESSAGES } from "./messages.ts";
+
 /**
  * The agent's `play` reply: the story MP3 and what to show on a screen device. Declared
  * here rather than imported from `@spoken-letter-alexa/agent` on purpose: the skill bundle
@@ -89,7 +93,7 @@ export function artSource(artUrl: string | null | undefined): ArtSource | null {
 export function playDirective(
   play: Play,
   offsetInMilliseconds = 0,
-  options: { expectedPreviousToken?: string; token?: string } = {},
+  options: { expectedPreviousToken?: string; token?: string; locale?: SkillLocale } = {},
 ): PlayDirective {
   const art = artSource(play.artUrl);
   return {
@@ -104,7 +108,7 @@ export function playDirective(
       },
       metadata: {
         title: play.title,
-        subtitle: `read by ${play.storyteller}`,
+        subtitle: MESSAGES[options.locale ?? "en-US"].readBy(play.storyteller),
         ...(art && { art: { sources: [art] } }),
       },
     },
