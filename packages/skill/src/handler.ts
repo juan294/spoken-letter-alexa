@@ -4,7 +4,7 @@ import { emfEnvelope, log, resolveLocale, type SkillLocale } from "@spoken-lette
 
 import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
-import { MATCHERS, MESSAGES, type Matchers, type Messages } from "./messages.ts";
+import { DEMO_TOPICS, type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 
@@ -72,18 +72,20 @@ const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.va
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
   [entry.name.value, ...entry.name.synonyms].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));
 
-const SAFE_TOPICS = new Set(["mermaids", "space", "ocean", "forest", "animals", "friendship", "bedtime"]);
+const SAFE_TOPICS: ReadonlySet<string> = new Set(DEMO_TOPICS);
+const isDemoTopic = (value: string): value is DemoTopic => SAFE_TOPICS.has(value);
 
 /** Only fixture-safe topics cross the skill session boundary. A resolved slot is already canonical. */
-function safeDemoTopic(speech: string | undefined, match: Matchers, locale: SkillLocale): string | null {
+function safeDemoTopic(speech: string | undefined, locale: SkillLocale): DemoTopic | null {
   if (!speech) return null;
   const text = speech.toLocaleLowerCase(locale);
-  if (SAFE_TOPICS.has(text)) return text;
-  return match.topics.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+  if (isDemoTopic(text)) return text;
+  return MATCHERS[locale].topics.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
 }
 
 /** A resolved `ReactionChoice` is canonical; an unresolved one is matched as spoken. */
-function reactionChoice(spoken: string | undefined, match: Matchers, locale: SkillLocale): "like" | "love" | undefined {
+function reactionChoice(spoken: string | undefined, locale: SkillLocale): "like" | "love" | undefined {
+  const match = MATCHERS[locale];
   const choice = spoken?.toLocaleLowerCase(locale);
   if (choice === undefined) return undefined;
   if (choice === "like" || match.like.test(choice)) return "like";
@@ -129,11 +131,6 @@ function recoverFlow(m: Messages, state: Record<string, string>, fallback: boole
   return { ...question(text, reprompt), sessionAttributes: next };
 }
 
-/** Catalog-aware filler for the progressive response, never a generic "one moment" (phase-2.md section 2). */
-function progressiveText(m: Messages, playOriented: boolean): string {
-  return playOriented ? m.progressivePlay : m.progressiveNews;
-}
-
 function escapeSsml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -165,7 +162,8 @@ const audioControl = (directives: AudioDirective[]): AlexaResponseEnvelope => ({
 const themeQuestion = (m: Messages, text = m.themePrompt): AlexaResponseEnvelope => ({ ...question(text, m.themePrompt), sessionAttributes: { demoFlow: "draft" } });
 
 /** Resume, start over and repeat all decode the current AudioPlayer token and re-issue a play directive, differing only in the offset. */
-function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number, m: Messages, locale: SkillLocale): AlexaResponseEnvelope {
+function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number, locale: SkillLocale): AlexaResponseEnvelope {
+  const m = MESSAGES[locale];
   const token = event.context.AudioPlayer?.token;
   const play = token ? decodeStreamToken(token) : null;
   if (!play) return question(m.nothingToResume, m.reprompt);
@@ -328,7 +326,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       mark(key, result, closing(text, directives));
     const control = (directives: AudioDirective[]) => mark("playback_control", "completed", audioControl(directives));
     const resume = (offset: number) => {
-      const response = resumablePlay(event, offset, m, locale);
+      const response = resumablePlay(event, offset, locale);
       return mark("playback_control", response.response.directives ? "completed" : "awaiting_input", response);
     };
     const askForTheme = (text = m.themePrompt, key: ResponseKey = "theme_prompt") => mark(key, "awaiting_input", themeQuestion(m, text));
@@ -503,7 +501,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       }
       if (pendingReaction && intent === "AMAZON.NoIntent") return saveReaction("dismiss");
       if (intent === "ReactToStoryIntent") {
-        const choice = reactionChoice(resolvedValue(event, "choice"), match, locale);
+        const choice = reactionChoice(resolvedValue(event, "choice"), locale);
         if (choice) return saveReaction(choice);
         return { ...ask(m.reactionPrompt, m.reactionReprompt, "reaction_prompt"), sessionAttributes: { demoFlow: "reaction" } };
       }
@@ -522,7 +520,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       const catchAllWish = catchAll && match.wish.test(catchAll);
       if (intent === "WishFromStorytellerIntent" && !resolvedValue(event, "storyteller")) return ask(m.whoFrom, m.wishStart, "wish_start");
       if (intent === "WishStoryIntent" || intent === "WishFromStorytellerIntent" || catchAllWish || catchAllAsk) {
-        const topic = safeDemoTopic(resolvedValue(event, "wishtopic") ?? catchAll, match, locale);
+        const topic = safeDemoTopic(resolvedValue(event, "wishtopic") ?? catchAll, locale);
         if (!topic) return ask(m.wishTopicStart, m.wishStart, "wish_start");
         const rawStoryteller = resolvedValue(event, "storyteller") ?? catchAllAsk?.[1];
         const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(rawStoryteller.toLocaleLowerCase("en-US")) : undefined;
@@ -622,7 +620,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
               apiEndpoint,
               apiAccessToken,
               requestId: event.request.requestId,
-              text: progressiveText(m, playOriented),
+              // Catalog-aware filler, never a generic "one moment" (phase-2.md section 2).
+              text: playOriented ? m.progressivePlay : m.progressiveNews,
               fetch: options.progressiveFetch,
             })
           : undefined;

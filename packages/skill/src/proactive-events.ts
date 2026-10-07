@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { SKILL_LOCALES } from "@spoken-letter-alexa/shared";
+
 const LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token";
 export const DEVELOPMENT_PROACTIVE_EVENTS_URL = "https://api.amazonalexa.com/v1/proactiveEvents/stages/development";
 
@@ -16,7 +18,7 @@ export function buildMessageAlert(input: { userId: string; eventId: string; occu
       name: "AMAZON.MessageAlert.Activated" as const,
       payload: { state: { status: "UNREAD" as const, freshness: "NEW" as const }, messageGroup: { creator: { name: "Spoken Letter" }, count: 1 } },
     },
-    localizedAttributes: [{ locale: "en-US" as const }, { locale: "es-ES" as const }],
+    localizedAttributes: SKILL_LOCALES.map((locale) => ({ locale })),
     relevantAudience: { type: "Unicast" as const, payload: { user: input.userId } },
   };
 }

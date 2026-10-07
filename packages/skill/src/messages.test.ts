@@ -1,11 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { MESSAGES, type Messages } from "./messages.ts";
+import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
+import { DEMO_TOPICS, MESSAGES, type Messages } from "./messages.ts";
 
-/** Every catalog line, with templates rendered against neutral sample values. */
+/** Every catalog line, with templates rendered against sample values (a topic doubles as a title). */
 function lines(messages: Messages): string[] {
   return Object.values(messages).map((entry: string | ((...args: never[]) => string)) =>
-    typeof entry === "function" ? (entry as (...args: string[]) => string)("Sample Title", "Sample Teller") : entry);
+    typeof entry === "function" ? (entry as (...args: string[]) => string)("mermaids", "Sample Teller") : entry);
 }
 
 describe("skill message catalogs", () => {
@@ -44,4 +45,9 @@ describe("skill message catalogs", () => {
     expect(es.wishConfirm("space")).not.toMatch(/ de \?|undefined/);
     expect(es.readBy("Grandpa Juan")).toBe("leída por Grandpa Juan");
   });
+});
+
+test("DEMO_TOPICS are exactly the interaction model's DemoTopic values", () => {
+  const values = interactionModel.interactionModel.languageModel.types.find((type) => type.name === "DemoTopic")?.values.map((value) => value.name.value);
+  expect(values).toEqual([...DEMO_TOPICS]);
 });
