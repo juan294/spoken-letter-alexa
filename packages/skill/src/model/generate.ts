@@ -509,7 +509,9 @@ const SPANISH_SAMPLES: Record<string, string[]> = {
   ],
   AppHandoffIntent: [
     "envía una historia a {listeneralias}",
+    "envíale una historia a {listeneralias}",
     "manda una historia a {listeneralias}",
+    "mándale una historia a {listeneralias}",
     "crea una historia para {listeneralias}",
     "puedes enviar una historia a {listeneralias}",
     "puedes crear una historia para {listeneralias}",
