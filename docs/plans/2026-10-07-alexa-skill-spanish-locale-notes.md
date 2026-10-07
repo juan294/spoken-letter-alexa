@@ -75,6 +75,51 @@ Evidence:
 
 Not done: the plan says to delete `probe/es-es-locale` and its worktree after Owner acceptance of Phase 2. That worktree holds the source of the es-ES model currently on the development stage, and the Owner's acceptance is still owed, so both are left in place for the Owner.
 
+## Phase 3: backend localization
+
+Commits: `15689fb` (implementation), `dee2f0f` (review repairs), `ccc4812` (simplify).
+
+- Transport (D6). `routes.ts` accepts optional `locale: z.enum(SKILL_LOCALES)` on the session, playlist, demo next, inbox, draft and wish bodies. `AgentSession.locale` is written on every session open (default en-US), so a reopen replaces it (SS6). The Dynamo store reads back only a supported value. The skill's `agent-client.ts` sends `locale` on exactly those bodies when given, and reopens the device session when a turn's locale differs from the cached one.
+- Turns. `persona.ts` exports `SPANISH_LANGUAGE_LINE` and `systemPromptFor(catalog, locale)`; en-US returns `personaWithCatalog(catalog)` unchanged. `runTurn` builds the prompt and the fallback reply from `TurnOptions.locale`. `ScriptedModel` answers in Spanish when the prompt carries the line and recognizes Spanish play, list and next words.
+- Catalog (D5). `packages/agent/src/messages.ts` holds `AGENT_MESSAGES: Record<SkillLocale, …>`: playlist replies, update details (rendered by `publicEvent` in the request locale), the draft outline (rendered at save time, D7) and the fallback say. The English values are the earlier literals, unchanged. The fixture contract still checks the English detail wording.
+- `canonicalTheme(speech, locale)` keeps the seven English rows, in their original order, for en-US. es-ES has its own Spanish rows, then an exact canonical value.
+- Shared. `topics.ts` (`DEMO_TOPICS`, `isDemoTopic`, `SPANISH_TOPIC_PHRASES`), `text.ts` (`spanishPattern`, moved from the skill) and `isSkillLocale`.
+
+Red evidence: before implementation, the agent route tests had 17 failures and the skill client and handler tests had 7. Review repairs added 4 more failing tests before their fixes.
+
+Independent review of `15689fb`: CHANGES REQUESTED. Dispositions:
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| 1 | The English ocean row matched the Spanish subjunctive "sea"; Spanish "luna" turned "Luna the cat" into space | Fixed: per-locale theme rows; en-US is exactly the original table; B5 rows and an SS3 route test added |
+| 2 | No Phase 3 handoff | Fixed: this section |
+| 3 | A per-container client cache can miss a language change made through another warm container | Accepted risk (needs a language switch plus a container split). The plan has turns use the stored locale. If seen on a device, send `locale` on the turn body as an override |
+| 4 | An invalid `locale` value now gets a 400 (a 422 on `/demo/wish`) | Accepted: the skill only sends es-ES; an omitted locale is still accepted (B2) |
+| 5 | ScriptedModel treated "más" as "another" | Fixed: removed; test added |
+| 6 | Spanish copy (noStoriesYet, whichTitle, "He guardado", scripted "reciente" and "envía") | Fixed as proposed |
+
+Re-review of `dee2f0f`: APPROVE.
+
+Simplify (two combined reviewers). Applied:
+- one shared `spanishPattern` in place of three drifting copies;
+- shared `isSkillLocale` and `isDemoTopic`;
+- the unused `FALLBACK_SAY` export removed;
+- `languageLine` inlined;
+- the draft enum types derived from the schema;
+- scripted replies keyed by `SkillLocale`;
+- the route adds the locale once;
+- `runTurn` is the one place the prompt is built.
+
+Skipped:
+- storing `locale` only for non-English sessions: storing en-US explicitly is what lets a reopen replace es-ES;
+- a per-request agent wrapper in place of the `localeInput` spreads: optional, and no call site is missed today.
+
+Gate on `ccc4812`:
+- Attempt 1 failed: `test` exit 1, from one simulator UI test (`App.test.tsx`, "finishes the link on /demo/callback…"). The other four checks passed. The simulator has no diff from `develop`, and its suite then passed 3 of 3 runs in isolation. This is the known first-run timing flake.
+- Attempt 2 on the same identity passed all 5 checks: sha256 `eb8a379d…a245`, 636 files, unchanged before and after.
+- The failed receipt is kept outside the repository at `<scratchpad>/p3-verify-attempt1-failed.log` and `p3-verification-attempt1-failed.json`.
+- en-US: no pre-existing test changed. Every English literal moved verbatim (reviewer compared them character by character), and the en-US system prompt is byte-identical.
+
 ## Deviations
 
 - Plan said existing English assertions stay unmodified. Found `proactive-events.test.ts` asserted `localizedAttributes: [{ locale: "en-US" }]` exactly. Chose to update that one assertion to both locales. Why: D10 and oracle E8 require the es-ES entry, so this test cannot pass unchanged.
@@ -82,3 +127,7 @@ Not done: the plan says to delete `probe/es-es-locale` and its worktree after Ow
 - Plan step 6 kept storyteller aliases on the en-US model for Phase 1. Kept as written; Phase 2 extends the handler to read the es-ES model's synonyms.
 - Plan oracle M4 said every es-ES sample passes `utteranceAllowed`. Found the fixed handoff and credit-help samples must say "enviar" and "créditos", both denied fragments. Chose to mask only that one fragment for those two intents, exactly as the en-US test does for "send" and "credit". Why: the explanations are the intents' purpose and write nothing.
 - Plan said `utteranceAllowed(sample, locale)` applies that locale's child words. Found applying the English list as well rejects "cuáles son las historias" ("son" means "they are"). Chose: each locale applies its own child words; the shared `CLASS_C_DENYLIST` and record/audio still apply to both, and es-ES adds "grab". Why: correct Spanish while staying stricter than the plan on fragments.
+- Plan step 5 said the handler passes its resolved locale to every client call. Chose: pass it only for non-en-US requests, and only on the D6 bodies (session, playlist, next, inbox, draft, wish). Why: the agent treats an omitted locale as en-US, so this is the same contract. English request bodies stay byte-identical, and the existing exact-match handler and client tests pass unmodified, as the plan requires.
+- Plan step 4 said canonicalTheme adds the Spanish patterns "in the same table". Found one shared table let English "sea" match Spanish "que sea" and Spanish "luna" change English results. Chose per-locale rows behind `canonicalTheme(speech, locale)`; en-US is exactly the original table. Why: en-US invariance and correct Spanish matching.
+- Plan's consumer sweep said Phase 3 adds the locale field to `session-recovery.integration.test.ts`'s in-process requests. Not needed: those requests are en-US, and en-US sends no locale. The file stays unmodified; Phase 4 adds the es-ES journeys in a new file.
+- The wish body accepts `locale` (D6), and it is used only to match a raw Spanish topic. The wish receipt has no speech; the wish's update detail is rendered in the reader's locale when read.
