@@ -609,7 +609,7 @@ const LOCALE_TABLES: Record<SkillLocale, LocaleTables> = {
     examplePhrases: (storyteller) => [
       "Alexa, abre spoken letter",
       `Alexa, pide a spoken letter que ponga la historia que mandó ${storyteller ?? "tu familia"}`,
-      "Alexa, pide a spoken letter qué hay de nuevo",
+      "Alexa, pregunta a spoken letter qué hay de nuevo",
     ],
   },
 };

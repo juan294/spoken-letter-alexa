@@ -132,7 +132,7 @@ describe("es-ES interaction model", () => {
     expect(es?.examplePhrases).toEqual([
       "Alexa, abre spoken letter",
       "Alexa, pide a spoken letter que ponga la historia que mandó Aunt Whitney",
-      "Alexa, pide a spoken letter qué hay de nuevo",
+      "Alexa, pregunta a spoken letter qué hay de nuevo",
     ]);
     expect(es?.smallIconUri).toBe(info.locales["en-US"]?.smallIconUri);
     expect(es?.largeIconUri).toBe(info.locales["en-US"]?.largeIconUri);

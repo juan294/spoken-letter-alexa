@@ -60,7 +60,7 @@ Independent review of `3deae2e`: CHANGES REQUESTED. Dispositions:
 | 5 | "crea una historia para {listeneralias}" is close to "crea una historia para dormir" | Accepted. A mis-route only gives the handoff explanation; check in Amazon's utterance profiler after `ask deploy` |
 | 6 | "pon otra" vs "ponla otra vez"; "me {choice}" is short | Accepted; device acceptance in Phase 4 |
 | 7 | `withExamplePhrases` was not bounded to its locale | Fixed: refuses an array past the next locale key; test added |
-| 8 | "pide a spoken letter qué hay de nuevo" reads awkwardly | Owner decision: the plan mandates it; "pregunta a spoken letter qué hay de nuevo" is the alternative |
+| 8 | "pide a spoken letter qué hay de nuevo" reads awkwardly | Fixed after Owner decision (2026-10-07): "Alexa, pregunta a spoken letter qué hay de nuevo" |
 | 9 | Extra child words (nene, nena, bebé); unaccented forms pass | Follow-up only. The lists match the plan, and es-ES has no training input today |
 | 10 | "pídeles a los abuelos" is not matched | Accepted; no plural catalog storyteller exists |
 
@@ -152,7 +152,6 @@ Final gate on `4bcc6be`: all 5 checks passed (718 unit tests, CDK synth, 8 of 8 
 
 - Copy review of every Spanish string: `packages/skill/src/messages.ts`, `packages/agent/src/messages.ts`, the scripted replies in `packages/agent/src/scripted-model.ts`, the language line in `packages/agent/src/persona.ts`, and the es-ES manifest text in `skill.json` (Phases 1 and 3 exit criteria).
 - Acceptance of Phases 1–4. After Phase 2 acceptance, delete `probe/es-es-locale` and `/Users/juan/code/spoken-letter-alexa-es-probe`; both were left in place.
-- Example phrase wording: the plan's "pide a spoken letter qué hay de nuevo" vs "pregunta a spoken letter qué hay de nuevo".
 - Optional: extra Spanish child words beyond the plan's list ("nene", "nena", "bebé"), and accent folding if an es-ES training file is ever added.
 - Known risk (Phase 3, finding 3): a language switch that lands on a different warm Lambda container keeps the old session locale until that container's cache reopens. If seen on a device, send `locale` on the turn body as an override.
 
@@ -167,3 +166,4 @@ Final gate on `4bcc6be`: all 5 checks passed (718 unit tests, CDK synth, 8 of 8 
 - Plan step 4 said canonicalTheme adds the Spanish patterns "in the same table". Found one shared table let English "sea" match Spanish "que sea" and Spanish "luna" change English results. Chose per-locale rows behind `canonicalTheme(speech, locale)`; en-US is exactly the original table. Why: en-US invariance and correct Spanish matching.
 - Plan's consumer sweep said Phase 3 adds the locale field to `session-recovery.integration.test.ts`'s in-process requests. Not needed: those requests are en-US, and en-US sends no locale. The file stays unmodified; Phase 4 adds the es-ES journeys in a new file.
 - The wish body accepts `locale` (D6), and it is used only to match a raw Spanish topic. The wish receipt has no speech; the wish's update detail is rendered in the reader's locale when read.
+- Plan phase-2.md step 5 set the third es-ES example phrase to "Alexa, pide a spoken letter qué hay de nuevo". The Owner chose "Alexa, pregunta a spoken letter qué hay de nuevo" on 2026-10-07. The generator, the M7 test and `skill.json` now use it. The request part, "qué hay de nuevo", is still an exact `WhatIsNewIntent` sample.
