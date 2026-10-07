@@ -37,8 +37,48 @@ Simplify (four read-only angles): efficiency clean. Applied: helpers take only `
 
 Gate: `python3 .rpi/scripts/rpi-verify.py` on `dff9005` passed all 5 checks (typecheck, lint, test, cdk-synth, e2e with 8 of 8). Identity sha256 `2ff6b754…eb2d`, 628 files, unchanged before and after. Existing `handler.test.ts`, `session-recovery.integration.test.ts` and `progressive.test.ts` are unmodified.
 
+## Phase 2: es-ES interaction model and manifest
+
+Commits: `3deae2e` (implementation), `7f600c9` (review repairs), `215c93b` (simplify).
+
+- `generate.ts` holds everything that differs by locale in one `LOCALE_TABLES` record: lowercasing, alphabet, child words, denied fragments, kinship forms, samples, catch-all carriers, slot types and example phrases. `generateInteractionModel({ locale })` builds the en-US intents and slots, then swaps in the es-ES samples. A missing or unknown intent in a locale's sample table throws. `MODEL_PATHS` and `TRAINING_PATHS` are built from `SKILL_LOCALES`. Existing en-US callers keep their defaults.
+- `interactionModels/custom/es-ES.json` is generated and drift-checked: 36 intents, the same slots as en-US, and English canonical slot values with Spanish synonyms. `StorytellerName` adds `tía`, `tita` and `la tía`/`la tita` forms for "Aunt", the article forms of `abuela` and `abuelo`, `mamá`/`papá` forms, and the bare name.
+- `skill.json` gains the es-ES locale (Spanish summary, description and keywords; the en-US icon files), `distributionCountries: ["US","ES"]`, and a Spanish line in the shared testing instructions. `withExamplePhrases` rewrites one locale's array in place, so the hand-formatted manifest is never reflowed. A `JSON.stringify` round trip changes the committed file (reviewer-verified).
+- `deploy.mjs` checks both locales' models and icons and names both device languages.
+- `handler.ts` builds storyteller aliases from both models. The Spanish `askStoryteller` capture drops `a la`, `a el` and `al`.
+
+Red evidence: before implementation, the new model tests and handler alias tests failed (M2 drift, M3 Spanish samples, the M4 tables, M6, M7 and the alias tests). Review repairs added 5 more failing tests before their fixes.
+
+Independent review of `3deae2e`: CHANGES REQUESTED. Dispositions:
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| 1 | The M4 test exempted handoff and credit samples from every check | Fixed: only "enviar" (handoff) and "crédito" (credit help) are masked, mirroring en-US's "send" and "credit" |
+| 2 | No "cuento" samples | Fixed: PlayStory, StartStory (with "inventa"), Wish and WishFromStoryteller samples |
+| 3 | No "pídele" sample; an article in the slot ("la tía Whitney") missed resolution | Fixed: "pídele" samples and article synonyms; handler test for a raw "la tía Whitney" |
+| 4 | Spain uses the perfect tense ("ha mandado") | Fixed: two PlayStory samples |
+| 5 | "crea una historia para {listeneralias}" is close to "crea una historia para dormir" | Accepted. A mis-route only gives the handoff explanation; check in Amazon's utterance profiler after `ask deploy` |
+| 6 | "pon otra" vs "ponla otra vez"; "me {choice}" is short | Accepted; device acceptance in Phase 4 |
+| 7 | `withExamplePhrases` was not bounded to its locale | Fixed: refuses an array past the next locale key; test added |
+| 8 | "pide a spoken letter qué hay de nuevo" reads awkwardly | Owner decision: the plan mandates it; "pregunta a spoken letter qué hay de nuevo" is the alternative |
+| 9 | Extra child words (nene, nena, bebé); unaccented forms pass | Follow-up only. The lists match the plan, and es-ES has no training input today |
+| 10 | "pídeles a los abuelos" is not matched | Accepted; no plural catalog storyteller exists |
+
+Re-review of `7f600c9`: APPROVE. The reviewer's node scan of es-ES.json found no duplicate samples, no sample shape shared across intents, no synonym shared across values, and no catch-all carrier that prefixes a play sample.
+
+Simplify (four angles). Applied: per-locale tables in place of nine locale branches; the unknown-intent guard (it caught the catch-all carriers sitting in the samples table, now their own constant); "grab" moved into the Spanish denied fragments; the shared `spanishPattern` word boundary (exported from `messages.ts`) for the Spanish child words; paths built from `SKILL_LOCALES`; one deploy loop over models and icons, with a pointer to `SKILL_LOCALES` because the plain-Node script cannot import TypeScript. Skipped: a generated storyteller-only file to save about 13.5 KB in the Lambda bundle (well under 1 ms of cold start); aligning DemoTopic synonyms with the matcher vocabulary (a pre-existing en-US pattern); reformatting skill.json to drop the in-place rewrite (the plan says preserve its formatting).
+
+Evidence:
+- `pnpm -F @spoken-letter-alexa/skill run deploy --dry-run` passed on `215c93b` (M8). It made one read-only `aws lambda get-function` call.
+- `git diff develop` is empty for en-US.json and generate.test.ts (M1).
+- Gate: `python3 .rpi/scripts/rpi-verify.py` on `215c93b` passed all 5 checks (8 of 8 E2E). Identity sha256 `af8f36e7…6bea8`, 631 files, unchanged before and after.
+
+Not done: the plan says to delete `probe/es-es-locale` and its worktree after Owner acceptance of Phase 2. That worktree holds the source of the es-ES model currently on the development stage, and the Owner's acceptance is still owed, so both are left in place for the Owner.
+
 ## Deviations
 
 - Plan said existing English assertions stay unmodified. Found `proactive-events.test.ts` asserted `localizedAttributes: [{ locale: "en-US" }]` exactly. Chose to update that one assertion to both locales. Why: D10 and oracle E8 require the es-ES entry, so this test cannot pass unchanged.
 - Plan said en-US behavior is unchanged. Found that step 5 (D4 resolution for every custom slot) changes what a real en-US device sends when Alexa resolves a synonym: storyteller "Whitney" becomes "Aunt Whitney", and drafttheme "sea" becomes "ocean". Chose to follow step 5 as written. Why: the canonical value is what the backend matches anyway; en-US test envelopes carry no resolutions, so the suite cannot observe it. Phase 4's English regression on a device covers it.
 - Plan step 6 kept storyteller aliases on the en-US model for Phase 1. Kept as written; Phase 2 extends the handler to read the es-ES model's synonyms.
+- Plan oracle M4 said every es-ES sample passes `utteranceAllowed`. Found the fixed handoff and credit-help samples must say "enviar" and "créditos", both denied fragments. Chose to mask only that one fragment for those two intents, exactly as the en-US test does for "send" and "credit". Why: the explanations are the intents' purpose and write nothing.
+- Plan said `utteranceAllowed(sample, locale)` applies that locale's child words. Found applying the English list as well rejects "cuáles son las historias" ("son" means "they are"). Chose: each locale applies its own child words; the shared `CLASS_C_DENYLIST` and record/audio still apply to both, and es-ES adds "grab". Why: correct Spanish while staying stricter than the plan on fragments.
