@@ -148,12 +148,17 @@ Final gate on `4bcc6be`: all 5 checks passed (718 unit tests, CDK synth, 8 of 8 
 4. Device acceptance on the office Echo Show 5 in Spanish (Spain) with Alexa+, by voice, R1–R4. Record the time, the language of each reply, and the `skill_turn` lines. Then the English regression. Also check on the device: whether nonsense speech during a pending draft reaches `ThemeChoiceIntent` (with `ER_SUCCESS_NO_MATCH`) rather than Fallback (the handler already covers both); "crea una historia para dormir" vs the handoff sample; "pon otra" vs "ponla otra vez".
 5. Record the evidence in these notes and the friction log.
 
-### Pending Owner decisions and follow-ups
+### Owner decisions, 2026-10-07
 
-- Copy review of every Spanish string: `packages/skill/src/messages.ts`, `packages/agent/src/messages.ts`, the scripted replies in `packages/agent/src/scripted-model.ts`, the language line in `packages/agent/src/persona.ts`, and the es-ES manifest text in `skill.json` (Phases 1 and 3 exit criteria).
-- Acceptance of Phases 1–4. After Phase 2 acceptance, delete `probe/es-es-locale` and `/Users/juan/code/spoken-letter-alexa-es-probe`; both were left in place.
+- The Spanish copy review is waived for now. The demo will be recorded in English once English Alexa+ works again, and the current Spanish wording gives enough parity.
+- Phases 1–4 are accepted. The Owner authorized the local merge into `develop`, branch and worktree cleanup, the push, and publication to AWS.
+- `probe/es-es-locale` (`b13c7bc`, the superseded hand-written model) and its worktree are deleted. Its evidence stays in `docs/research/2026-10-02-alexa-invocation-failure.md`.
+
+### Follow-ups
+
 - Optional: extra Spanish child words beyond the plan's list ("nene", "nena", "bebé"), and accent folding if an es-ES training file is ever added.
 - Known risk (Phase 3, finding 3): a language switch that lands on a different warm Lambda container keeps the old session locale until that container's cache reopens. If seen on a device, send `locale` on the turn body as an override.
+- Device acceptance in Spanish (release step 4) and its device-only checks remain.
 
 ## Deviations
 
