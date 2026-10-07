@@ -15,6 +15,8 @@ import {
   type StreamOptions,
 } from "@strands-agents/sdk";
 
+import { type SkillLocale, spanishPattern } from "@spoken-letter-alexa/shared";
+
 import { SPANISH_LANGUAGE_LINE } from "./persona.ts";
 import { type TurnOutput } from "./schema.ts";
 
@@ -51,12 +53,10 @@ function firstJson<T extends object>(items: Block[] | undefined, key: keyof T & 
   return null;
 }
 
-/** Word boundaries spelled out, since `\b` treats accented letters as non-word characters. */
-const words = (alternatives: string): RegExp => new RegExp(`(?<![\\p{L}])(?:${alternatives})(?![\\p{L}])`, "iu");
-const SPANISH_PLAY = words("pon|ponme|ponla|reproduce|escuchar|escucha|oír|léeme");
+const SPANISH_PLAY = spanishPattern(String.raw`\b(?:pon|ponme|ponla|reproduce|escuchar|escucha|oír|léeme)\b`);
 // "más nueva" is the superlative ("the newest"), a play request like English "newest".
-const SPANISH_LIST = words("qué|cuál|cuáles|lista|disponibles?|(?<!más\\s)nuev[ao]s?");
-const SPANISH_NEXT = words("otra|otro|siguiente|distinta");
+const SPANISH_LIST = spanishPattern(String.raw`\b(?:qué|cuál|cuáles|lista|disponibles?|(?<!más\s)nuev[ao]s?)\b`);
+const SPANISH_NEXT = spanishPattern(String.raw`\b(?:otra|otro|siguiente|distinta)\b`);
 
 function wantsPlayback(text: string): boolean {
   return (/\b(play|listen|hear|put on)\b/i.test(text) || SPANISH_PLAY.test(text))
@@ -77,8 +77,8 @@ type Replies = {
 };
 
 /** The scripted replies; Spanish when the system prompt carries the Spanish language line (plan SS5). */
-const REPLIES: Record<"en" | "es", Replies> = {
-  en: {
+const REPLIES: Record<SkillLocale, Replies> = {
+  "en-US": {
     unreachable: "I couldn't reach the family stories just now. Try again in a moment.",
     none: "No stories have been delivered yet. Deliver one in Spoken Letter first.",
     listed: (count, title, storyteller) => `You have ${count} delivered ${count === 1 ? "story" : "stories"}. The newest is "${title}" by ${storyteller}.`,
@@ -86,7 +86,7 @@ const REPLIES: Record<"en" | "es", Replies> = {
     unavailable: "That story's recording is not available right now. Try another one.",
     done: "Done.",
   },
-  es: {
+  "es-ES": {
     unreachable: "No he podido acceder a las historias familiares. Inténtalo de nuevo en un momento.",
     none: "Todavía no te ha llegado ninguna historia. Primero envía una desde Spoken Letter.",
     listed: (count, title, storyteller) => `Tienes ${count} ${count === 1 ? "historia" : "historias"}. La más reciente es "${title}", de ${storyteller}.`,
@@ -121,7 +121,7 @@ export class ScriptedModel extends Model {
     const last = messages.at(-1);
     const userText = [...messages].reverse().flatMap((m) => (m.role === "user" ? blocks(m) : [])).find((b) => b.type === "textBlock")?.text ?? "";
     const structuredTool = options?.toolSpecs?.find((spec) => spec.name === STRUCTURED_OUTPUT_TOOL)?.name;
-    const replies = REPLIES[typeof options?.systemPrompt === "string" && options.systemPrompt.includes(SPANISH_LANGUAGE_LINE) ? "es" : "en"];
+    const replies = REPLIES[typeof options?.systemPrompt === "string" && options.systemPrompt.includes(SPANISH_LANGUAGE_LINE) ? "es-ES" : "en-US"];
 
     const toolResult = last?.role === "user" ? blocks(last).find((b) => b.type === "toolResultBlock") : undefined;
     const previousToolUse = toolResult

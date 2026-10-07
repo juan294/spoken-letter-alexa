@@ -1,7 +1,8 @@
 export { readEnv, type EnvSource } from "./env.ts";
 export { log } from "./logger.ts";
-export { resolveLocale, SKILL_LOCALES, type SkillLocale } from "./locale.ts";
-export { DEMO_TOPICS, type DemoTopic, SPANISH_TOPIC_PHRASES } from "./topics.ts";
+export { isSkillLocale, resolveLocale, SKILL_LOCALES, type SkillLocale } from "./locale.ts";
+export { spanishPattern } from "./text.ts";
+export { DEMO_TOPICS, type DemoTopic, isDemoTopic, SPANISH_TOPIC_PHRASES } from "./topics.ts";
 export { emfEnvelope, type EmfMetric, type EmfUnit } from "./metrics.ts";
 export { constantTimeEqual, decodeJwtClaims, hmacSha256Hex, randomToken, sha256Base64Url, sha256Hex } from "./crypto.ts";
 export { BRAND_TOKENS, brand, flattenTokens, resolveToken } from "./brand/index.ts";

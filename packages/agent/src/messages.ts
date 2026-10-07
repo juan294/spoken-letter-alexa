@@ -1,5 +1,7 @@
 import { type DemoTopic, type SkillLocale, SPANISH_TOPIC_PHRASES } from "@spoken-letter-alexa/shared";
 
+import type { DraftChoices } from "./demo-drafts.ts";
+
 /**
  * Every line the agent API speaks through the skill, per locale (plan D5). A locale missing a
  * key fails `tsc`. Spanish copy is Spain Spanish in the `tú` register (plan D9). Titles and
@@ -36,13 +38,9 @@ export type UpdateMessages = {
   withStory: (detail: string, title: string, storyteller: string) => string;
 };
 
-export type DraftPlace = "quiet shore" | "forest path" | "starry sky" | "cozy room" | "sunny meadow";
-export type DraftChallenge = "small mystery" | "lost map" | "surprising sound" | "unexpected journey";
-export type DraftEnding = "kindness" | "courage" | "teamwork" | "a restful return";
-
 /** The draft outline (`demo-drafts.ts`), rendered once at save time in the request locale (plan D7). */
 export type DraftMessages = {
-  outline: (theme: DemoTopic, place: DraftPlace, challenge: DraftChallenge, ending: DraftEnding) => string;
+  outline: (theme: DemoTopic, choices: DraftChoices) => string;
 };
 
 export type AgentMessages = {
@@ -57,15 +55,15 @@ const SPANISH_THEMES: Record<DemoTopic, string> = {
   bedtime: "la hora de dormir", space: "el espacio", ocean: "el mar", forest: "el bosque",
   animals: "los animales", friendship: "la amistad", mermaids: "las sirenas",
 };
-const SPANISH_PLACES: Record<DraftPlace, string> = {
+const SPANISH_PLACES: Record<DraftChoices["place"], string> = {
   "quiet shore": "una orilla tranquila", "forest path": "un sendero del bosque", "starry sky": "un cielo estrellado",
   "cozy room": "una habitación acogedora", "sunny meadow": "un prado soleado",
 };
-const SPANISH_CHALLENGES: Record<DraftChallenge, string> = {
+const SPANISH_CHALLENGES: Record<DraftChoices["challenge"], string> = {
   "small mystery": "un pequeño misterio", "lost map": "un mapa perdido", "surprising sound": "un sonido sorprendente",
   "unexpected journey": "un viaje inesperado",
 };
-const SPANISH_ENDINGS: Record<DraftEnding, string> = {
+const SPANISH_ENDINGS: Record<DraftChoices["ending"], string> = {
   kindness: "la bondad", courage: "el valor", teamwork: "el trabajo en equipo", "a restful return": "un regreso tranquilo",
 };
 
@@ -97,7 +95,7 @@ export const AGENT_MESSAGES: Record<SkillLocale, AgentMessages> = {
       withStory: (detail, title, storyteller) => `${detail} "${title}" by ${storyteller}.`,
     },
     drafts: {
-      outline: (theme, place, challenge, ending) => `Theme: ${theme}. Setting: a ${place}. Middle: a ${challenge}. Ending: ${ending} brings everyone home.`,
+      outline: (theme, { place, challenge, ending }) => `Theme: ${theme}. Setting: a ${place}. Middle: a ${challenge}. Ending: ${ending} brings everyone home.`,
     },
     fallbackSay: "I can't reach Spoken Letter right now. Try again in a moment, or reconnect it in the Alexa app.",
   },
@@ -128,7 +126,7 @@ export const AGENT_MESSAGES: Record<SkillLocale, AgentMessages> = {
       withStory: (detail, title, storyteller) => `${detail} "${title}", de ${storyteller}.`,
     },
     drafts: {
-      outline: (theme, place, challenge, ending) =>
+      outline: (theme, { place, challenge, ending }) =>
         `Tema: ${SPANISH_THEMES[theme]}. Lugar: ${SPANISH_PLACES[place]}. Nudo: ${SPANISH_CHALLENGES[challenge]}. Final: ${SPANISH_ENDINGS[ending]} trae a todos de vuelta a casa.`,
     },
     fallbackSay: "Ahora mismo no puedo conectar con Spoken Letter. Inténtalo de nuevo en un momento o vuelve a conectarlo en la app de Alexa.",

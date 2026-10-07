@@ -1,4 +1,4 @@
-import { DEMO_TOPICS, type DemoTopic, type SkillLocale, SPANISH_TOPIC_PHRASES } from "@spoken-letter-alexa/shared";
+import { DEMO_TOPICS, type DemoTopic, type SkillLocale, spanishPattern, SPANISH_TOPIC_PHRASES } from "@spoken-letter-alexa/shared";
 
 export { DEMO_TOPICS, type DemoTopic };
 
@@ -200,11 +200,6 @@ export type Matchers = {
   like: RegExp;
   love: RegExp;
 };
-
-/** A Unicode word boundary: JavaScript's `\b` treats accented letters as non-word characters. */
-const WORD_BOUNDARY = String.raw`(?:(?<=[\p{L}\p{N}])(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(?=[\p{L}\p{N}]))`;
-/** A case-insensitive Unicode pattern whose `\b` is a letter-or-digit boundary, accented letters included. */
-export const spanishPattern = (source: string): RegExp => new RegExp(source.replaceAll(String.raw`\b`, WORD_BOUNDARY), "iu");
 
 export const MATCHERS: Record<SkillLocale, Matchers> = {
   "en-US": {

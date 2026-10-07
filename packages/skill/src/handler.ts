@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 
-import { emfEnvelope, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { emfEnvelope, isDemoTopic, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
-import { DEMO_TOPICS, type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
+import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
@@ -75,8 +75,6 @@ const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.va
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
   [entry.name.value, ...entry.name.synonyms].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));
 
-const SAFE_TOPICS: ReadonlySet<string> = new Set(DEMO_TOPICS);
-const isDemoTopic = (value: string): value is DemoTopic => SAFE_TOPICS.has(value);
 
 /** Only fixture-safe topics cross the skill session boundary. A resolved slot is already canonical. */
 function safeDemoTopic(speech: string | undefined, locale: SkillLocale): DemoTopic | null {
@@ -101,7 +99,7 @@ function validatedSession(attributes: Record<string, string> | undefined): Recor
   const state: Record<string, string> = {};
   const flow = attributes?.demoFlow;
   if (flow === "draft" || flow === "reaction") state.demoFlow = flow;
-  if (flow === "wish" && attributes?.demoTopic && SAFE_TOPICS.has(attributes.demoTopic)
+  if (flow === "wish" && attributes?.demoTopic && isDemoTopic(attributes.demoTopic)
       && (!attributes.demoStoryteller || SAFE_STORYTELLERS.has(attributes.demoStoryteller))) {
     state.demoFlow = "wish";
     state.demoTopic = attributes.demoTopic;

@@ -2,9 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseFixtureCatalog, TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
-import { CLASS_C_DENYLIST, SKILL_LOCALES, type SkillLocale } from "@spoken-letter-alexa/shared";
-
-import { spanishPattern } from "../messages.ts";
+import { CLASS_C_DENYLIST, SKILL_LOCALES, type SkillLocale, spanishPattern } from "@spoken-letter-alexa/shared";
 
 export type ModelSlot = { name: string; type: string };
 export type ModelIntent = { name: string; slots?: ModelSlot[]; samples: string[] };

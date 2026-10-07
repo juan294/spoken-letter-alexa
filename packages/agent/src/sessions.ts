@@ -1,5 +1,5 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { randomToken, sha256Hex, SKILL_LOCALES, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { isSkillLocale, randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { type MessageData } from "@strands-agents/sdk";
 
 export const SESSION_TTL_SECONDS = 2 * 60 * 60;
@@ -25,8 +25,6 @@ export type AgentSession = {
   /** The request locale of the latest session open (plan D6, SS6); absent means en-US. */
   locale?: SkillLocale;
 };
-
-const isSkillLocale = (value: unknown): value is SkillLocale => SKILL_LOCALES.some((locale) => locale === value);
 
 export interface SessionStore {
   put(session: AgentSession): Promise<void>;

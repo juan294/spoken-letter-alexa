@@ -20,16 +20,10 @@ export const ALEXA_PERSONA = [
 /** Appended last to every es-ES turn's system prompt, so the cached persona prefix is unchanged (plan SS5). */
 export const SPANISH_LANGUAGE_LINE = "Always reply in Spanish (Spain), using tú. Keep story titles and storyteller names exactly as written.";
 
-/** The reply-language instruction for a locale; en-US has none, so its prompt stays byte-identical. */
-export function languageLine(locale: SkillLocale): string {
-  return locale === "es-ES" ? SPANISH_LANGUAGE_LINE : "";
-}
-
-/** The full system prompt for a turn: persona, cached catalog, then the language line. */
+/** The full system prompt for a turn: persona, cached catalog, then the language line. en-US has none, so its prompt stays byte-identical. */
 export function systemPromptFor(catalog: string | undefined, locale: SkillLocale): string {
-  const line = languageLine(locale);
   const base = personaWithCatalog(catalog);
-  return line ? `${base}\n\n${line}` : base;
+  return locale === "es-ES" ? `${base}\n\n${SPANISH_LANGUAGE_LINE}` : base;
 }
 
 /**

@@ -11,7 +11,7 @@ export { createSigV4Fetch } from "./sigv4-fetch.ts";
 export { runTurn, CLIENT_ERA, type TurnOptions, type TurnResult } from "./turn.ts";
 export { ScriptedModel } from "./scripted-model.ts";
 export { ALEXA_PERSONA } from "./persona.ts";
-export { FALLBACK_SAY, playSchema, turnOutputSchema, type Play, type ToolTrace, type TurnOutput } from "./schema.ts";
+export { playSchema, turnOutputSchema, type Play, type ToolTrace, type TurnOutput } from "./schema.ts";
 export {
   DynamoSessionStore,
   MemorySessionStore,

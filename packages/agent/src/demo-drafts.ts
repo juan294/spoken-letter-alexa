@@ -1,5 +1,5 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { DEMO_TOPICS, type DemoTopic, randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { type DemoTopic, isDemoTopic, randomToken, sha256Hex, type SkillLocale, spanishPattern } from "@spoken-letter-alexa/shared";
 import { Agent, type Model } from "@strands-agents/sdk";
 import { z } from "zod";
 
@@ -94,11 +94,6 @@ export class DemoDraftError extends Error {
   }
 }
 
-/**
- * A Spanish word pattern. JavaScript's `\b` treats accented letters as non-word characters, so
- * the boundary is spelled out with Unicode letter classes.
- */
-const spanishWords = (alternatives: string): RegExp => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, "u");
 
 /**
  * Each locale's words for each theme; the first matching theme wins. Kept apart by locale:
@@ -116,17 +111,15 @@ const THEME_PATTERNS: Record<SkillLocale, [DraftTheme, RegExp][]> = {
     ["friendship", /\b(friendship|friends?)\b/u],
   ],
   "es-ES": [
-    ["bedtime", spanishWords("dormir|buenas noches")],
-    ["space", spanishWords("espacio|estrellas?|cohetes?|planetas?|luna")],
-    ["mermaids", spanishWords("sirenas?")],
-    ["ocean", spanishWords("océanos?|oceanos?|mar|mares|playas?|olas?")],
-    ["forest", spanishWords("bosques?|árbol|árboles|arbol|arboles")],
-    ["animals", spanishWords("animal|animales|gat[oa]s?|perr[oa]s?|pájaros?|pajaros?")],
-    ["friendship", spanishWords("amistad|amig[oa]s?")],
+    ["bedtime", spanishPattern(String.raw`\b(?:dormir|buenas noches)\b`)],
+    ["space", spanishPattern(String.raw`\b(?:espacio|estrellas?|cohetes?|planetas?|luna)\b`)],
+    ["mermaids", spanishPattern(String.raw`\b(?:sirenas?)\b`)],
+    ["ocean", spanishPattern(String.raw`\b(?:océanos?|oceanos?|mar|mares|playas?|olas?)\b`)],
+    ["forest", spanishPattern(String.raw`\b(?:bosques?|árbol|árboles|arbol|arboles)\b`)],
+    ["animals", spanishPattern(String.raw`\b(?:animal|animales|gat[oa]s?|perr[oa]s?|pájaros?|pajaros?)\b`)],
+    ["friendship", spanishPattern(String.raw`\b(?:amistad|amig[oa]s?)\b`)],
   ],
 };
-
-const isDraftTheme = (value: string): value is DraftTheme => (DEMO_TOPICS as readonly string[]).includes(value);
 
 /**
  * Speech is used only to choose a controlled topic; no part of it reaches the model or store.
@@ -138,7 +131,7 @@ export function canonicalTheme(speech: string, locale: SkillLocale = "en-US"): D
   const matched = THEME_PATTERNS[locale].find(([, pattern]) => pattern.test(words))?.[0];
   if (matched) return matched;
   const exact = words.trim();
-  return locale !== "en-US" && isDraftTheme(exact) ? exact : null;
+  return locale !== "en-US" && isDemoTopic(exact) ? exact : null;
 }
 
 /** Bedrock chooses safe outline components; the renderer alone creates persisted prose. */
@@ -157,7 +150,7 @@ export function createModelDraftGenerator(model: Model): DraftGenerator {
 }
 
 function outlineFor(theme: DraftTheme, choices: DraftChoices, locale: SkillLocale): string {
-  return AGENT_MESSAGES[locale].drafts.outline(theme, choices.place, choices.challenge, choices.ending);
+  return AGENT_MESSAGES[locale].drafts.outline(theme, choices);
 }
 
 function publicReceipt(stored: StoredReceipt): DemoDraftReceipt {

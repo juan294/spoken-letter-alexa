@@ -3,7 +3,7 @@ import { log, type SkillLocale } from "@spoken-letter-alexa/shared";
 import { Agent, AfterToolCallEvent, BeforeToolCallEvent, McpClient, type MessageData, type Model, type Usage } from "@strands-agents/sdk";
 
 import { AGENT_MESSAGES } from "./messages.ts";
-import { personaWithCatalog } from "./persona.ts";
+import { systemPromptFor } from "./persona.ts";
 import { type Play, type ToolTrace, turnOutputSchema } from "./schema.ts";
 
 /** The MCP TypeScript SDK 1.x client speaks the 2025-era protocol (legacy `initialize`). */
@@ -29,7 +29,7 @@ export type TurnOptions = {
    * always get an unshared, disconnected-after-use client.
    */
   reuseMcpClient?: boolean | undefined;
-  /** Selects the fallback reply's language; the system prompt carries the reply-language instruction. */
+  /** The reply language: selects the system prompt's language line and the fallback reply. */
   locale?: SkillLocale | undefined;
 };
 
@@ -119,7 +119,7 @@ export async function runTurn(options: TurnOptions, text: string): Promise<TurnR
   const agent = new Agent({
     model: options.model,
     tools: [mcp],
-    systemPrompt: options.systemPrompt ?? personaWithCatalog(options.catalog),
+    systemPrompt: options.systemPrompt ?? systemPromptFor(options.catalog, options.locale ?? "en-US"),
     structuredOutputSchema: turnOutputSchema,
     messages: options.history ?? [],
     printer: false,

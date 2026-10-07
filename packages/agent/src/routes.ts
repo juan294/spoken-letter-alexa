@@ -8,7 +8,6 @@ import { z } from "zod";
 import { type SpeechSynthesizer } from "./polly.ts";
 import { createModelDraftGenerator, DemoDraftController, DemoDraftError, type DemoDraftStore, type DraftGenerator } from "./demo-drafts.ts";
 import { DemoUpdateController, DemoUpdateError, type DemoUpdateStore, type DemoStory, type FixtureEvent } from "./demo-updates.ts";
-import { systemPromptFor } from "./persona.ts";
 import { PlaylistController, type PlaylistCatalog, type PlaylistStore } from "./playlist.ts";
 import { isCatalogStale, type SessionStore, deviceSessionId, newSession, SESSION_TTL_SECONDS } from "./sessions.ts";
 import { type Transcriber } from "./transcribe.ts";
@@ -349,9 +348,9 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const existing = id === undefined ? null : await deps.sessions.get(id);
     // Every open records its locale, so a device that changes language is answered in the new one (plan SS6).
     const locale = parsed.data.locale ?? "en-US";
-    let session = existing
-      ? { ...existing, expiresAt: now() + SESSION_TTL_SECONDS, locale }
-      : { ...newSession({ mode, subject: subjectOf(accessToken), accessToken, ...(id !== undefined && { id }) }, now), locale };
+    let session = { ...(existing
+      ? { ...existing, expiresAt: now() + SESSION_TTL_SECONDS }
+      : newSession({ mode, subject: subjectOf(accessToken), accessToken, ...(id !== undefined && { id }) }, now)), locale };
     if (mode === "device" && deps.deviceMcp && isCatalogStale(session, now())) {
       const catalog = await fetchCatalog(deps.deviceMcp, accessToken);
       if (catalog !== undefined) session = { ...session, catalog, catalogFetchedAt: now() };
@@ -370,8 +369,8 @@ export function createAgentApp(deps: AgentDeps): Hono {
     const mcp = session.mode === "device" && deps.deviceMcp ? deps.deviceMcp : { url: deps.mcpUrl, fetch: deps.mcpFetch };
     const locale = session.locale ?? "en-US";
     const result = await runTurn(
-      { model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history,
-        systemPrompt: systemPromptFor(session.catalog, locale), locale, reuseMcpClient: session.mode === "device" },
+      { model: deps.model, mcpUrl: mcp.url, accessToken, fetch: mcp.fetch, history: session.history, catalog: session.catalog,
+        locale, reuseMcpClient: session.mode === "device" },
       parsed.data.text,
     );
     // The skill speaks `say` with Alexa's own voice, so Polly runs for the simulator only.
