@@ -7,6 +7,7 @@
 | Alexa+ MCP Toolkit access (`alexa-ai` CLI, Inspector, simulator) | high | A self-serve access tier for hackathon entrants, and the manifest schema outside the gated toolkit. |
 | Alexa+ audio playback contract | high | One page stating which content types Alexa+ renders and plays from a tool result (`resource_link`, screened vs screenless). |
 | Alexa+ protocol facts | medium | Publish the live client's `initialize` version (2025-03-26), the Inspector's (2025-06-18) and its `Mcp-Session-Id` expectation on one page. |
+| Alexa+ routing to development-stage custom skills | high | Say whether development skills run under Alexa+, keep support answers consistent, and give developers a per-skill way to test under Alexa+. |
 | Alexa custom skill turn budget | high | State the endpoint timeout as a number, and report per-turn endpoint latency against it in the simulator. |
 | Alexa progressive responses (Directive Service) | medium | Connect `apiEndpoint`/`apiAccessToken` to slow endpoints in the latency guidance, and ship it in the audio-player sample. |
 | ASK CLI interaction model validation | medium | Fail or warn when a manifest declares `AUDIO_PLAYER` but the model omits the required playback intents, or when two `AMAZON.SearchQuery` intents share carrier prefixes. |
@@ -577,3 +578,22 @@ The final runtime candidate `c46be917a1c82d02dfc1dfd761b0c41d69e13ec9` fixes six
 Sixteen final software cases passed 106 turns and 982 evidence assertions. Coverage includes actual stored drafts/readback, cancellation and contextual fallback, read-once wish/reaction/seed updates, all named handoffs and credits, short/exact titles, playlist stream/token/offset continuity, and three HTTP audio range checks. One Amazon API transport disconnect required an isolated playlist repeat; the failed attempt remains retained. The original manual guide's older exact no-send/cannot-charge wording is explicitly superseded by the preserved current copy.
 
 The final full Alexa simulator still returned Amazon's generic unexpected error with zero observed skill/API log events in its 88.470-second window. The Owner also reports an Echo failure, whose exact words/time are not available. This confirms an unresolved full-invocation path, not a diagnosed broader outage. `amazon_routing=PARTIAL`; `echo_acceptance=UNVERIFIED`. The [updated guide](alexa-device-manual-test-script.md#9-october-1-session-friction-acceptance) marks actual audio, idle timing, natural playback events, and notification delivery as unverified. No latency improvement, notification send, or private-app effect is claimed.
+
+## 2026-10-07: Alexa+ intercepts development-skill invocation
+
+- **Alexa+ routing to a development-stage custom skill.** Severity high. The skill ran under
+  Alexa+ on September 28 and 30. From September 29, Alexa+ classified "open spoken letter"
+  as a video request ("not supported on this device"), answered "let's create a story" with
+  its own built-in story creation, and then returned service-interruption replies. Ending
+  Alexa+ Early Access made the same skill work end to end within minutes. Support first
+  said the Spain account was not a blocker, then that it might be, and stated that
+  development skills are not supported on Alexa+ accounts, which the voice history
+  contradicts. Fix: document whether and how development-stage skills run under Alexa+,
+  show invocation precedence when an Alexa+ built-in capability overlaps a skill's
+  utterances, and give developers a way to test their skill under Alexa+.
+- **Alexa+ language statement for Spain.** Severity low. The Amazon.es page says Alexa+ in
+  Spain runs only in Spanish (Spain), yet English Alexa+ records appear on en-US devices.
+  Fix: state the actual language rule.
+- **Voice history as a debugging tool.** Severity low, positive. The Alexa+ record titles
+  ("Video", "Request") were the clearest evidence of how Alexa+ routed each utterance.
+  Fix: expose the same routing classification in the developer console.

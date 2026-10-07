@@ -181,3 +181,30 @@ Alexa Enterprise Support replied on October 5 at 20:47 UTC. They confirmed recei
 They said no action is needed on our side and promised detailed findings soon. They will not change retail account settings. The reply gives no root cause, no service-issue verdict and no answer to the support question yet. Root cause remains unconfirmed. Read from the case email thread on October 6. No deployment, invocation or account-setting change occurred.
 
 On October 6 at 05:28 UTC, the Owner authorized a reply to the case thread. It thanks the team, says Spoken Letter is a submission to the Amazon App Dev 2026 hackathon (Alexa+ track) with a hard deadline of October 23, 2026, 12:00 PM PDT (confirmed on the Devpost page on October 6), and says the blocked invocation prevents the remaining device work and the demo recording. It asks for an interim workaround, such as a supported classic-path test option, while the investigation continues. It repeats that retail account settings must not be changed. Gmail shows the message as SENT in the case thread. Amazon's case system had not yet echoed it at the time of writing.
+
+## Amazon diagnosis and the Alexa+ isolation test, October 6–7
+
+Alexa Enterprise Support replied twice on October 6. At 18:27 UTC they gave a root cause: the account has Alexa+ Early Access, development-stage custom skills "are not currently supported" on Alexa+ entitled accounts, and the Alexa+ orchestration layer intercepts the invocation before it reaches the Lambda endpoint. They proposed disabling Alexa+ or certifying the skill. At 18:41 UTC they added a second, possibly contributing cause: the Spain account against an en-US, us-east-1-only skill. They proposed moving the account to the US marketplace, or adding an es-ES locale and an eu-west-1 endpoint. That second reply contradicts their October 2 statement that the Spain account falls back to the default endpoint and that those changes are optional. The first reply also said the skill works in the console simulator, which the simulator failures recorded above contradict. Read from the case email thread on October 7.
+
+On October 7 at about 06:17 UTC the Owner ended Alexa+ Early Access on the Amazon.es memberships page. A browser read of that page afterwards listed only Amazon Prime. Amazon's confirmation email states that Early Access can be restarted at any time by voice or from a button in the email. No other account, address, language or device setting was changed. The office Echo Show 5 is set to English (United States), per the Owner.
+
+At 06:23 UTC the Owner opened the skill on that Echo. `sla-alexa-skill` logged a complete session: `LaunchRequest` at 06:23:13 (3,051.93 ms, including a 430.33 ms cold start), the theme prompt at 06:23:26 (79.94 ms) and `draft_saved` at 06:23:36 (3,432.40 ms). `sla-alexa-api` logged three matching requests. No errors were logged. The Owner reports that "play music" also worked; voice history shows Alexa answering "Here's Apple Music." With Alexa+ off, invocation works; with Alexa+ on, it failed. That isolates the Alexa+ path. It does not explain why.
+
+### Voice history, September 25 to October 2
+
+A read-only browser review of the account's Alexa voice history (Amazon.es privacy pages, custom range September 25 to October 2) shows two record formats. Classic records show the utterance and the skill's reply. Alexa+ records carry a generated topic title, such as "Weather", "Video", "Request" or "Collaborative Story Creation". Both formats appear on the same device on the same days.
+
+| Date (device local) | Surface | Observation |
+| --- | --- | --- |
+| Sep 28 | Echo Show 5 and developer console simulator | "Open spoken letter" is an Alexa+ record ("Conversación"), followed by classic records in which the skill answered story listing, playback and story-start requests. Alexa+ records for other requests on the same device that day. |
+| Sep 29, 18:35 | Echo Show 5 | Alexa+ record titled "Video". "Open spoken word." and "Open spoken letter." each answered "Sorry, spoken letter is not supported on this device." Six simulator attempts that day are also "Video" records. |
+| Sep 29, later | Echo Show 5 | A skill story-start turn answered normally. |
+| Sep 30 | Kitchen Echo Show 11 (English at the time) | Skill turns answered, including playback start, between Alexa+ records (timer, music, "Collaborative Story Creation"). |
+| Oct 1 | ASK simulator | "Let's create a story" and a theme produced Alexa+ records with generated story titles. Alexa+ answered with its own story creation instead of routing to the skill. |
+| Oct 1–2 | Both Echos and simulators | "Open spoken letter" and "Play music" are "Request" records; replies include a service-interruption notice. |
+
+Inference, not an Amazon confirmation: the development skill did run under Alexa+ on September 28 and 30. From September 29, Alexa+ intent routing sent the invocation to video handling, answered story-creation utterances itself, and then failed generally on October 1–3. "Not supported on Alexa+" is therefore not consistent with this account's history. What changed on Amazon's side is unknown.
+
+Correction to the account and language findings above. The Amazon.es Alexa+ page states that in Spain Alexa+ is available only in Spanish (Spain) on the device. Alexa+ records in English on both en-US devices contradict that statement in practice, so device language is not the boundary here.
+
+On October 7 at 06:39 UTC, with Owner authorization, a reply went to the case thread with this timeline. It asks what changed after September 30, whether development-stage invocation can be restored for this Alexa+ account, and whether a certified en-US, US-distributed skill would be reachable from a Spain account. A separate email went to the hackathon office-hours contact. It asks whether entrants have a supported way to test a development skill under Alexa+, and whether device footage recorded with Alexa+ off is acceptable. Gmail shows both as SENT. Open: a retest with Alexa+ re-enabled, to see whether the October 1–3 failures have cleared.
