@@ -19,13 +19,31 @@
             "stories",
             "audio"
           ]
+        },
+        "es-ES": {
+          "name": "Spoken Letter",
+          "smallIconUri": "file://assets/images/en-US_smallIconUri.png",
+          "largeIconUri": "file://assets/images/en-US_largeIconUri.png",
+          "summary": "Escucha en tu Echo las historias familiares que llegan a tu cuenta de Spoken Letter.",
+          "description": "Spoken Letter lleva a tu Echo las historias de tu familia. Pide la historia más nueva, una historia de tu narrador favorito o la siguiente. Empieza el borrador de una historia, guarda un deseo para una historia nueva, cuenta qué te ha gustado o te ha encantado y ponte al día con tus novedades. Elige quién la escucha, termina tu historia y gestiona tus créditos en la app de Spoken Letter. Activa las notificaciones para saber cuándo tienes una novedad y abre Spoken Letter para escucharla.",
+          "examplePhrases": [
+            "Alexa, abre spoken letter",
+            "Alexa, pide a spoken letter que ponga la historia que mandó Aunt Whitney",
+            "Alexa, pide a spoken letter qué hay de nuevo"
+          ],
+          "keywords": [
+            "familia",
+            "historias",
+            "audio"
+          ]
         }
       },
       "isAvailableWorldwide": false,
       "distributionCountries": [
-        "US"
+        "US",
+        "ES"
       ],
-      "testingInstructions": "Development stage. Say: open spoken letter; play the story Aunt Whitney sent; what is new; next; start over; shuffle on; pause; resume; let's create a story; about mermaids; read my draft; I want a story about mermaids; how do I add credits. Playback uses fixture recordings. Drafts are saved only for the demo and are not delivered. Fixture wishes, reactions, and updates remain in the demo inbox. On the Owner's opted-in test device, a separately authorized development notification uses Amazon's generic MessageAlert wording; open the skill to hear fixture detail.",
+      "testingInstructions": "Development stage. Say: open spoken letter; play the story Aunt Whitney sent; what is new; next; start over; shuffle on; pause; resume; let's create a story; about mermaids; read my draft; I want a story about mermaids; how do I add credits. Playback uses fixture recordings. Drafts are saved only for the demo and are not delivered. Fixture wishes, reactions, and updates remain in the demo inbox. On the Owner's opted-in test device, a separately authorized development notification uses Amazon's generic MessageAlert wording; open the skill to hear fixture detail. In Spanish (es-ES), say: abre spoken letter; qué hay de nuevo; pon mis historias; siguiente; pausa; continúa; vamos a crear una historia; sirenas; lee mi borrador; quiero una historia sobre el espacio; cómo añado créditos.",
       "category": "COMMUNICATION"
     },
     "apis": {

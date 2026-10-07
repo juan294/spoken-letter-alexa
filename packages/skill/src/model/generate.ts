@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseFixtureCatalog, TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
-import { CLASS_C_DENYLIST } from "@spoken-letter-alexa/shared";
+import { CLASS_C_DENYLIST, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 export type ModelSlot = { name: string; type: string };
 export type ModelIntent = { name: string; slots?: ModelSlot[]; samples: string[] };
@@ -14,8 +14,12 @@ export type InteractionModel = {
   };
 };
 
-/** `skill-package/interactionModels/custom/en-US.json`, committed and drift-checked. */
-export const MODEL_PATH = path.resolve(import.meta.dirname, "../../skill-package/interactionModels/custom/en-US.json");
+/** `skill-package/interactionModels/custom/<locale>.json`, committed and drift-checked. */
+export const MODEL_PATHS: Record<SkillLocale, string> = {
+  "en-US": path.resolve(import.meta.dirname, "../../skill-package/interactionModels/custom/en-US.json"),
+  "es-ES": path.resolve(import.meta.dirname, "../../skill-package/interactionModels/custom/es-ES.json"),
+};
+export const MODEL_PATH = MODEL_PATHS["en-US"];
 export const TRAINING_PATH = path.resolve(import.meta.dirname, "../../skill-package/training/en-US.jsonl");
 /** `fixtures/stories.json` at the repo root — the same catalog the MCP server serves. */
 export const FIXTURES_PATH = path.resolve(import.meta.dirname, "../../../../fixtures/stories.json");
@@ -167,20 +171,35 @@ const BUILT_IN_INTENTS = [
 
 const CHILD_WORDS = /\b(kid|kids|child|children|son|daughter|grandson|granddaughter)\b/;
 
-/** Alexa's utterance alphabet: lowercase letters, digits, spaces, apostrophes, slot braces. */
-function normaliseUtterance(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9 {}']/g, " ")
+/**
+ * es-ES safety tables (plan, Scope and invariants). Word boundaries are spelled out because
+ * `\b` treats accented letters as non-word characters. The shared `CLASS_C_DENYLIST` governs
+ * tool metadata in English; Spanish samples are checked against both lists.
+ */
+const SPANISH_CHILD_WORDS = /(?<![\p{L}])(?:niño|niña|niños|niñas|hijo|hija|hijos|hijas|nieto|nieta|nietos|nietas|crío|cría|peque)(?![\p{L}])/u;
+const SPANISH_DENYLIST = ["enviar", "descargar", "comprar", "crédito", "pagar", "destinatario", "borrar", "eliminar", "quitar", "admin"];
+
+/** Each locale's utterance alphabet: lowercase letters, digits, spaces, apostrophes, slot braces. */
+const ALPHABETS: Record<SkillLocale, { allowed: RegExp; other: RegExp }> = {
+  "en-US": { allowed: /^[a-z0-9 {}']+$/, other: /[^a-z0-9 {}']/g },
+  "es-ES": { allowed: /^[a-zñáéíóúü0-9 {}']+$/u, other: /[^a-zñáéíóúü0-9 {}']/gu },
+};
+
+function normaliseUtterance(text: string, locale: SkillLocale): string {
+  const lower = locale === "en-US" ? text.toLowerCase() : text.normalize("NFC").toLocaleLowerCase(locale);
+  return lower
+    .replace(ALPHABETS[locale].other, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /** Recorded phrasings are filtered exactly as the fixed lists are asserted. */
-export function utteranceAllowed(sample: string): boolean {
-  if (!/^[a-z0-9 {}']+$/.test(sample)) return false;
-  if (CHILD_WORDS.test(sample)) return false;
+export function utteranceAllowed(sample: string, locale: SkillLocale = "en-US"): boolean {
+  if (!ALPHABETS[locale].allowed.test(sample)) return false;
+  // Each locale's own child words: the English "son" is the Spanish "they are".
+  if ((locale === "en-US" ? CHILD_WORDS : SPANISH_CHILD_WORDS).test(sample)) return false;
   if (/record|audio/.test(sample)) return false;
+  if (locale === "es-ES" && (sample.includes("grab") || SPANISH_DENYLIST.some((fragment) => sample.includes(fragment)))) return false;
   return CLASS_C_DENYLIST.every((denied) => !sample.includes(denied.fragment));
 }
 
@@ -236,20 +255,32 @@ const KINSHIP_SYNONYM_FORMS: Record<string, string[]> = {
   dad: ["daddy", "father"],
 };
 
+/** The Spanish kinship forms for the same English kinship words (plan D2: the catalog name is spoken as is). */
+const SPANISH_KINSHIP_FORMS: Record<string, string[]> = {
+  aunt: ["tía", "tita"],
+  grandma: ["abuela"],
+  grandpa: ["abuelo"],
+  mom: ["mamá"],
+  dad: ["papá"],
+};
+
 /**
  * `StorytellerName` (phase-3.md section 2): `AMAZON.FirstName` only matches a bare first
  * name, but every fixture storyteller is kinship-qualified ("Aunt Whitney"). The full string
  * is the canonical value; synonyms add the bare first name and, when the leading word is a
  * recognized kinship term, its other common forms ("Auntie Whitney").
  */
-export function storytellerSlotType(stories: CatalogStoryteller[]): ModelSlotType {
+export function storytellerSlotType(stories: CatalogStoryteller[], locale: SkillLocale = "en-US"): ModelSlotType {
   const distinct = [...new Set(stories.map((story) => story.storyteller))].sort();
   const values = distinct.map((storyteller) => {
     const [kinshipWord, ...rest] = storyteller.split(" ");
     const bareName = rest.join(" ");
-    const kinshipVariants = bareName ? (KINSHIP_SYNONYM_FORMS[kinshipWord?.toLowerCase() ?? ""] ?? []) : [];
+    const forms = locale === "en-US" ? KINSHIP_SYNONYM_FORMS : SPANISH_KINSHIP_FORMS;
+    const kinshipVariants = bareName ? (forms[kinshipWord?.toLowerCase() ?? ""] ?? []) : [];
+    // English capitalizes the kinship word as a title ("Auntie Whitney"); Spanish writes it in lower case ("tía Whitney").
+    const spoken = (variant: string) => (locale === "en-US" ? `${variant.charAt(0).toUpperCase()}${variant.slice(1)}` : variant);
     const synonyms = bareName
-      ? [bareName, ...kinshipVariants.map((variant) => `${variant.charAt(0).toUpperCase()}${variant.slice(1)} ${bareName}`)].sort()
+      ? [bareName, ...kinshipVariants.map((variant) => `${spoken(variant)} ${bareName}`)].sort()
       : [];
     return { name: { value: storyteller, ...(synonyms.length > 0 && { synonyms }) } };
   });
@@ -257,8 +288,15 @@ export function storytellerSlotType(stories: CatalogStoryteller[]): ModelSlotTyp
 }
 
 /** The store listing's fixed three-entry `examplePhrases`, generated so it never drifts from what actually works. */
-export function generateExamplePhrases(stories: CatalogStoryteller[]): [string, string, string] {
+export function generateExamplePhrases(stories: CatalogStoryteller[], locale: SkillLocale = "en-US"): [string, string, string] {
   const [storyteller] = [...new Set(stories.map((story) => story.storyteller))].sort();
+  if (locale === "es-ES") {
+    return [
+      "Alexa, abre spoken letter",
+      `Alexa, pide a spoken letter que ponga la historia que mandó ${storyteller ?? "tu familia"}`,
+      "Alexa, pide a spoken letter qué hay de nuevo",
+    ];
+  }
   return [
     "Alexa, open spoken letter",
     `Alexa, ask spoken letter to play the story ${storyteller ?? "your family"} sent`,
@@ -266,17 +304,34 @@ export function generateExamplePhrases(stories: CatalogStoryteller[]): [string, 
   ];
 }
 
-export function generateInteractionModel(input: { training: string[]; stories: CatalogStoryteller[] }): InteractionModel {
+/**
+ * Rewrites one locale's `examplePhrases` array inside the manifest text, leaving every other
+ * byte as committed (the manifest is hand-formatted; `JSON.stringify` would reflow it).
+ */
+export function withExamplePhrases(manifestText: string, locale: SkillLocale, phrases: readonly string[]): string {
+  const localeStart = manifestText.indexOf(`"${locale}": {`);
+  const key = localeStart === -1 ? -1 : manifestText.indexOf(`"examplePhrases": [`, localeStart);
+  if (key === -1) throw new Error(`skill.json has no ${locale} locale with examplePhrases`);
+  const lineStart = manifestText.lastIndexOf("\n", key) + 1;
+  const indent = manifestText.slice(lineStart, key);
+  const open = key + `"examplePhrases": [`.length;
+  const close = manifestText.indexOf("]", open);
+  const body = phrases.map((phrase) => `${indent}  ${JSON.stringify(phrase)}`).join(",\n");
+  return `${manifestText.slice(0, open)}\n${body}\n${indent}${manifestText.slice(close)}`;
+}
+
+export function generateInteractionModel(input: { locale?: SkillLocale; training: string[]; stories: CatalogStoryteller[] }): InteractionModel {
+  const locale = input.locale ?? "en-US";
   const intents: ModelIntent[] = TOOL_METADATA.map((tool) => {
     const intent = TOOL_INTENTS[tool.name];
     if (!intent) throw new Error(`tool ${tool.name} has no skill intent: add it to TOOL_INTENTS in packages/skill/src/model/generate.ts`);
     return { name: intent.name, ...(intent.slots && { slots: intent.slots }), samples: [...intent.samples] };
   });
 
-  const catchAll = new Set(CATCH_ALL_SAMPLES);
+  const catchAll = new Set(locale === "en-US" ? CATCH_ALL_SAMPLES : SPANISH_SAMPLES.CatchAllIntent);
   for (const line of input.training) {
-    const sample = normaliseUtterance(line);
-    if (sample && utteranceAllowed(sample)) catchAll.add(sample);
+    const sample = normaliseUtterance(line, locale);
+    if (sample && utteranceAllowed(sample, locale)) catchAll.add(sample);
   }
   intents.push({ name: "CatchAllIntent", slots: [{ name: "text", type: "AMAZON.SearchQuery" }], samples: [...catchAll] });
   intents.push(
@@ -338,6 +393,16 @@ export function generateInteractionModel(input: { training: string[]; stories: C
     { name: "StartPlaylistOverIntent", samples: ["start the playlist over", "restart the playlist", "play the playlist from the beginning"] },
   );
 
+  if (locale === "es-ES") {
+    // Same intents, slots and order as en-US (plan D8); only the samples are Spanish.
+    for (const intent of intents) {
+      if (intent.name === "CatchAllIntent") continue;
+      const samples = SPANISH_SAMPLES[intent.name];
+      if (!samples) throw new Error(`intent ${intent.name} has no es-ES samples: add them to SPANISH_SAMPLES in packages/skill/src/model/generate.ts`);
+      intent.samples = [...samples];
+    }
+  }
+
   const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];
   assertNoCarrierCollision(playSamples, [...catchAll]);
   for (const intent of intents) assertSlotsDeclared(intent);
@@ -347,18 +412,145 @@ export function generateInteractionModel(input: { training: string[]; stories: C
   return {
     interactionModel: {
       languageModel: { invocationName: INVOCATION_NAME, intents, types: [
-        storytellerSlotType(input.stories),
-        { name: "DemoTopic", values: [
-          { name: { value: "mermaids", synonyms: ["mermaid"] } },
-          { name: { value: "space", synonyms: ["star", "stars", "planet", "planets"] } },
-          { name: { value: "ocean", synonyms: ["sea", "beach"] } },
-          { name: { value: "forest", synonyms: ["wood", "woods"] } },
-          { name: { value: "animals", synonyms: ["animal", "cat", "cats", "dog", "dogs"] } },
-          { name: { value: "friendship", synonyms: ["friend", "friends"] } },
-          { name: { value: "bedtime", synonyms: ["sleep"] } },
-        ] },
-        { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] },
+        storytellerSlotType(input.stories, locale),
+        ...(locale === "en-US" ? [
+          { name: "DemoTopic", values: [
+            { name: { value: "mermaids", synonyms: ["mermaid"] } },
+            { name: { value: "space", synonyms: ["star", "stars", "planet", "planets"] } },
+            { name: { value: "ocean", synonyms: ["sea", "beach"] } },
+            { name: { value: "forest", synonyms: ["wood", "woods"] } },
+            { name: { value: "animals", synonyms: ["animal", "cat", "cats", "dog", "dogs"] } },
+            { name: { value: "friendship", synonyms: ["friend", "friends"] } },
+            { name: { value: "bedtime", synonyms: ["sleep"] } },
+          ] },
+          { name: "ReactionChoice", values: [{ name: { value: "like", synonyms: ["liked"] } }, { name: { value: "love", synonyms: ["loved"] } }] },
+        ] : SPANISH_TYPES),
       ] },
     },
   };
 }
+
+/**
+ * es-ES samples per intent (plan D8, phase-2.md step 2): the same intents and slots as en-US,
+ * Spain Spanish, no child words, no denylisted fragment outside the fixed handoff and credit
+ * explanations. The catch-all carriers are intent-neutral and are not a prefix of any
+ * `PlayStoryIntent` sample. "ponga …" serves "pide a spoken letter que ponga …".
+ */
+const SPANISH_SAMPLES: Record<string, string[]> = {
+  PlayStoryIntent: [
+    "pon una historia familiar",
+    "pon una historia",
+    "pon la última historia",
+    "pon la historia más nueva",
+    "pon una historia corta",
+    "pon algo corto",
+    "pon una historia para dormir",
+    "pon algo para dormir",
+    "pon la historia que mandó {storyteller}",
+    "ponga la historia que mandó {storyteller}",
+    "pon la historia de {storyteller}",
+    "pon la historia que hizo {storyteller}",
+    "pon la que mandó {storyteller}",
+    "pon la de {storyteller}",
+    "lo que mandó {storyteller}",
+    "quiero escuchar la historia que mandó {storyteller}",
+    "pon {title}",
+    "ponga {title}",
+    "pon la historia {title}",
+    "pon la historia que se llama {title}",
+    "pon la que se llama {title}",
+    "ponme {title}",
+    "reproduce {title}",
+    "quiero escuchar {title}",
+    "léeme {title}",
+  ],
+  WhatIsNewIntent: [
+    "qué hay de nuevo",
+    "qué historias nuevas hay",
+    "qué historias tengo",
+    "qué historias hay",
+    "qué historias familiares tengo",
+    "cuáles son las historias nuevas",
+    "dime mis historias",
+    "dime las historias",
+    "hay alguna historia nueva",
+    "hay historias nuevas",
+    "alguna historia nueva",
+    "qué me ha mandado {storyteller}",
+    "quién ha mandado una historia",
+    "qué tienes",
+  ],
+  NextStoryIntent: [
+    "pon la siguiente historia familiar",
+    "pon la siguiente historia",
+    "pon la siguiente",
+    "pon otra historia",
+    "pon otra",
+    "siguiente historia",
+    "la siguiente",
+    "otra historia",
+    "otra más",
+    "qué escucho ahora",
+    "cuál es la siguiente historia",
+  ],
+  CatchAllIntent: [
+    "por favor {text}",
+    "puedes {text}",
+    "podrías {text}",
+    "pide a spoken letter que {text}",
+    "dile a spoken letter que {text}",
+  ],
+  StartStoryIntent: [
+    "vamos a crear una historia",
+    "crea una historia",
+    "haz una historia",
+    "vamos a crear una historia para dormir",
+    "crea una historia para dormir",
+    "crea una historia sobre {theme}",
+    "haz una historia sobre {theme}",
+    "vamos a hacer una historia",
+    "quiero crear una historia",
+    "me gustaría hacer una historia",
+    "vamos a hacer una historia sobre {theme}",
+    "quiero crear una historia sobre {theme}",
+    "me gustaría crear una historia sobre {theme}",
+  ],
+  ThemeChoiceIntent: ["{drafttheme}"],
+  ThemeIntent: ["sobre {theme}", "el tema es {theme}", "que sea sobre {theme}"],
+  HelpTopicIntent: ["ayuda con {topic}", "cómo puedo {topic}", "háblame de {topic}"],
+  ReadDemoDraftIntent: ["lee mi borrador", "qué dice mi borrador", "qué hay en mi borrador", "cuál es mi borrador"],
+  WishStoryIntent: ["quiero una historia sobre {wishtopic}", "me gustaría una historia sobre {wishtopic}"],
+  WishFromStorytellerIntent: ["pide a {storyteller} otra historia sobre {wishtopic}", "quiero otra historia sobre {wishtopic} de {storyteller}"],
+  AppHandoffIntent: [
+    "envía una historia a {listeneralias}",
+    "manda una historia a {listeneralias}",
+    "crea una historia para {listeneralias}",
+    "puedes enviar una historia a {listeneralias}",
+    "puedes crear una historia para {listeneralias}",
+  ],
+  CreditHelpIntent: ["añade créditos", "añade créditos de historias", "puedes añadir créditos", "cómo añado créditos"],
+  ReactToStoryIntent: ["me {choice} esa historia", "me {choice}", "esa historia me {choice}"],
+  UpdatesIntent: ["mis novedades", "dime mis novedades", "qué novedades tengo", "cuáles son mis novedades"],
+  PlayAllIntent: ["pon mis historias", "pon mis historias de spoken letter", "pon todas mis historias", "pon toda la lista", "mezcla mis historias"],
+  PlayAgainIntent: ["ponla otra vez", "ponla de nuevo", "pon esta historia otra vez", "vuelve a ponerla"],
+  PlayNewStoriesIntent: ["pon mis historias nuevas", "pon las historias nuevas", "pon mis historias más nuevas"],
+  PlayCreatorStoriesIntent: ["pon mis historias de {storyteller}", "pon las historias de {storyteller}", "pon todas las historias de {storyteller}"],
+  StartPlaylistOverIntent: ["empieza la lista desde el principio", "reinicia la lista", "pon la lista desde el principio"],
+};
+
+/** es-ES `DemoTopic` and `ReactionChoice`: the English canonical values with Spanish synonyms (plan D4). */
+const SPANISH_TYPES: ModelSlotType[] = [
+  { name: "DemoTopic", values: [
+    { name: { value: "mermaids", synonyms: ["sirena", "sirenas"] } },
+    { name: { value: "space", synonyms: ["espacio", "el espacio", "estrella", "estrellas", "planeta", "planetas"] } },
+    { name: { value: "ocean", synonyms: ["océano", "mar", "el mar", "playa"] } },
+    { name: { value: "forest", synonyms: ["bosque", "el bosque"] } },
+    { name: { value: "animals", synonyms: ["animal", "animales", "gato", "gatos", "perro", "perros"] } },
+    { name: { value: "friendship", synonyms: ["amistad", "la amistad", "amigo", "amigos", "amiga", "amigas"] } },
+    { name: { value: "bedtime", synonyms: ["dormir", "hora de dormir", "la hora de dormir"] } },
+  ] },
+  { name: "ReactionChoice", values: [
+    { name: { value: "like", synonyms: ["gusta", "gustó", "ha gustado"] } },
+    { name: { value: "love", synonyms: ["encanta", "encantó", "ha encantado"] } },
+  ] },
+];

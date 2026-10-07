@@ -7,6 +7,7 @@ import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE }
 import { DEMO_TOPICS, type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
+import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
 
 /** Entity resolution for custom slot types: `ER_SUCCESS_MATCH` carries the canonical value (plan D4). */
 type SlotResolutions = { resolutionsPerAuthority?: { status?: { code?: string }; values?: { value?: { name?: string } }[] }[] };
@@ -67,7 +68,9 @@ export type HandlerOptions = {
 
 export type SkillHandler = (event: AlexaRequestEnvelope) => Promise<AlexaResponseEnvelope>;
 
-const storytellerValues = interactionModel.interactionModel.languageModel.types.find((type) => type.name === "StorytellerName")?.values ?? [];
+/** Both locales share canonical storyteller values; each adds its own spoken synonyms ("Auntie Whitney", "tía Whitney"). */
+const storytellerValues = [interactionModel, spanishModel].flatMap((model) =>
+  model.interactionModel.languageModel.types.find((type) => type.name === "StorytellerName")?.values ?? []);
 const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.value));
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
   [entry.name.value, ...entry.name.synonyms].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));

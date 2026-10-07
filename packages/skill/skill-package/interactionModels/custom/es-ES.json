@@ -1,0 +1,495 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "spoken letter",
+      "intents": [
+        {
+          "name": "WhatIsNewIntent",
+          "slots": [
+            {
+              "name": "storyteller",
+              "type": "StorytellerName"
+            }
+          ],
+          "samples": [
+            "qué hay de nuevo",
+            "qué historias nuevas hay",
+            "qué historias tengo",
+            "qué historias hay",
+            "qué historias familiares tengo",
+            "cuáles son las historias nuevas",
+            "dime mis historias",
+            "dime las historias",
+            "hay alguna historia nueva",
+            "hay historias nuevas",
+            "alguna historia nueva",
+            "qué me ha mandado {storyteller}",
+            "quién ha mandado una historia",
+            "qué tienes"
+          ]
+        },
+        {
+          "name": "PlayStoryIntent",
+          "slots": [
+            {
+              "name": "title",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "storyteller",
+              "type": "StorytellerName"
+            }
+          ],
+          "samples": [
+            "pon una historia familiar",
+            "pon una historia",
+            "pon la última historia",
+            "pon la historia más nueva",
+            "pon una historia corta",
+            "pon algo corto",
+            "pon una historia para dormir",
+            "pon algo para dormir",
+            "pon la historia que mandó {storyteller}",
+            "ponga la historia que mandó {storyteller}",
+            "pon la historia de {storyteller}",
+            "pon la historia que hizo {storyteller}",
+            "pon la que mandó {storyteller}",
+            "pon la de {storyteller}",
+            "lo que mandó {storyteller}",
+            "quiero escuchar la historia que mandó {storyteller}",
+            "pon {title}",
+            "ponga {title}",
+            "pon la historia {title}",
+            "pon la historia que se llama {title}",
+            "pon la que se llama {title}",
+            "ponme {title}",
+            "reproduce {title}",
+            "quiero escuchar {title}",
+            "léeme {title}"
+          ]
+        },
+        {
+          "name": "NextStoryIntent",
+          "samples": [
+            "pon la siguiente historia familiar",
+            "pon la siguiente historia",
+            "pon la siguiente",
+            "pon otra historia",
+            "pon otra",
+            "siguiente historia",
+            "la siguiente",
+            "otra historia",
+            "otra más",
+            "qué escucho ahora",
+            "cuál es la siguiente historia"
+          ]
+        },
+        {
+          "name": "CatchAllIntent",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "por favor {text}",
+            "puedes {text}",
+            "podrías {text}",
+            "pide a spoken letter que {text}",
+            "dile a spoken letter que {text}"
+          ]
+        },
+        {
+          "name": "StartStoryIntent",
+          "slots": [
+            {
+              "name": "theme",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "vamos a crear una historia",
+            "crea una historia",
+            "haz una historia",
+            "vamos a crear una historia para dormir",
+            "crea una historia para dormir",
+            "crea una historia sobre {theme}",
+            "haz una historia sobre {theme}",
+            "vamos a hacer una historia",
+            "quiero crear una historia",
+            "me gustaría hacer una historia",
+            "vamos a hacer una historia sobre {theme}",
+            "quiero crear una historia sobre {theme}",
+            "me gustaría crear una historia sobre {theme}"
+          ]
+        },
+        {
+          "name": "ThemeChoiceIntent",
+          "slots": [
+            {
+              "name": "drafttheme",
+              "type": "DemoTopic"
+            }
+          ],
+          "samples": [
+            "{drafttheme}"
+          ]
+        },
+        {
+          "name": "ThemeIntent",
+          "slots": [
+            {
+              "name": "theme",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "sobre {theme}",
+            "el tema es {theme}",
+            "que sea sobre {theme}"
+          ]
+        },
+        {
+          "name": "HelpTopicIntent",
+          "slots": [
+            {
+              "name": "topic",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "ayuda con {topic}",
+            "cómo puedo {topic}",
+            "háblame de {topic}"
+          ]
+        },
+        {
+          "name": "ReadDemoDraftIntent",
+          "samples": [
+            "lee mi borrador",
+            "qué dice mi borrador",
+            "qué hay en mi borrador",
+            "cuál es mi borrador"
+          ]
+        },
+        {
+          "name": "WishStoryIntent",
+          "slots": [
+            {
+              "name": "wishtopic",
+              "type": "DemoTopic"
+            }
+          ],
+          "samples": [
+            "quiero una historia sobre {wishtopic}",
+            "me gustaría una historia sobre {wishtopic}"
+          ]
+        },
+        {
+          "name": "WishFromStorytellerIntent",
+          "slots": [
+            {
+              "name": "wishtopic",
+              "type": "DemoTopic"
+            },
+            {
+              "name": "storyteller",
+              "type": "StorytellerName"
+            }
+          ],
+          "samples": [
+            "pide a {storyteller} otra historia sobre {wishtopic}",
+            "quiero otra historia sobre {wishtopic} de {storyteller}"
+          ]
+        },
+        {
+          "name": "AppHandoffIntent",
+          "slots": [
+            {
+              "name": "listeneralias",
+              "type": "AMAZON.FirstName"
+            }
+          ],
+          "samples": [
+            "envía una historia a {listeneralias}",
+            "manda una historia a {listeneralias}",
+            "crea una historia para {listeneralias}",
+            "puedes enviar una historia a {listeneralias}",
+            "puedes crear una historia para {listeneralias}"
+          ]
+        },
+        {
+          "name": "CreditHelpIntent",
+          "samples": [
+            "añade créditos",
+            "añade créditos de historias",
+            "puedes añadir créditos",
+            "cómo añado créditos"
+          ]
+        },
+        {
+          "name": "ReactToStoryIntent",
+          "slots": [
+            {
+              "name": "choice",
+              "type": "ReactionChoice"
+            }
+          ],
+          "samples": [
+            "me {choice} esa historia",
+            "me {choice}",
+            "esa historia me {choice}"
+          ]
+        },
+        {
+          "name": "UpdatesIntent",
+          "samples": [
+            "mis novedades",
+            "dime mis novedades",
+            "qué novedades tengo",
+            "cuáles son mis novedades"
+          ]
+        },
+        {
+          "name": "PlayAllIntent",
+          "samples": [
+            "pon mis historias",
+            "pon mis historias de spoken letter",
+            "pon todas mis historias",
+            "pon toda la lista",
+            "mezcla mis historias"
+          ]
+        },
+        {
+          "name": "PlayAgainIntent",
+          "samples": [
+            "ponla otra vez",
+            "ponla de nuevo",
+            "pon esta historia otra vez",
+            "vuelve a ponerla"
+          ]
+        },
+        {
+          "name": "PlayNewStoriesIntent",
+          "samples": [
+            "pon mis historias nuevas",
+            "pon las historias nuevas",
+            "pon mis historias más nuevas"
+          ]
+        },
+        {
+          "name": "PlayCreatorStoriesIntent",
+          "slots": [
+            {
+              "name": "storyteller",
+              "type": "StorytellerName"
+            }
+          ],
+          "samples": [
+            "pon mis historias de {storyteller}",
+            "pon las historias de {storyteller}",
+            "pon todas las historias de {storyteller}"
+          ]
+        },
+        {
+          "name": "StartPlaylistOverIntent",
+          "samples": [
+            "empieza la lista desde el principio",
+            "reinicia la lista",
+            "pon la lista desde el principio"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.PauseIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ResumeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NextIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.PreviousIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StartOverIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.LoopOnIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.LoopOffIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ShuffleOnIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ShuffleOffIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        }
+      ],
+      "types": [
+        {
+          "name": "StorytellerName",
+          "values": [
+            {
+              "name": {
+                "value": "Aunt Whitney",
+                "synonyms": [
+                  "Whitney",
+                  "tita Whitney",
+                  "tía Whitney"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DemoTopic",
+          "values": [
+            {
+              "name": {
+                "value": "mermaids",
+                "synonyms": [
+                  "sirena",
+                  "sirenas"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "space",
+                "synonyms": [
+                  "espacio",
+                  "el espacio",
+                  "estrella",
+                  "estrellas",
+                  "planeta",
+                  "planetas"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "ocean",
+                "synonyms": [
+                  "océano",
+                  "mar",
+                  "el mar",
+                  "playa"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "forest",
+                "synonyms": [
+                  "bosque",
+                  "el bosque"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "animals",
+                "synonyms": [
+                  "animal",
+                  "animales",
+                  "gato",
+                  "gatos",
+                  "perro",
+                  "perros"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "friendship",
+                "synonyms": [
+                  "amistad",
+                  "la amistad",
+                  "amigo",
+                  "amigos",
+                  "amiga",
+                  "amigas"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "bedtime",
+                "synonyms": [
+                  "dormir",
+                  "hora de dormir",
+                  "la hora de dormir"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ReactionChoice",
+          "values": [
+            {
+              "name": {
+                "value": "like",
+                "synonyms": [
+                  "gusta",
+                  "gustó",
+                  "ha gustado"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "love",
+                "synonyms": [
+                  "encanta",
+                  "encantó",
+                  "ha encantado"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

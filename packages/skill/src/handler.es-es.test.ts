@@ -281,6 +281,22 @@ describe("es-ES matchers stay no wider than en-US (review repairs)", () => {
   });
 });
 
+describe("es-ES storyteller aliases (Phase 2)", () => {
+  test.each(["pídele a la tía Whitney otra historia sobre sirenas", "pídele a tita Whitney un cuento sobre sirenas", "pide a Whitney una historia sobre sirenas"])(
+    "%s proposes a wish from the catalog storyteller",
+    async (text) => {
+      const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("es-ES", "CatchAllIntent", { text }));
+      expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
+      expect(speech(response)).toBe("¿Guardo tu deseo de una historia de Aunt Whitney sobre sirenas? Di sí o no.");
+    },
+  );
+
+  test("an unresolved Spanish storyteller slot still maps to the catalog name", async () => {
+    const response = await createHandler({ skillId: SKILL_ID, agent: fakeAgent() })(intent("es-ES", "WishFromStorytellerIntent", { wishtopic: "sirenas", storyteller: "tía Whitney" }));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "wish", demoTopic: "mermaids", demoStoryteller: "Aunt Whitney" });
+  });
+});
+
 describe("es-ES locale resolution and playback (E5)", () => {
   test.each([
     [undefined, "Spoken Letter. Which family story would you like?"],

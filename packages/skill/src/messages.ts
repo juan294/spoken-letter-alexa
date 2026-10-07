@@ -245,7 +245,7 @@ export const MATCHERS: Record<SkillLocale, Matchers> = {
       ["animals", es(String.raw`\b(?:animal|animales|gat[oa]s?|perr[oa]s?)\b`)], ["friendship", es(String.raw`\b(?:amig[oa]s?|amistad)\b`)],
       ["bedtime", es(String.raw`\bdormir\b`)],
     ],
-    askStoryteller: es(String.raw`^p[ií]de(?:le|les)?\s+al?\s+(.+?)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b`),
+    askStoryteller: es(String.raw`^p[ií]de(?:le|les)?\s+(?:a\s+(?:la\s+|el\s+)?|al\s+)(.+?)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b`),
     wish: es(String.raw`^(?:quiero|me\s+gustar[ií]a|deseo)\s+(?:una|otra|un|otro)\s+(?:historia|cuento)\b.*\b(?:sobre|acerca\s+de)\b`),
     // Imperatives and infinitives only: "la historia que mandó" asks to play, not to send, and
     // the present tense after "que" ("la que me envía la abuela") describes a story, not a command.

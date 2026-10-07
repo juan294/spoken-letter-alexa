@@ -4,7 +4,7 @@
 //
 // 1. Confirms the endpoint ARN in skill-package/skill.json is the SkillStack function
 //    (fixed name `sla-alexa-skill`) and that the function exists in the account.
-// 2. Runs `ask deploy` (skill manifest and the generated en-US interaction model; the
+// 2. Runs `ask deploy` (skill manifest and the generated en-US and es-ES interaction models; the
 //    Lambda is CDK-managed, so no skill infrastructure is deployed by ASK).
 // 3. Records the skill id in infra/cdk.context.json as `sla:skillId` and asks for one
 //    more `pnpm deploy`, which locks the invoke permission to that id. The first run
@@ -39,20 +39,26 @@ const uri = manifest.manifest?.apis?.custom?.endpoint?.uri;
 if (uri !== EXPECTED_ARN) fail(`skill.json endpoint is ${uri}; expected ${EXPECTED_ARN} (SkillStack)`);
 console.log(`ok: skill.json endpoint is ${EXPECTED_ARN}`);
 
-const modelPath = path.join(pkgRoot, "skill-package/interactionModels/custom/en-US.json");
-if (!existsSync(modelPath)) fail("interaction model missing: run pnpm -F skill generate");
-console.log("ok: interaction model present");
+const LOCALES = ["en-US", "es-ES"];
+for (const name of LOCALES) {
+  const modelPath = path.join(pkgRoot, `skill-package/interactionModels/custom/${name}.json`);
+  if (!existsSync(modelPath)) fail(`${name} interaction model missing: run pnpm -F skill generate`);
+}
+console.log(`ok: interaction models present (${LOCALES.join(", ")})`);
 
 // `file://` icon URIs are resolved inside the uploaded package, so a missing or misnamed
 // file fails at Amazon's import rather than here. Catch it before the upload.
-const locale = manifest.manifest?.publishingInformation?.locales?.["en-US"] ?? {};
-for (const key of ["smallIconUri", "largeIconUri"]) {
-  const value = locale[key];
-  if (typeof value !== "string" || !value.startsWith("file://")) fail(`skill.json ${key} must be a file:// path inside skill-package`);
-  const asset = path.join(pkgRoot, "skill-package", value.slice("file://".length));
-  if (!existsSync(asset)) fail(`${key} points at skill-package/${value.slice("file://".length)}, which does not exist`);
+for (const name of LOCALES) {
+  const locale = manifest.manifest?.publishingInformation?.locales?.[name];
+  if (!locale) fail(`skill.json has no ${name} locale`);
+  for (const key of ["smallIconUri", "largeIconUri"]) {
+    const value = locale[key];
+    if (typeof value !== "string" || !value.startsWith("file://")) fail(`skill.json ${name} ${key} must be a file:// path inside skill-package`);
+    const asset = path.join(pkgRoot, "skill-package", value.slice("file://".length));
+    if (!existsSync(asset)) fail(`${name} ${key} points at skill-package/${value.slice("file://".length)}, which does not exist`);
+  }
 }
-console.log("ok: 108 px and 512 px locale icons present");
+console.log("ok: 108 px and 512 px locale icons present for every locale");
 
 const version = spawnSync("ask", ["--version"], { encoding: "utf8" });
 const askVersion = version.stdout?.trim() ?? "";
@@ -98,4 +104,4 @@ delete context["sla:skillPermissionOpen"];
 writeFileSync(contextPath, `${JSON.stringify(context, null, 2)}\n`);
 console.log(JSON.stringify({ event: "skill_deployed", skillId, firstTime, context: path.relative(repoRoot, contextPath) }));
 if (firstTime) console.log("Next: pnpm deploy (SkillStack replaces the open trigger with one locked to this skill id and sets SKILL_ID).");
-console.log("Then enable testing in the developer console (Test tab, Development) and use a device on the same account set to en-US.");
+console.log("Then enable testing in the developer console (Test tab, Development) and use a device on the same account set to English (United States) or Spanish (Spain).");
