@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["eslint.config.mjs", "vitest.config.ts", "scripts/**/*.mjs"]
+  "include": ["eslint.config.mjs", "vitest.config.ts", "scripts/**/*.mjs", "scripts/**/*.d.mts"]
 }
