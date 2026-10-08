@@ -207,11 +207,39 @@ The Owner accepted Phase 1 and authorized steps 1–4: the local merge, `pnpm bu
 
 **Device check D1–D5:** not run yet. Everything it needs is deployed.
 
-## Phase 2 status (2026-10-08)
+## Phase 2 progress (2026-10-08, paused for an Owner reboot)
 
-- A worktree was created: `/Users/juan/code/spoken-letter-alexa-storytellers` on `feat/more-storytellers` off `e26e8b8`. No changes yet.
-- Writing `pull-fixture-story.mjs`'s first test was blocked by the session's permission classifier as data exfiltration. The plan copies production stories from the Owner's account into this public repository, with per-story Owner consent. This needs the Owner's decision: allow it, or run the pulls themselves.
-- `--list` has not been run. The Owner's story choices and per-story confirmations are still needed (phase-2.md Entry).
+**Authorization and choices.** The Owner approved the production pull (permission rule, 2026-10-08). Owner decisions:
+- Consent to publish: yes.
+- Children's names in titles or audio: acceptable.
+- Display names: the Owner is fine with the names used.
+- Story selection: delegated to random picks.
+
+**Committed on `feat/more-storytellers`:**
+- `2466bd7`: `scripts/pull-fixture-story.mjs` (`--list`, story pull, `--as-take`) and `registerStory` exported from `add-fixture-story.mjs`. The S5 tests (12) pass.
+- The follow-up commit: production refs are `spaces/<s>/stories/<d>/final/brand-chime-v1.mp3`, so the path guard now allows nested files. The CLI retries a transient `fetch failed`.
+
+**Candidates.** Pulled into the session scratchpad only, never the repository. Local Whisper transcripts were used to identify narrators and content. Usable, with the narrator taken from her own introduction:
+
+| Doc id | Title | Narrator |
+| --- | --- | --- |
+| `Cg0tS0NfyhiQMKiSs1L1` | Andrea and the Crocodile | Aunt Jordan |
+| `Jh7vzb4DlYQxOD0A8Tnu` | Peach and Walla's Red Rock Adventure | Aunt Jordan |
+| `SWXIxqk44OihjgoY9vIt` | A Kitten Book Club | Aunt Jordan (same space, listener and cat) |
+
+Rejected:
+- **Aunt Whitney (Owner's answer):** Princess Ana and the Peas; Rupert and Sam Play Football.
+- **Readings of published picture books (copyright):** Don't Worry Little Crab (×2), Pirañas Don't Eat Bananas.
+- **IP characters:** a Peppa Pig story.
+- **Music, not narration:** Transcendental, Story for Ana.
+- **Spanish:** two stories.
+
+**Open.** The plan needs 2–3 storytellers other than Aunt Whitney; one is found so far. Next:
+- Sample more English stories from the main family space for a self-introduced narrator. The batch with ids `1LrCeBdx…`, `CZ7pww4S…`, `GRVWOJgx…`, `TpPE9pEA…`, `Q3YGEWtF…` and `482LTRLY…` was interrupted by the reboot.
+- Or the Owner names a second narrator.
+- Or the Owner accepts Aunt Jordan alone, recorded as a deviation.
+
+Then: pull into the worktree, regenerate the models, update the simulator mock and its tests, then review, simplify and the full gate.
 
 ## Jordan's demo script (2026-10-08)
 
@@ -233,4 +261,36 @@ The Owner accepted Phase 1 and authorized steps 1–4: the local merge, `pnpm bu
 - The script is about 450 words (136 s of narration) against D8's 70-word budget. The script relies on a time cut, so the session-window outcome of the device check (D1–D5, still pending) decides the fallback. Line 30 has "The end" without the wake word.
 - The finished mix alone is 139.5 s, so the clips must be trimmed to keep the video under three minutes.
 - Phrases differ from the spike: "record" (spike: "record story"), "playback", "re-record", "next", "send story".
-- Script lines 5–7 need "El Trasgu" by Tío Manuel. Production holds a delivered "El Trasgu del Sotano" in the same family space. Its narrator is being checked from a local transcript; if it is Tío Manuel, Phase 2 has its second storyteller. Spanish names in an en-US model need synonym coverage and a device check.
+- Script lines 5–7 need "El Trasgu" by Tío Manuel. Production holds a delivered "El Trasgu del Sotano" in the same family space. The Owner confirmed Tío Manuel narrates it, so it became Phase 2's second storyteller (below). Spanish names in an en-US model need synonym coverage and a device check.
+
+## Phase 2 implementation (2026-10-08, after the reboot)
+
+**Second storyteller.** Jordan's demo script (private-repo issue #2263, recorded on `develop` in "Jordan's demo script") needs "El Trasgu" by Tío Manuel. Production holds it as "El Trasgu del Sotano", delivered on 2026-07-27. The Owner confirmed Tío Manuel is the narrator. Further sampling stopped.
+
+**Deviation: a Spanish story in the catalog.** "Spanish" was a rejection reason during sampling, because the add-on locale is en-US. Jordan's script plays a short clip of this story, so it is included as is, with its production title. The en-US model gains `tío` kinship forms ("Tio Manuel", "Uncle Manuel"), and playlist and simulator matching ignore accents.
+
+**Per-story confirmations (phase-2.md Entry; yes or no, no names):**
+
+| Story id | Storyteller consent to publish | Child's name check | Display name |
+| --- | --- | --- | --- |
+| `st_andrea_and_the_crocodile` | yes (Owner, 2026-10-08) | names acceptable (Owner, 2026-10-08) | Aunt Jordan |
+| `st_peach_and_walla` | yes | names acceptable | Aunt Jordan |
+| `st_a_kitten_book_club` | yes | names acceptable | Aunt Jordan |
+| `st_el_trasgu` | yes | names acceptable | Tío Manuel (Owner-confirmed narrator) |
+
+The Owner's "acceptable" answer is a recorded exception to Entry (b), alongside the demo-listener exception on `develop`.
+
+**Pulled with `scripts/pull-fixture-story.mjs`:** each story was `downloaded` with `mixStatus: ready`. The newest is now A Kitten Book Club; the first in catalog order is still Ignacio.
+
+**Independent review findings and dispositions:**
+1. Example-phrase tests pinned to Aunt Whitney: fixed. The gate found the same failure.
+2. Consent and child-name record: recorded above.
+3. Device script order (5.3) and the storyteller claim (4.1): fixed.
+4. The simulator mock missed typed "Tio Manuel": fixed with accent folding and an unaccented test.
+5. Kinship lookup assumed NFC: now normalizes to NFC first.
+6. The playlist normalize change only widens matching ("Peña" matches "Pena"): accepted, no change.
+7. The README lacked `--as-take`, and its provenance wording was inaccurate: fixed.
+
+**Gate.** `python3 .rpi/scripts/rpi-verify.py` passed all 5 checks on `f21dcbe`: 786 tests, 8 of 8 E2E.
+
+**Accepted.** The Owner accepted Phase 2 on 2026-10-08 and authorized continuing through the remaining phases' local implementation ("keep going until everything is implemented and we'll test at the end"). Deploys, push and the device check stay separate Owner gates. `feat/more-storytellers` was merged into `develop` locally; this notes file was the only conflict.

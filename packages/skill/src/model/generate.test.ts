@@ -250,6 +250,11 @@ describe("storytellerSlotType", () => {
     expect(type.values[0]?.name.synonyms).toContain("Auntie Whitney");
   });
 
+  test("a Spanish kinship word gains its unaccented and English forms, so en-US speech still matches", () => {
+    const type = storytellerSlotType([{ storyteller: "Tío Manuel" }]);
+    expect(type.values).toEqual([{ name: { value: "Tío Manuel", synonyms: ["Manuel", "Tio Manuel", "Uncle Manuel"] } }]);
+  });
+
   test("a storyteller with no recognized kinship prefix still gets a value, with no synonyms required", () => {
     const type = storytellerSlotType([{ storyteller: "Juan" }]);
     expect(type.values).toEqual([{ name: { value: "Juan" } }]);
@@ -261,7 +266,7 @@ describe("generateExamplePhrases", () => {
     const phrases = generateExamplePhrases(stories);
     expect(phrases).toHaveLength(3);
     expect(phrases[0]).toBe("Alexa, open spoken letter");
-    expect(phrases[1]).toContain("Aunt Whitney");
+    expect(phrases[1]).toContain("Aunt Jordan");
     expect(phrases[2]).toBe("Alexa, ask spoken letter what is new");
   });
 

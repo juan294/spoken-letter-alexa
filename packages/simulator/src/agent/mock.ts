@@ -8,6 +8,14 @@ import martinaAudio from "../../../../fixtures/audio/st_martina_the_mermaid.mp3?
 import ignacioArt from "../../../../fixtures/art/st_ignacio_the_snail.png?url";
 import mauricioArt from "../../../../fixtures/art/st_mauricio_the_bull.png?url";
 import martinaArt from "../../../../fixtures/art/st_martina_the_mermaid.png?url";
+import andreaAudio from "../../../../fixtures/audio/st_andrea_and_the_crocodile.mp3?url";
+import peachAudio from "../../../../fixtures/audio/st_peach_and_walla.mp3?url";
+import kittenAudio from "../../../../fixtures/audio/st_a_kitten_book_club.mp3?url";
+import trasguAudio from "../../../../fixtures/audio/st_el_trasgu.mp3?url";
+import andreaArt from "../../../../fixtures/art/st_andrea_and_the_crocodile.png?url";
+import peachArt from "../../../../fixtures/art/st_peach_and_walla.png?url";
+import kittenArt from "../../../../fixtures/art/st_a_kitten_book_club.png?url";
+import trasguArt from "../../../../fixtures/art/st_el_trasgu.png?url";
 import type { AgentTransport, Play, SessionRequest, SessionResponse, TurnResponse } from "./types.ts";
 
 export const FIXTURE_STORIES = catalog.stories;
@@ -21,6 +29,10 @@ const ASSETS: Record<string, { audio: string; art: string }> = {
   st_ignacio_the_snail: { audio: ignacioAudio, art: ignacioArt },
   st_mauricio_the_bull: { audio: mauricioAudio, art: mauricioArt },
   st_martina_the_mermaid: { audio: martinaAudio, art: martinaArt },
+  st_andrea_and_the_crocodile: { audio: andreaAudio, art: andreaArt },
+  st_peach_and_walla: { audio: peachAudio, art: peachArt },
+  st_a_kitten_book_club: { audio: kittenAudio, art: kittenArt },
+  st_el_trasgu: { audio: trasguAudio, art: trasguArt },
 };
 
 const ERA = "2025-03-26";
@@ -44,7 +56,8 @@ const DRAFT_OUTLINES: Record<string, string> = {
   bedtime: "A sleepy traveler finishes one last task, says goodnight, and rests.",
 };
 
-const normalize = (text: string) => text.toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, " ").trim();
+// Accents are folded first, so typed "Tio Manuel" matches the catalog's "Tío Manuel".
+const normalize = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, " ").trim();
 const topicIn = (text: string) => TOPICS.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
 const noPlay = (say: string): TurnResponse => ({ say, play: null, speechUrl: null, toolCalls: [] });
 const RECEIPT_LIMIT = 10;

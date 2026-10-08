@@ -49,7 +49,7 @@ test("creator, title, newest, and missing delivery resolve against the fixture c
   await expect(await page.request.get(new URL(martinaAudio, page.url()).href)).toBeOK();
   await expect(page.getByTestId("now-playing-art")).toHaveJSProperty("naturalWidth", 480);
   await ask(page, "play my newest story");
-  await expect(panel).toHaveAttribute("data-story-id", "st_mauricio_the_bull");
+  await expect(panel).toHaveAttribute("data-story-id", "st_a_kitten_book_club");
   await ask(page, "play The unseen dragon");
   await expect(page.getByLabel("Transcript")).toContainText("couldn't find that delivered story");
   await expect(panel).not.toHaveAttribute("data-story-id", /st_/);

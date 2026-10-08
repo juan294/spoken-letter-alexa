@@ -26,6 +26,42 @@
       "deliveredAt": "2026-08-03T00:03:24.000Z",
       "file": "st_martina_the_mermaid.mp3",
       "art": "st_martina_the_mermaid.png"
+    },
+    {
+      "id": "st_andrea_and_the_crocodile",
+      "title": "Andrea and the Crocodile",
+      "storyteller": "Aunt Jordan",
+      "durationSeconds": 225,
+      "deliveredAt": "2026-08-05T15:22:59.805Z",
+      "file": "st_andrea_and_the_crocodile.mp3",
+      "art": "st_andrea_and_the_crocodile.png"
+    },
+    {
+      "id": "st_peach_and_walla",
+      "title": "Peach and Walla's Red Rock Adventure",
+      "storyteller": "Aunt Jordan",
+      "durationSeconds": 220,
+      "deliveredAt": "2026-08-09T01:37:22.762Z",
+      "file": "st_peach_and_walla.mp3",
+      "art": "st_peach_and_walla.png"
+    },
+    {
+      "id": "st_a_kitten_book_club",
+      "title": "A Kitten Book Club",
+      "storyteller": "Aunt Jordan",
+      "durationSeconds": 270,
+      "deliveredAt": "2026-08-26T00:48:41.598Z",
+      "file": "st_a_kitten_book_club.mp3",
+      "art": "st_a_kitten_book_club.png"
+    },
+    {
+      "id": "st_el_trasgu",
+      "title": "El Trasgu del Sotano",
+      "storyteller": "Tío Manuel",
+      "durationSeconds": 638,
+      "deliveredAt": "2026-07-27T06:47:17.947Z",
+      "file": "st_el_trasgu.mp3",
+      "art": "st_el_trasgu.png"
     }
   ]
 }

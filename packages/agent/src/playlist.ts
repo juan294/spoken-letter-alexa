@@ -111,7 +111,8 @@ export type PlaylistResult = {
 };
 
 const none = (say: string | null): PlaylistResult => ({ action: "none", say });
-const normalize = (value: string): string => value.trim().toLocaleLowerCase("en-US");
+/** Case- and accent-insensitive, so "tio manuel" heard without its accent still matches "Tío Manuel". */
+const normalize = (value: string): string => value.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("en-US");
 
 function tokenFor(generation: number, position: number): string {
   return `pl_${generation}_${position}_${randomToken(24)}`;

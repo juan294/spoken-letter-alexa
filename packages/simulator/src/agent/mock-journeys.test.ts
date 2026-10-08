@@ -37,7 +37,10 @@ describe("offline demo journeys", () => {
     const { ask } = await demo();
     expect((await ask("play stories by Aunt Whitney")).play?.storyteller).toBe("Aunt Whitney");
     expect((await ask("play Martina the music loving mermaid")).play?.id).toBe("st_martina_the_mermaid");
-    expect((await ask("play my newest story")).play?.id).toBe("st_mauricio_the_bull");
+    expect((await ask("play my newest story")).play?.id).toBe("st_a_kitten_book_club");
+    expect((await ask("play stories by Aunt Jordan")).play?.storyteller).toBe("Aunt Jordan");
+    expect((await ask("play El Trasgu by Tío Manuel")).play).toMatchObject({ id: "st_el_trasgu", storyteller: "Tío Manuel" });
+    expect((await ask("play stories by Tio Manuel")).play?.id).toBe("st_el_trasgu");
   });
 
   it("saves a name-free story draft and gives a truthful named-listener handoff", async () => {
