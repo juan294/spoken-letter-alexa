@@ -1,0 +1,230 @@
+[
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "REPLACE_ALL",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_ignacio_the_snail.mp3",
+        "token": "eyJpZCI6InN0X2lnbmFjaW9fdGhlX3NuYWlsIiwidXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2F1ZGlvL3N0X2lnbmFjaW9fdGhlX3NuYWlsLm1wMyIsInRpdGxlIjoiSWduYWNpbyB0aGUgc25haWwiLCJzdG9yeXRlbGxlciI6IkF1bnQgV2hpdG5leSIsImR1cmF0aW9uU2Vjb25kcyI6Mjg4LCJhcnRVcmwiOiJodHRwczovL2FsZXhhLnNwb2tlbmxldHRlci5jb20vZml4dHVyZXMvYXJ0L3N0X2lnbmFjaW9fdGhlX3NuYWlsLnBuZyJ9",
+        "offsetInMilliseconds": 0
+      },
+      "metadata": {
+        "title": "Ignacio the snail",
+        "subtitle": "read by Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_ignacio_the_snail.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "REPLACE_ALL",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_ignacio_the_snail.mp3",
+        "token": "eyJpZCI6InN0X2lnbmFjaW9fdGhlX3NuYWlsIiwidXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2F1ZGlvL3N0X2lnbmFjaW9fdGhlX3NuYWlsLm1wMyIsInRpdGxlIjoiSWduYWNpbyB0aGUgc25haWwiLCJzdG9yeXRlbGxlciI6IkF1bnQgV2hpdG5leSIsImR1cmF0aW9uU2Vjb25kcyI6Mjg4LCJhcnRVcmwiOiJodHRwczovL2FsZXhhLnNwb2tlbmxldHRlci5jb20vZml4dHVyZXMvYXJ0L3N0X2lnbmFjaW9fdGhlX3NuYWlsLnBuZyJ9",
+        "offsetInMilliseconds": 42000
+      },
+      "metadata": {
+        "title": "Ignacio the snail",
+        "subtitle": "leída por Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_ignacio_the_snail.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "ENQUEUE",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_ignacio_the_snail.mp3",
+        "token": "pl_token",
+        "offsetInMilliseconds": 0,
+        "expectedPreviousToken": "pl_previous"
+      },
+      "metadata": {
+        "title": "Ignacio the snail",
+        "subtitle": "read by Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_ignacio_the_snail.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "REPLACE_ALL",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_martina_the_mermaid.mp3",
+        "token": "eyJpZCI6InN0X21hcnRpbmFfdGhlX21lcm1haWQiLCJ1cmwiOiJodHRwczovL2FsZXhhLnNwb2tlbmxldHRlci5jb20vZml4dHVyZXMvYXVkaW8vc3RfbWFydGluYV90aGVfbWVybWFpZC5tcDMiLCJ0aXRsZSI6Ik1hcnRpbmEgdGhlIG11c2ljIGxvdmluZyBtZXJtYWlkIiwic3Rvcnl0ZWxsZXIiOiJBdW50IFdoaXRuZXkiLCJkdXJhdGlvblNlY29uZHMiOjM3NCwiYXJ0VXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2FydC9zdF9tYXJ0aW5hX3RoZV9tZXJtYWlkLnBuZyJ9",
+        "offsetInMilliseconds": 0
+      },
+      "metadata": {
+        "title": "Martina the music loving mermaid",
+        "subtitle": "read by Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_martina_the_mermaid.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "REPLACE_ALL",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_martina_the_mermaid.mp3",
+        "token": "eyJpZCI6InN0X21hcnRpbmFfdGhlX21lcm1haWQiLCJ1cmwiOiJodHRwczovL2FsZXhhLnNwb2tlbmxldHRlci5jb20vZml4dHVyZXMvYXVkaW8vc3RfbWFydGluYV90aGVfbWVybWFpZC5tcDMiLCJ0aXRsZSI6Ik1hcnRpbmEgdGhlIG11c2ljIGxvdmluZyBtZXJtYWlkIiwic3Rvcnl0ZWxsZXIiOiJBdW50IFdoaXRuZXkiLCJkdXJhdGlvblNlY29uZHMiOjM3NCwiYXJ0VXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2FydC9zdF9tYXJ0aW5hX3RoZV9tZXJtYWlkLnBuZyJ9",
+        "offsetInMilliseconds": 42000
+      },
+      "metadata": {
+        "title": "Martina the music loving mermaid",
+        "subtitle": "leída por Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_martina_the_mermaid.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "ENQUEUE",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_martina_the_mermaid.mp3",
+        "token": "pl_token",
+        "offsetInMilliseconds": 0,
+        "expectedPreviousToken": "pl_previous"
+      },
+      "metadata": {
+        "title": "Martina the music loving mermaid",
+        "subtitle": "read by Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_martina_the_mermaid.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "REPLACE_ALL",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_mauricio_the_bull.mp3",
+        "token": "eyJpZCI6InN0X21hdXJpY2lvX3RoZV9idWxsIiwidXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2F1ZGlvL3N0X21hdXJpY2lvX3RoZV9idWxsLm1wMyIsInRpdGxlIjoiTWF1cmljaW8gdGhlIHRyYWluIHJpZGluZyBidWxsIiwic3Rvcnl0ZWxsZXIiOiJBdW50IFdoaXRuZXkiLCJkdXJhdGlvblNlY29uZHMiOjMwOSwiYXJ0VXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2FydC9zdF9tYXVyaWNpb190aGVfYnVsbC5wbmcifQ",
+        "offsetInMilliseconds": 0
+      },
+      "metadata": {
+        "title": "Mauricio the train riding bull",
+        "subtitle": "read by Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_mauricio_the_bull.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "REPLACE_ALL",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_mauricio_the_bull.mp3",
+        "token": "eyJpZCI6InN0X21hdXJpY2lvX3RoZV9idWxsIiwidXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2F1ZGlvL3N0X21hdXJpY2lvX3RoZV9idWxsLm1wMyIsInRpdGxlIjoiTWF1cmljaW8gdGhlIHRyYWluIHJpZGluZyBidWxsIiwic3Rvcnl0ZWxsZXIiOiJBdW50IFdoaXRuZXkiLCJkdXJhdGlvblNlY29uZHMiOjMwOSwiYXJ0VXJsIjoiaHR0cHM6Ly9hbGV4YS5zcG9rZW5sZXR0ZXIuY29tL2ZpeHR1cmVzL2FydC9zdF9tYXVyaWNpb190aGVfYnVsbC5wbmcifQ",
+        "offsetInMilliseconds": 42000
+      },
+      "metadata": {
+        "title": "Mauricio the train riding bull",
+        "subtitle": "leída por Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_mauricio_the_bull.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "AudioPlayer.Play",
+    "playBehavior": "ENQUEUE",
+    "audioItem": {
+      "stream": {
+        "url": "https://alexa.spokenletter.com/fixtures/audio/st_mauricio_the_bull.mp3",
+        "token": "pl_token",
+        "offsetInMilliseconds": 0,
+        "expectedPreviousToken": "pl_previous"
+      },
+      "metadata": {
+        "title": "Mauricio the train riding bull",
+        "subtitle": "read by Aunt Whitney",
+        "art": {
+          "sources": [
+            {
+              "url": "https://alexa.spokenletter.com/fixtures/art/st_mauricio_the_bull.png",
+              "size": "X_SMALL",
+              "widthPixels": 480,
+              "heightPixels": 480
+            }
+          ]
+        }
+      }
+    }
+  }
+]
