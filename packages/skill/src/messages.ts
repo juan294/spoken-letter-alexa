@@ -67,7 +67,7 @@ const ES_WISH_START = "Para pedir un deseo, di quiero una historia sobre el espa
 export const MESSAGES: Record<SkillLocale, Messages> = {
   "en-US": {
     reprompt: "You can say: play my stories, or ask what is new.",
-    launch: "Spoken Letter. Which family story would you like?",
+    launch: "Here's Spoken Letter. Which story would you like to hear?",
     help: "You can say play my stories, ask what is new, or say let's create a story. For delivery and credits, use Spoken Letter. Which would you like?",
     retry: "I'm still looking for that one. Ask again in a moment.",
     nothingToResume: "There is nothing to resume. Ask for a family story first.",

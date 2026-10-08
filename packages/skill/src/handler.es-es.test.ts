@@ -355,8 +355,8 @@ describe("es-ES requests carry the locale to the agent (Phase 3)", () => {
 
 describe("es-ES locale resolution and playback (E5)", () => {
   test.each([
-    [undefined, "Spoken Letter. Which family story would you like?"],
-    ["fr-FR", "Spoken Letter. Which family story would you like?"],
+    [undefined, "Here's Spoken Letter. Which story would you like to hear?"],
+    ["fr-FR", "Here's Spoken Letter. Which story would you like to hear?"],
     ["es-MX", "Spoken Letter. ¿Qué historia familiar quieres escuchar?"],
     ["es-ES", "Spoken Letter. ¿Qué historia familiar quieres escuchar?"],
   ])("launch with locale %s", async (locale, expected) => {

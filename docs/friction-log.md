@@ -598,3 +598,24 @@ The final full Alexa simulator still returned Amazon's generic unexpected error 
 - **Voice history as a debugging tool.** Severity low, positive. The Alexa+ record titles
   ("Video", "Request") were the clearest evidence of how Alexa+ routed each utterance.
   Fix: expose the same routing classification in the developer console.
+
+## 2026-10-08: a staged create flow for the video
+
+- **No Alexa+ integration path for external developers.** Severity high. The video has to
+  show what a parent would do with Alexa+ and MCP, but a development-stage custom skill is
+  the only way to run on a real Echo, and Alexa+ routing to such skills was unreliable
+  (2026-10-07 entry). The event organizers accept a staged flow, so the create steps follow
+  a fixed demo script, and the README's "What the video shows" table lists which steps are
+  real and which are staged. Fix: a documented way for developers to put an MCP server in
+  front of Alexa+ customers, or a test path that shows the real Alexa+ experience.
+- **No audio for custom skills.** Severity medium. A skill never receives the user's voice,
+  so a "record your story" step cannot capture anything. The skill shows the script on an
+  APL teleprompter and plays a take recorded beforehand in the Spoken Letter app. Fix: a
+  consented audio-capture interface for custom skills, or say plainly in the docs that none
+  exists.
+- **The session window decides the script.** Severity medium. With `shouldEndSession`
+  absent, a screen device keeps the session about 30 seconds with the microphone closed,
+  so "the end" needs the wake word and a long reading needs a cut in the edit. An on-screen
+  Done button and a resume on the next launch cover a dropped session. Fix: document the
+  window per device and per Alexa+ mode.
+

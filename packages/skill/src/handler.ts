@@ -84,8 +84,20 @@ type SlotTypeValue = { name: { value: string; synonyms?: string[] } };
 const storytellerValues: SlotTypeValue[] = [interactionModel, spanishModel].flatMap((model) =>
   model.interactionModel.languageModel.types.find((type) => type.name === "StorytellerName")?.values ?? []);
 const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.value));
+/** Case- and accent-insensitive, so "tio manuel" heard without its accent still names "Tío Manuel". */
+const foldName = (name: string) => name.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("en-US");
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
-  [entry.name.value, ...(entry.name.synonyms ?? [])].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));
+  [entry.name.value, ...(entry.name.synonyms ?? [])].map((alias) => [foldName(alias), entry.name.value] as const)));
+
+/**
+ * "play El Trasgu by Tío Manuel" fills only `{title}` ("play {title}"): a tail naming a known
+ * storyteller becomes the storyteller, so the title match is on the title alone.
+ */
+function titleByStoryteller(spoken: string): { title: string; storyteller: string } | null {
+  const split = /^(.+?)\s+(?:by|from)\s+(.+)$/i.exec(spoken);
+  const storyteller = split?.[2] ? STORYTELLER_ALIASES.get(foldName(split[2])) : undefined;
+  return split?.[1] && storyteller ? { title: split[1], storyteller } : null;
+}
 
 
 /** Only fixture-safe topics cross the skill session boundary. A resolved slot is already canonical. */
@@ -564,7 +576,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         const topic = safeDemoTopic(resolvedValue(event, "wishtopic") ?? catchAll, locale);
         if (!topic) return ask(m.wishTopicStart, m.wishStart, "wish_start");
         const rawStoryteller = resolvedValue(event, "storyteller") ?? catchAllAsk?.[1];
-        const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(rawStoryteller.toLocaleLowerCase("en-US")) : undefined;
+        const spokenStoryteller = rawStoryteller ? STORYTELLER_ALIASES.get(foldName(rawStoryteller)) : undefined;
         if (rawStoryteller && !spokenStoryteller) return ask(m.whoFrom, m.wishStart, "wish_start");
         return { ...ask(m.wishConfirm(topic, spokenStoryteller), m.wishReprompt, "wish_confirm"),
           sessionAttributes: { demoFlow: "wish", demoTopic: topic, ...(spokenStoryteller && { demoStoryteller: spokenStoryteller }) } };
@@ -628,8 +640,11 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
         if (intent === "StartPlaylistOverIntent") return command({ command: "reset", ...tokenInput });
         if (intent === "PlayStoryIntent") {
-          const title = slotValue(event, "title");
-          const storyteller = resolvedValue(event, "storyteller");
+          const spokenTitle = slotValue(event, "title");
+          const resolvedStoryteller = resolvedValue(event, "storyteller");
+          const split = spokenTitle && !resolvedStoryteller ? titleByStoryteller(spokenTitle) : null;
+          const title = split?.title ?? spokenTitle;
+          const storyteller = split?.storyteller ?? resolvedStoryteller;
           if (title) {
             const shortTitle = match.shortTitle.exec(title)?.[1];
             return command({ command: "title", title: shortTitle ?? title, ...(storyteller && { storyteller }) });

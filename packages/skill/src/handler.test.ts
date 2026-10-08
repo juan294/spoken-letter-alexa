@@ -977,6 +977,16 @@ test("named wish with an omitted unknown storyteller asks who instead of droppin
   expect(demoWish).not.toHaveBeenCalled();
 });
 
+test("a title ending in a known storyteller is split into the title and the storyteller", async () => {
+  const playlist = vi.fn().mockResolvedValue({ action: "none", say: "Which story?" });
+  const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) });
+  await handler(intent("PlayStoryIntent", { title: "El Trasgu by tio manuel" }));
+  expect(playlist).toHaveBeenLastCalledWith(expect.objectContaining({ command: "title", title: "El Trasgu", storyteller: "Tío Manuel" }));
+  await handler(intent("PlayStoryIntent", { title: "the owl from someone else" }));
+  expect(playlist).toHaveBeenLastCalledWith(expect.objectContaining({ command: "title", title: "the owl from someone else" }));
+  expect(playlist.mock.lastCall?.[0]).not.toHaveProperty("storyteller");
+});
+
 test("title playback removes the spoken short-title story wrapper", async () => {
   const playlist = vi.fn().mockResolvedValue({ action: "none", say: "Which story?" });
   const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) });

@@ -12,6 +12,29 @@ and a CDK deployment at `alexa.spokenletter.com`. The add-on is the parent's too
 exposes only stories the parent has already delivered, and no child account, voice or
 data exists on this path.
 
+## What the video shows
+
+Amazon gives external developers no Alexa+ integration path yet, and a custom skill never
+receives raw audio. The hackathon video therefore shows the envisioned experience on a real
+Echo Show with a development-stage custom skill, following a fixed demo script written by
+the family that recorded the demo story. Which steps are real and which are staged:
+
+| Step | Treatment |
+| --- | --- |
+| Playing stories by storyteller or by title | Real: skill → agent API → MCP server → delivered fixture stories, played with the AudioPlayer |
+| Credits | Staged: the balance comes from a fixture; nothing is charged |
+| Listener and saved wish | Staged: one listener and one wish from `fixtures/demo-create.json` |
+| Story conversation | Staged: fixed replies from the demo script; no model call |
+| Script on screen | Real: an APL teleprompter with a 3-2-1 countdown, showing the script the storyteller wrote in the Spoken Letter app |
+| Recording | Staged: nothing is captured; "playback" plays a take recorded beforehand of the same script in the Spoken Letter app |
+| Music and sound effects | Staged: the finished mix the Spoken Letter app produced for that take |
+| Send | Staged: a confirmation only; nothing is delivered |
+| Creation progress | Real: a creation record in DynamoDB (`sla-demo-state`), so a dropped session resumes at take review |
+
+The listener's first name in the demo is used with the family's consent. The
+[Alexa+ simulator](#architecture) at `/demo` runs the real agent on Bedrock; the staged
+create flow is English only, and the Spanish skill keeps its draft flow.
+
 ## Architecture
 
 ```

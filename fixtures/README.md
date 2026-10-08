@@ -65,9 +65,22 @@ the storyteller agrees to publication. Then regenerate the interaction models
 (`packages/simulator/src/agent/mock.ts`), run `pnpm test`, and commit the MP3, the artwork,
 the catalog and the models together.
 
-`--as-take <script-file> --variant <plain|effects|music|both>[,…] [--name <slug>]` pulls the
-same story's current final mix into `fixtures/takes/` as a demo take, through
-`scripts/add-demo-take.mjs`.
+`--as-take <script-file> --variant <plain|effects|music|both>[,…] [--narration <variant>[,…]]
+[--name <slug>]` pulls the same story's current final mix into `fixtures/takes/` as a demo
+take, through `scripts/add-demo-take.mjs`; `--narration` pulls its voice-only narration (the
+app's WebM) for those mixes instead. The staged create flow's take, `sam_on_the_moon`, came
+from one pull: the narration as `plain` and the finished mix with music and effects as the
+other three mixes (music-only and effects-only stand in with it).
+
+## The staged create flow
+
+`demo-create.json` holds what the English create flow says that is not generic copy: the
+credit balance, the listener and the saved wish, Alexa's two story-specific replies, the
+title, and the script shown on screen. The script must match a take in
+`takes/manifest.json` (`packages/shared/src/demo-create.test.ts`). The listener's first name
+is used with the family's consent, as an exception to the no-real-names rule for this demo.
+Regenerate the interaction models after changing it: the `ListenerName` and `StoryTitle`
+slot types come from this file.
 
 For a file that is not in production, `scripts/add-fixture-story.mjs <mp3> --title …
 --storyteller … --delivered-at …` registers an MP3 already copied to `fixtures/audio/`.

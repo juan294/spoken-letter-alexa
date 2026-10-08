@@ -164,7 +164,12 @@ export class PlaylistController {
       if (command.command === "title") {
         available = available.filter((story) => normalize(story.title).includes(normalize(command.title)));
         const storyteller = command.storyteller;
-        if (storyteller) available = available.filter((story) => normalize(story.storyteller).includes(normalize(storyteller)));
+        if (storyteller) {
+          const byStoryteller = catalog.filter((story) => normalize(story.storyteller).includes(normalize(storyteller)));
+          available = available.filter((story) => byStoryteller.includes(story));
+          // A misheard title ("el trasgo") still plays when the named storyteller has only one story.
+          if (available.length === 0 && byStoryteller.length === 1) available = byStoryteller;
+        }
         if (available.length === 0) return { result: none(catalog.length === PLAYLIST_LIMIT
           ? m.onlyFirst(PLAYLIST_LIMIT, catalog[0]?.title)
           : m.titleNotFound(catalog[0]?.title)) };

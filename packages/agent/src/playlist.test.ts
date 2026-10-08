@@ -42,6 +42,15 @@ describe("playlist controller", () => {
     expect((await controller.command("owner", { command: "title", title: "el trasgu del sotano", storyteller: "Tio Manuel" })).play?.id).toBe("d");
   });
 
+  test("a misheard title still plays when the named storyteller has exactly one story", async () => {
+    const { controller } = harness([...stories, { id: "d", title: "El Trasgu", storyteller: "Tío Manuel", deliveredAt: "2026-07-27T00:00:00Z" }]);
+    const misheard = await controller.command("owner", { command: "title", title: "el trasgo", storyteller: "Tío Manuel" });
+    expect(misheard.play?.id).toBe("d");
+    expect(misheard.say).toBe("Playing El Trasgu by Tío Manuel.");
+    // Grandpa has two stories, so a missed title is still reported rather than guessed.
+    expect((await controller.command("owner", { command: "title", title: "Nope", storyteller: "Grandpa" })).action).toBe("none");
+  });
+
   test("disambiguates titles and creators, and offers an available choice for a missing title", async () => {
     const duplicate = [{ ...stories[0]!, title: "Owl" }, { ...stories[1]!, title: "Owl" }];
     const { controller } = harness(duplicate);
