@@ -46,6 +46,8 @@ export type AlexaRequestEnvelope = {
     /** `Alexa.Presentation.APL.UserEvent` only: the `SendEvent` arguments and the component that sent them. */
     arguments?: unknown[];
     source?: unknown;
+    /** `Alexa.Presentation.APL.RuntimeError` only. `message` can quote the document, so it is never logged. */
+    errors?: { type?: string; reason?: string; message?: string }[];
   };
 };
 
@@ -450,6 +452,11 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
       }
       if (type.startsWith("AudioPlayer.") || type.startsWith("PlaybackController.")) return EMPTY;
+      if (type === "Alexa.Presentation.APL.RuntimeError") {
+        // A failed SetValue or Scroll must not speak over the adult reading, or drop the stage.
+        log.warn("apl_runtime_error", { errors: (event.request.errors ?? []).map((error) => `${error.type ?? "unknown"}:${error.reason ?? "unknown"}`) });
+        return { ...EMPTY, sessionAttributes: state };
+      }
       // The staged recording step is English only (plan D1); a Done tap arrives as an APL UserEvent.
       const recording = locale === "en-US" ? recordingTurn(event, state, options.publicBaseUrl) : null;
       if (type !== "IntentRequest") return recording ? mark(recording.key, recording.result, recording.response) : ask(m.help);
@@ -673,7 +680,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         telemetry.interactionResult = "fallback";
         telemetry.fallbackCount = nextState.fallbackCount ? Number(nextState.fallbackCount) : 1;
       }
-      return type === "IntentRequest" || type === "LaunchRequest" || type === "Alexa.Presentation.APL.UserEvent"
+      return type === "IntentRequest" || type === "LaunchRequest" || type.startsWith("Alexa.Presentation.APL.")
         ? { ...response, sessionAttributes: nextState }
         : response;
     } finally {

@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { type AgentClient } from "./agent-client.ts";
 import { CREATE_MESSAGES } from "./create-messages.ts";
 import { createHandler, type AlexaRequestEnvelope, type AlexaResponseEnvelope } from "./handler.ts";
+import teleprompter from "./apl/teleprompter.json" with { type: "json" };
 import skillManifest from "../skill-package/skill.json" with { type: "json" };
 import takesManifest from "../../../fixtures/takes/manifest.json" with { type: "json" };
 
@@ -54,7 +55,7 @@ describe("recording (phase 1 device spike)", () => {
     const directives = response.response.directives ?? [];
     const renders = directives.filter((directive) => directive.type === "Alexa.Presentation.APL.RenderDocument");
     expect(renders).toHaveLength(1);
-    expect(renders[0]).toMatchObject({ token: "teleprompter", datasources: { teleprompter: { script: SPIKE?.script } } });
+    expect(renders[0]).toMatchObject({ token: "teleprompter", document: teleprompter, datasources: { teleprompter: { script: SPIKE?.script } } });
     const execute = directives.find((directive) => directive.type === "Alexa.Presentation.APL.ExecuteCommands") as { token: string; commands: Command[] } | undefined;
     expect(execute?.token).toBe("teleprompter");
     const steps = flatten(execute?.commands ?? []);
@@ -138,6 +139,17 @@ describe("recording (phase 1 device spike)", () => {
     const response = await handler(intent("AMAZON.ResumeIntent", { attributes: { demoFlow: "create", createStage: "sending" } }));
     expect(speech(response)).not.toContain(CREATE_MESSAGES.takeContinue);
     expect(response.sessionAttributes).toEqual({});
+  });
+
+  test("an APL runtime error while reading is logged by type only, with no speech, and keeps the stage", async () => {
+    const { log } = await import("@spoken-letter-alexa/shared");
+    const warn = vi.spyOn(log, "warn");
+    const response = await handler(envelope({ type: "Alexa.Presentation.APL.RuntimeError", token: "teleprompter", errors: [{ type: "LINK_ERROR", reason: "INVALID_COMMAND", message: "Scroll failed on scriptScroll" }] }, { apl: true, attributes: { demoFlow: "create", createStage: "recording" } }));
+    expect(response.response.outputSpeech).toBeUndefined();
+    expect("shouldEndSession" in response.response).toBe(false);
+    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "recording" });
+    expect(warn).toHaveBeenCalledWith("apl_runtime_error", { errors: ["LINK_ERROR:INVALID_COMMAND"] });
+    warn.mockRestore();
   });
 
   test("a UserEvent with other arguments falls back to help without playing a take", async () => {

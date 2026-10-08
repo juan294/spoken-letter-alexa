@@ -383,7 +383,11 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
   if (tables.samples) {
     // Same intents, slots and order as en-US (plan D8) apart from the English-only ones (staged
     // demo plan D13); only the samples change.
-    for (const name of EN_US_ONLY_INTENTS) intents.splice(intents.findIndex((intent) => intent.name === name), 1);
+    for (const name of EN_US_ONLY_INTENTS) {
+      const index = intents.findIndex((intent) => intent.name === name);
+      if (index === -1) throw new Error(`EN_US_ONLY_INTENTS names ${name}, which the en-US model does not declare`);
+      intents.splice(index, 1);
+    }
     const unused = new Set(Object.keys(tables.samples));
     for (const intent of intents) {
       if (intent.name === "CatchAllIntent") continue;

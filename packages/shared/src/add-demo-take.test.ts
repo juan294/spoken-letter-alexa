@@ -55,6 +55,23 @@ describe.skipIf(!hasFfmpeg)("add-demo-take.mjs (R7)", () => {
     expect(manifest.takes[0]?.script).toBe("Once upon a time, an owl.");
   });
 
+  test("never overwrites a file another mix or script still uses", () => {
+    const shared = path.join(cwd, "fixtures/takes/owl_plain.mp3");
+    const before = readFileSync(shared);
+    expect(run("--name", "owl", "--script", "Once upon a time, an owl.", "--plain", source, "--duration", "2").status).toBe(0);
+    expect(run("--name", "owl", "--script", "A second owl story.", "--plain", source, "--effects", source, "--music", source, "--both", source).status).toBe(0);
+    const manifest = parseTakesManifest(JSON.parse(readFileSync(path.join(cwd, "fixtures/takes/manifest.json"), "utf8")));
+    expect(manifest.takes[0]?.files).toEqual({ plain: "owl_plain_2.mp3", effects: "owl_plain.mp3", music: "owl_music.mp3", both: "owl_plain.mp3" });
+    expect(manifest.takes[1]?.files).toEqual({ plain: "owl_plain_3.mp3", effects: "owl_plain_3.mp3", music: "owl_plain_3.mp3", both: "owl_plain_3.mp3" });
+    expect(readFileSync(shared).equals(before)).toBe(true);
+  });
+
+  test("refuses an unknown flag", () => {
+    const result = run("--name", "owl", "--script", "x", "--plian", source);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/unknown option --plian/);
+  });
+
   test("refuses a new script without all four variants, leaving the manifest untouched", () => {
     const before = readFileSync(path.join(cwd, "fixtures/takes/manifest.json"), "utf8");
     const result = run("--name", "fox", "--script", "A fox story.", "--plain", source);

@@ -84,6 +84,8 @@
             "type": "Frame",
             "id": "countdownOverlay",
             "position": "absolute",
+            "top": 0,
+            "left": 0,
             "width": "100vw",
             "height": "100vh",
             "backgroundColor": "rgba(46, 39, 56, 0.88)",

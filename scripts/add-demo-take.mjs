@@ -17,12 +17,14 @@ const fail = (message, code = 2) => {
   process.exit(code);
 };
 
+const VALUE_OPTIONS = new Set(["name", "script", "start", "duration", ...TAKE_VARIANTS]);
 const options = {};
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 1) {
-  const key = args[i];
-  if (key === "--spike") options.spike = true;
-  else options[key.replace(/^--/, "")] = args[(i += 1)];
+  const key = args[i].replace(/^--/, "");
+  if (key === "spike") options.spike = true;
+  else if (VALUE_OPTIONS.has(key)) options[key] = args[(i += 1)];
+  else fail(`unknown option ${args[i]}`);
 }
 
 const { name, script, start, duration } = options;
@@ -43,12 +45,28 @@ if (!existing && given.length < TAKE_VARIANTS.length) {
   fail("a new script needs --plain, --effects, --music and --both (the same file may be passed for several)");
 }
 
+// A file stays in use while any mix this run does not replace still names it; such a file is
+// never overwritten, so a new output takes the next free `<name>_<variant>[_<n>].mp3`.
+const inUse = new Set(manifest.takes.flatMap((take) => TAKE_VARIANTS
+  .filter((variant) => take !== existing || !given.includes(variant))
+  .map((variant) => take.files[variant])));
+const freeName = (variant) => {
+  for (let n = 1; ; n += 1) {
+    const file = `${name}_${variant}${n === 1 ? "" : `_${n}`}.mp3`;
+    if (!inUse.has(file)) return file;
+  }
+};
+
 // One converted file per distinct input, named after the first mix that uses it.
 const outputs = new Map();
 const files = { ...existing?.files };
 for (const variant of given) {
   const input = path.resolve(options[variant]);
-  if (!outputs.has(input)) outputs.set(input, `${name}_${variant}.mp3`);
+  if (!outputs.has(input)) {
+    const file = freeName(variant);
+    inUse.add(file);
+    outputs.set(input, file);
+  }
   files[variant] = outputs.get(input);
 }
 
