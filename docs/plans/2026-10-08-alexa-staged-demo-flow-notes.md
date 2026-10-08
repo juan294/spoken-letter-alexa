@@ -186,3 +186,37 @@ Identity sha256 `97cad23b…4d45`, 660 files, unchanged before and after the run
 - It decides where `CreateStage` lives.
 
 Phase 2 stays independent and waits for the Owner's story choices.
+
+## Phase 2 progress (2026-10-08, paused for an Owner reboot)
+
+**Authorization and choices.** The Owner approved the production pull (permission rule, 2026-10-08). Owner decisions:
+- Consent to publish: yes.
+- Children's names in titles or audio: acceptable.
+- Display names: the Owner is fine with the names used.
+- Story selection: delegated to random picks.
+
+**Committed on `feat/more-storytellers`:**
+- `2466bd7`: `scripts/pull-fixture-story.mjs` (`--list`, story pull, `--as-take`) and `registerStory` exported from `add-fixture-story.mjs`. The S5 tests (12) pass.
+- The follow-up commit: production refs are `spaces/<s>/stories/<d>/final/brand-chime-v1.mp3`, so the path guard now allows nested files. The CLI retries a transient `fetch failed`.
+
+**Candidates.** Pulled into the session scratchpad only, never the repository. Local Whisper transcripts were used to identify narrators and content. Usable, with the narrator taken from her own introduction:
+
+| Doc id | Title | Narrator |
+| --- | --- | --- |
+| `Cg0tS0NfyhiQMKiSs1L1` | Andrea and the Crocodile | Aunt Jordan |
+| `Jh7vzb4DlYQxOD0A8Tnu` | Peach and Walla's Red Rock Adventure | Aunt Jordan |
+| `SWXIxqk44OihjgoY9vIt` | A Kitten Book Club | Aunt Jordan (same space, listener and cat) |
+
+Rejected:
+- **Aunt Whitney (Owner's answer):** Princess Ana and the Peas; Rupert and Sam Play Football.
+- **Readings of published picture books (copyright):** Don't Worry Little Crab (×2), Pirañas Don't Eat Bananas.
+- **IP characters:** a Peppa Pig story.
+- **Music, not narration:** Transcendental, Story for Ana.
+- **Spanish:** two stories.
+
+**Open.** The plan needs 2–3 storytellers other than Aunt Whitney; one is found so far. Next:
+- Sample more English stories from the main family space for a self-introduced narrator. The batch with ids `1LrCeBdx…`, `CZ7pww4S…`, `GRVWOJgx…`, `TpPE9pEA…`, `Q3YGEWtF…` and `482LTRLY…` was interrupted by the reboot.
+- Or the Owner names a second narrator.
+- Or the Owner accepts Aunt Jordan alone, recorded as a deviation.
+
+Then: pull into the worktree, regenerate the models, update the simulator mock and its tests, then review, simplify and the full gate.
