@@ -203,7 +203,9 @@ The Owner accepted Phase 1 and authorized steps 1–4: the local merge, `pnpm bu
    - **Read-back** of the development stage: the interfaces are `AUDIO_PLAYER` and `ALEXA_PRESENTATION_APL`. en-US has 38 intents, including `RecordStoryIntent` and `TheEndIntent`; es-ES has 36, without them.
    - The ASK CLI's rewrite of `skill.json` was semantically equal and was discarded.
 
-**Device check D1–D5:** not run. D1 and D2 can run now, since the teleprompter and the window don't depend on S3. D3 needs the simulator deploy.
+**Simulator retry.** The Owner ran the deploy from their own terminal with `--verbose`. The hang was the S3 upload itself: a 14.8 MB zip at about 40 KB/s, sampled with `nettop`. The earlier runs inside the agent session showed no upload progress before they were stopped. `SpokenLetterAlexaSimulator` reached `UPDATE_COMPLETE` at 2026-10-08T13:17:43Z. CloudFront serves `https://alexa.spokenletter.com/fixtures/takes/spike_plain.mp3`: HTTP 200, `audio/mpeg`, 131,420 bytes, the same size as the local file.
+
+**Device check D1–D5:** not run yet. Everything it needs is deployed.
 
 ## Phase 2 status (2026-10-08)
 
