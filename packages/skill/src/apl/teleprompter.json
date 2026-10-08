@@ -2,7 +2,7 @@
   "type": "APL",
   "version": "2024.3",
   "theme": "dark",
-  "description": "Spoken Letter teleprompter: the script in large type, a 3-2-1 countdown overlay, a recording indicator and a Done button. Target: hub landscape small (960x480) and up.",
+  "description": "Spoken Letter teleprompter: the script in large type, a 3-2-1 countdown overlay, a recording indicator and a Done button. In preview (before \"record\") the overlay and the button are hidden and the script scrolls by touch. Target: hub landscape small (960x480) and up.",
   "mainTemplate": {
     "parameters": ["payload"],
     "items": [
@@ -49,6 +49,7 @@
                   {
                     "type": "TouchWrapper",
                     "id": "doneButton",
+                    "display": "${payload.teleprompter.preview ? 'none' : 'normal'}",
                     "onPress": [{ "type": "SendEvent", "arguments": ["done"] }],
                     "item": {
                       "type": "Frame",
@@ -83,6 +84,7 @@
           {
             "type": "Frame",
             "id": "countdownOverlay",
+            "display": "${payload.teleprompter.preview ? 'none' : 'normal'}",
             "position": "absolute",
             "top": 0,
             "left": 0,

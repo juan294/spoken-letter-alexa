@@ -1,4 +1,5 @@
 export { createAgentApp, type AgentDeps } from "./routes.ts";
+export { CREATION_TTL_SECONDS, type CreationStore, DynamoCreationStore, MemoryCreationStore, type StoredCreation } from "./create-flow.ts";
 export { canonicalTheme, createModelDraftGenerator, DemoDraftController, DynamoDemoDraftStore, MemoryDemoDraftStore,
   DEMO_DRAFT_LIMIT, DEMO_DRAFT_TTL_SECONDS, type DemoDraftReceipt, type DemoDraftStore, type DraftGenerator,
   type DraftTheme } from "./demo-drafts.ts";

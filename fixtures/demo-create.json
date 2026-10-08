@@ -1,0 +1,24 @@
+{
+  "credits": 20,
+  "listeners": [
+    {
+      "id": "samuel",
+      "name": "Samuel",
+      "synonyms": [
+        "Sam"
+      ],
+      "wish": {
+        "phrase": "a space adventure",
+        "topic": "space"
+      }
+    }
+  ],
+  "story": {
+    "replies": [
+      "Sam the astronaut meeting Monica the alien is a great start. What do Sam and Monica do together?",
+      "Hide and seek in low gravity sounds fun. How does the adventure end?"
+    ],
+    "title": "Sam on the Moon",
+    "script": "One morning, you woke up ready for adventure! You put on your astronaut suit, climbed into your spaceship, and counted down: \"Ten... nine... eight... seven... three... two... one... BLAST OFF!\" Whoosh! Your spaceship rocketed past the clouds and into the starry stretch of space.\n\nYou zoomed past planets until you saw the big, bright Moon! You guided your ship down, and with a soft thud, landed gently. You put on your space helmet, stepped out, and took a giant, bouncy leap on the quiet, dusty surface.\n\nBut then, peeking from behind a crater was someone else! They had big, sparkly eyes and skin that shimmered like stars. This was Monica, an alien from far away!\n\nAt first, your heart went thump-thump-thump. You stood still. Then Monica stepped forward, and with a gentle, tinkly sound, she said, \"Hello, Samuel!\" and gave you a friendly smile. All your scared feelings floated away, and you smiled back.\n\n\"Want to play a game?\" Monica asked, her voice like soft bells. \"How about hide-and-seek?\" On the Moon, that sounded amazing! You were \"it\" first. Monica floated behind a moon rock that looked like a lumpy potato. You counted to ten, then bounced off to find her. \"Ready or not, here I come!\" you called. You found her giggling. Then it was your turn to hide behind a tall crater.\n\nYou and Monica laughed and played until the moon turned warm orange as the sun began to set. \"Oh no!\" you realized. \"It's almost dinner time on Earth!\" It was time to go home. You gave Monica a zero-gravity hug. \"Goodbye, Monica!\" you said. \"I'll come back soon!\"\n\nMonica waved, her sparkly eyes twinkling. \"Goodbye, Samuel!\" she called as you floated back into your spaceship. You waved back as your ship lifted off, zooming home for dinner, with a new friend waiting for you on the Moon."
+  }
+}

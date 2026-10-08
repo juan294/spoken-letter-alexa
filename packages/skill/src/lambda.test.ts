@@ -50,8 +50,10 @@ describe("skill Lambda cold start", () => {
     const { handler } = await import("./lambda.ts");
     const response = await handler({
       version: "1.0",
+      session: { new: false, sessionId: "s1", application: { applicationId: "amzn1.ask.skill.test" }, user: { userId: "amzn1.ask.account.OWNER" },
+        attributes: { demoFlow: "create", createStage: "review" } },
       context: { System: { application: { applicationId: "amzn1.ask.skill.test" }, user: { userId: "amzn1.ask.account.OWNER" } } },
-      request: { type: "IntentRequest", requestId: "r1", timestamp: "2026-10-08T18:00:00Z", locale: "en-US", intent: { name: "TheEndIntent" } },
+      request: { type: "IntentRequest", requestId: "r1", timestamp: "2026-10-08T18:00:00Z", locale: "en-US", intent: { name: "PlaybackIntent" } },
     });
     expect(response.response.outputSpeech?.ssml).toContain('<audio src="https://alexa.spokenletter.com/fixtures/takes/');
   });

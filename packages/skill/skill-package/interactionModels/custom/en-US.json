@@ -52,6 +52,8 @@
             "play a bedtime story",
             "play something for bedtime",
             "play the story {storyteller} sent",
+            "play a story by {storyteller}",
+            "play a story from {storyteller}",
             "play the story from {storyteller}",
             "play the story by {storyteller}",
             "play the story {storyteller} made",
@@ -307,10 +309,13 @@
         {
           "name": "RecordStoryIntent",
           "samples": [
+            "record",
             "record story",
             "record my story",
             "start recording",
             "i'm ready to record",
+            "re record",
+            "rerecord",
             "record again",
             "record it again"
           ]
@@ -322,6 +327,94 @@
             "that's the end",
             "stop recording",
             "i'm done reading"
+          ]
+        },
+        {
+          "name": "ChooseListenerIntent",
+          "slots": [
+            {
+              "name": "listener",
+              "type": "ListenerName"
+            }
+          ],
+          "samples": [
+            "{listener}",
+            "it's for {listener}",
+            "it is for {listener}",
+            "for {listener}",
+            "the story is for {listener}"
+          ]
+        },
+        {
+          "name": "StoryDetailIntent",
+          "slots": [
+            {
+              "name": "detail",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "a {detail}",
+            "an {detail}",
+            "they {detail}",
+            "it's about {detail}",
+            "there's a {detail}",
+            "there is a {detail}"
+          ]
+        },
+        {
+          "name": "PlaybackIntent",
+          "samples": [
+            "playback",
+            "play back",
+            "play it back",
+            "play back the story",
+            "let me hear it",
+            "listen to it",
+            "listen back"
+          ]
+        },
+        {
+          "name": "StoryTitleIntent",
+          "slots": [
+            {
+              "name": "storytitle",
+              "type": "StoryTitle"
+            }
+          ],
+          "samples": [
+            "{storytitle}",
+            "call it {storytitle}",
+            "let's call it {storytitle}",
+            "it's called {storytitle}",
+            "the title is {storytitle}"
+          ]
+        },
+        {
+          "name": "SoundChoiceIntent",
+          "slots": [
+            {
+              "name": "sound",
+              "type": "SoundChoice"
+            }
+          ],
+          "samples": [
+            "{sound}",
+            "add {sound}",
+            "yes add {sound}",
+            "yes {sound}",
+            "with {sound}",
+            "add {sound} please"
+          ]
+        },
+        {
+          "name": "SendStoryIntent",
+          "samples": [
+            "send story",
+            "send the story",
+            "send it",
+            "yes send it",
+            "send it now"
           ]
         },
         {
@@ -510,6 +603,78 @@
                 "value": "love",
                 "synonyms": [
                   "loved"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListenerName",
+          "values": [
+            {
+              "name": {
+                "value": "Samuel",
+                "synonyms": [
+                  "Sam"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "StoryTitle",
+          "values": [
+            {
+              "name": {
+                "value": "Sam on the Moon"
+              }
+            }
+          ]
+        },
+        {
+          "name": "SoundChoice",
+          "values": [
+            {
+              "name": {
+                "value": "both",
+                "synonyms": [
+                  "add both",
+                  "music and sound effects",
+                  "music and effects",
+                  "sound effects and music",
+                  "both of them"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "music",
+                "synonyms": [
+                  "background music",
+                  "just music",
+                  "music only"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "effects",
+                "synonyms": [
+                  "sound effects",
+                  "just sound effects",
+                  "effects only"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "plain",
+                "synonyms": [
+                  "none",
+                  "neither",
+                  "nothing",
+                  "leave it as it is",
+                  "as it is"
                 ]
               }
             }

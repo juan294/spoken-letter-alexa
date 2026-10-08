@@ -1,10 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import { decodeJwtClaims, log, sha256Hex, SKILL_LOCALES } from "@spoken-letter-alexa/shared";
+import { creationRecordSchema, decodeJwtClaims, log, sha256Hex, SKILL_LOCALES } from "@spoken-letter-alexa/shared";
 import { type MessageData, type Model } from "@strands-agents/sdk";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 
+import { type CreationStore } from "./create-flow.ts";
 import { type SpeechSynthesizer } from "./polly.ts";
 import { createModelDraftGenerator, DemoDraftController, DemoDraftError, type DemoDraftStore, type DraftGenerator } from "./demo-drafts.ts";
 import { DemoUpdateController, DemoUpdateError, type DemoUpdateStore, type DemoStory, type FixtureEvent } from "./demo-updates.ts";
@@ -34,6 +35,8 @@ export type AgentDeps = {
   playlist?: { store: PlaylistStore; secret: string } | undefined;
   drafts?: { store: DemoDraftStore; generator?: DraftGenerator | undefined } | undefined;
   updates?: { store: DemoUpdateStore; stories: DemoStory[]; seed: FixtureEvent[] } | undefined;
+  /** The staged create flow's cross-session record (staged demo plan D5, revised). */
+  creations?: { store: CreationStore } | undefined;
   now?: (() => number) | undefined;
 };
 
@@ -51,6 +54,7 @@ const draftBodySchema = z.object({ deviceUserId: z.string().min(1).max(256), req
   theme: z.string().trim().min(1).max(160), ...localeField });
 const draftLatestBodySchema = z.object({ deviceUserId: z.string().min(1).max(256) });
 const updateDeviceSchema = z.object({ deviceUserId: z.string().min(1).max(256) });
+const creationSaveSchema = updateDeviceSchema.extend({ record: creationRecordSchema });
 const localizedDeviceSchema = updateDeviceSchema.extend(localeField);
 const legacyFinishedBodySchema = updateDeviceSchema.extend({ observedToken: z.string().min(1).max(4096), eventId: z.string().min(1).max(256) });
 const reactionBodySchema = updateDeviceSchema.extend({ requestId: z.string().min(1).max(256), choice: z.enum(["like", "love", "dismiss"]) });
@@ -335,6 +339,34 @@ export function createAgentApp(deps: AgentDeps): Hono {
       return c.json(receipt ?? { status: "none" });
     } catch {
       return c.json({ error: "draft_unavailable", message: "Your story draft is unavailable. Try again in a moment." }, 503);
+    }
+  });
+
+  const createUnavailable = (c: Context) => c.json({ error: "create_unavailable", message: "Story creation progress is unavailable." }, 503);
+
+  app.post("/agent/demo/create/current", async (c) => {
+    if (!deps.creations || !deps.playlist) return createUnavailable(c);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = updateDeviceSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device is required");
+    try {
+      const stored = await deps.creations.store.get(deviceSessionId(parsed.data.deviceUserId));
+      return c.json(stored ? { status: "found", ...stored } : { status: "none" });
+    } catch {
+      return createUnavailable(c);
+    }
+  });
+
+  app.post("/agent/demo/create/save", async (c) => {
+    if (!deps.creations || !deps.playlist) return createUnavailable(c);
+    if (!skillSecretMatches(c.req.header("x-alexa-skill-secret"), deps.playlist.secret)) return c.json({ error: "unauthorized", message: "Skill authorization is required" }, 401);
+    const parsed = creationSaveSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return jsonError(c, 400, "invalid_request", "A device and a valid creation record are required");
+    try {
+      await deps.creations.store.put(deviceSessionId(parsed.data.deviceUserId), parsed.data.record);
+      return c.json({ status: "saved" });
+    } catch {
+      return createUnavailable(c);
     }
   });
 

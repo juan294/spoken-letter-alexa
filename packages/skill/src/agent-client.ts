@@ -1,4 +1,5 @@
-import { type SkillLocale } from "@spoken-letter-alexa/shared";
+import { type CreationRecord, creationRecordSchema, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { z } from "zod";
 
 import { type Play } from "./audio.ts";
 
@@ -42,6 +43,13 @@ export type DemoWish = { status: "saved"; wishId: string; topic: string; storyte
 export type DemoEvent = { status: "read" | "dismissed" };
 export type DemoInbox = { events: { eventId: string; type: string; detail: string; occurredAt: string; storyId?: string }[] };
 
+/** The cross-session copy of the device's creation record (staged demo plan D5, revised). */
+export type CreationCurrent = { status: "none" } | { status: "found"; record: CreationRecord; updatedAt: number };
+const creationCurrentSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("none") }),
+  z.object({ status: z.literal("found"), record: creationRecordSchema, updatedAt: z.number() }),
+]);
+
 export type AgentClient = {
   /** One line of text for the device user; the agent keeps the conversation per user. */
   turn: (input: { deviceUserId: string; text: string } & WithLocale) => Promise<AgentReply>;
@@ -54,6 +62,8 @@ export type AgentClient = {
   demoEvent?: (input: { deviceUserId: string; eventId: string; action: "read" | "dismiss" }) => Promise<DemoEvent>;
   demoInbox?: (input: { deviceUserId: string } & WithLocale) => Promise<DemoInbox>;
   demoPlaybackFinished?: (input: { deviceUserId: string; observedToken: string; eventId: string }) => Promise<{ status: "recorded" | "duplicate" | "ignored" }>;
+  createCurrent?: (input: { deviceUserId: string }) => Promise<CreationCurrent>;
+  createSave?: (input: { deviceUserId: string; record: CreationRecord }) => Promise<{ status: "saved" }>;
 };
 
 export type AgentClientOptions = {
@@ -170,6 +180,16 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
           throw new AgentHttpError(200, "malformed", "agent draft reply is incomplete");
         }
         return reply as LatestDraft;
+      },
+      async createCurrent(input: { deviceUserId: string }): Promise<CreationCurrent> {
+        const reply = creationCurrentSchema.safeParse(await skillPost("/agent/demo/create/current", input));
+        if (!reply.success) throw new AgentHttpError(200, "malformed", "agent creation reply is incomplete");
+        return reply.data;
+      },
+      async createSave(input: { deviceUserId: string; record: CreationRecord }): Promise<{ status: "saved" }> {
+        const reply: unknown = await skillPost("/agent/demo/create/save", input);
+        if (!reply || typeof reply !== "object" || !("status" in reply) || reply.status !== "saved") throw new AgentHttpError(200, "malformed", "agent creation reply is incomplete");
+        return { status: "saved" };
       },
       async playlist(input: PlaylistCommand): Promise<PlaylistReply> {
         const reply = await skillPost<PlaylistReply>("/agent/playlist", input);

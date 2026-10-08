@@ -5,7 +5,8 @@
 // registered script (matched ignoring case and punctuation) can replace any of its mixes.
 // Usage: node scripts/add-demo-take.mjs --name <slug> --script "<text>" \
 //          --plain <mp3> --effects <mp3> --music <mp3> --both <mp3> \
-//          [--start <seconds>] [--duration <seconds>] [--spike]
+//          [--start <seconds>] [--duration <seconds>]
+// Any input ffmpeg reads works, such as the app's WebM narration.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -22,8 +23,7 @@ const options = {};
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 1) {
   const key = args[i].replace(/^--/, "");
-  if (key === "spike") options.spike = true;
-  else if (VALUE_OPTIONS.has(key)) options[key] = args[(i += 1)];
+  if (VALUE_OPTIONS.has(key)) options[key] = args[(i += 1)];
   else fail(`unknown option ${args[i]}`);
 }
 
@@ -70,11 +70,8 @@ for (const variant of given) {
   files[variant] = outputs.get(input);
 }
 
-const entry = { script: existing?.script ?? script.trim(), files, ...((options.spike || existing?.spike) && { spike: true }) };
-const takes = manifest.takes
-  .filter((take) => take !== existing)
-  .map((take) => (options.spike ? { script: take.script, files: take.files } : take));
-const next = parseTakesManifest({ takes: [...takes, entry] });
+const entry = { script: existing?.script ?? script.trim(), files };
+const next = parseTakesManifest({ takes: [...manifest.takes.filter((take) => take !== existing), entry] });
 
 mkdirSync(takesDir, { recursive: true });
 for (const [input, file] of outputs) {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseFixtureCatalog, TOOL_METADATA } from "@spoken-letter-alexa/mcp-server";
-import { CLASS_C_DENYLIST, SKILL_LOCALES, type SkillLocale, spanishPattern } from "@spoken-letter-alexa/shared";
+import { CLASS_C_DENYLIST, type DemoCreate, parseDemoCreate, SKILL_LOCALES, type SkillLocale, spanishPattern } from "@spoken-letter-alexa/shared";
 
 export type ModelSlot = { name: string; type: string };
 export type ModelIntent = { name: string; slots?: ModelSlot[]; samples: string[] };
@@ -24,6 +24,8 @@ export const TRAINING_PATHS = Object.fromEntries(SKILL_LOCALES.map((locale) =>
 export const TRAINING_PATH = TRAINING_PATHS["en-US"];
 /** `fixtures/stories.json` at the repo root — the same catalog the MCP server serves. */
 export const FIXTURES_PATH = path.resolve(import.meta.dirname, "../../../../fixtures/stories.json");
+/** `fixtures/demo-create.json`: the staged create flow's listener, title and story (staged demo plan, revised). */
+export const DEMO_CREATE_PATH = path.resolve(import.meta.dirname, "../../../../fixtures/demo-create.json");
 
 export const INVOCATION_NAME = "spoken letter";
 
@@ -41,6 +43,10 @@ export type CatalogStoryteller = { storyteller: string };
 /** The delivered-story catalog, for the storyteller slot type (phase-3.md section 2). */
 export function loadStories(file = FIXTURES_PATH): CatalogStoryteller[] {
   return parseFixtureCatalog(JSON.parse(readFileSync(file, "utf8")));
+}
+
+export function loadDemoCreate(file = DEMO_CREATE_PATH): DemoCreate {
+  return parseDemoCreate(JSON.parse(readFileSync(file, "utf8")));
 }
 
 /**
@@ -66,6 +72,8 @@ const TOOL_INTENTS: Record<string, Omit<ModelIntent, "name"> & { name: string }>
       "play a bedtime story",
       "play something for bedtime",
       "play the story {storyteller} sent",
+      "play a story by {storyteller}",
+      "play a story from {storyteller}",
       "play the story from {storyteller}",
       "play the story by {storyteller}",
       "play the story {storyteller} made",
@@ -152,14 +160,53 @@ const CATCH_ALL_SAMPLES = [
 ];
 
 /**
- * The English-only creation flow (staged demo plan D1, D13): appended to the en-US model only.
- * The recording step's samples are the only ones that may say "record" (generate.test.ts
- * RECORDING_SAMPLES).
+ * The English-only creation flow (staged demo plan D1, D13, revised for Jordan's script):
+ * appended to the en-US model only. The recording step's samples are the only ones that may say
+ * "record", and the send step's the only ones that may say "send" (generate.test.ts exemptions).
+ * Each step's phrases are the script's own words first ("record", "re-record", "playback",
+ * "send story"); "next" is Amazon's built-in `AMAZON.NextIntent`.
  */
 const EN_US_ONLY: ModelIntent[] = [
-  { name: "RecordStoryIntent", samples: ["record story", "record my story", "start recording", "i'm ready to record", "record again", "record it again"] },
+  { name: "RecordStoryIntent", samples: ["record", "record story", "record my story", "start recording", "i'm ready to record", "re record", "rerecord", "record again", "record it again"] },
   { name: "TheEndIntent", samples: ["the end", "that's the end", "stop recording", "i'm done reading"] },
+  {
+    name: "ChooseListenerIntent",
+    slots: [{ name: "listener", type: "ListenerName" }],
+    samples: ["{listener}", "it's for {listener}", "it is for {listener}", "for {listener}", "the story is for {listener}"],
+  },
+  {
+    // The conversation takes any reply; these carriers give a story answer a home in the model.
+    name: "StoryDetailIntent",
+    slots: [{ name: "detail", type: "AMAZON.SearchQuery" }],
+    samples: ["a {detail}", "an {detail}", "they {detail}", "it's about {detail}", "there's a {detail}", "there is a {detail}"],
+  },
+  { name: "PlaybackIntent", samples: ["playback", "play back", "play it back", "play back the story", "let me hear it", "listen to it", "listen back"] },
+  {
+    name: "StoryTitleIntent",
+    slots: [{ name: "storytitle", type: "StoryTitle" }],
+    samples: ["{storytitle}", "call it {storytitle}", "let's call it {storytitle}", "it's called {storytitle}", "the title is {storytitle}"],
+  },
+  {
+    name: "SoundChoiceIntent",
+    slots: [{ name: "sound", type: "SoundChoice" }],
+    samples: ["{sound}", "add {sound}", "yes add {sound}", "yes {sound}", "with {sound}", "add {sound} please"],
+  },
+  { name: "SendStoryIntent", samples: ["send story", "send the story", "send it", "yes send it", "send it now"] },
 ];
+
+/** The create flow's slot types, from the fixture; en-US only like the intents that use them. */
+export function createSlotTypes(demo: DemoCreate): ModelSlotType[] {
+  return [
+    { name: "ListenerName", values: demo.listeners.map((listener) => ({ name: { value: listener.name, ...(listener.synonyms.length > 0 && { synonyms: [...listener.synonyms] }) } })) },
+    { name: "StoryTitle", values: [{ name: { value: demo.story.title } }] },
+    { name: "SoundChoice", values: [
+      { name: { value: "both", synonyms: ["add both", "music and sound effects", "music and effects", "sound effects and music", "both of them"] } },
+      { name: { value: "music", synonyms: ["background music", "just music", "music only"] } },
+      { name: { value: "effects", synonyms: ["sound effects", "just sound effects", "effects only"] } },
+      { name: { value: "plain", synonyms: ["none", "neither", "nothing", "leave it as it is", "as it is"] } },
+    ] },
+  ];
+}
 export const EN_US_ONLY_INTENTS = EN_US_ONLY.map((intent) => intent.name);
 
 const BUILT_IN_INTENTS = [
@@ -314,7 +361,7 @@ export function withExamplePhrases(manifestText: string, locale: SkillLocale, ph
   return `${manifestText.slice(0, open)}\n${body}\n${indent}${manifestText.slice(close)}`;
 }
 
-export function generateInteractionModel(input: { locale?: SkillLocale; training: string[]; stories: CatalogStoryteller[] }): InteractionModel {
+export function generateInteractionModel(input: { locale?: SkillLocale; training: string[]; stories: CatalogStoryteller[]; demo?: DemoCreate }): InteractionModel {
   const locale = input.locale ?? "en-US";
   const intents: ModelIntent[] = TOOL_METADATA.map((tool) => {
     const intent = TOOL_INTENTS[tool.name];
@@ -404,7 +451,7 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
   }
 
   const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];
-  assertNoCarrierCollision(playSamples, [...catchAll]);
+  assertNoCarrierCollision(playSamples, [...catchAll, ...(intents.find((intent) => intent.name === "StoryDetailIntent")?.samples ?? [])]);
   for (const intent of intents) assertSlotsDeclared(intent);
 
   for (const name of BUILT_IN_INTENTS) intents.push({ name, samples: [] });
@@ -414,6 +461,7 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
       languageModel: { invocationName: INVOCATION_NAME, intents, types: [
         storytellerSlotType(input.stories, locale),
         ...tables.types,
+        ...(tables.samples ? [] : createSlotTypes(input.demo ?? loadDemoCreate())),
       ] },
     },
   };

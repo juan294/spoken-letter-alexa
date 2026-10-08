@@ -15,8 +15,6 @@ const takesManifestSchema = z.strictObject({
     /** The script as written, shown on the teleprompter; matched after `normalizeScript`. */
     script: z.string().trim().min(1),
     files: z.strictObject({ plain: takeFile, effects: takeFile, music: takeFile, both: takeFile }),
-    /** The phase 1 device spike's passage, read without a creation flow. At most one. */
-    spike: z.literal(true).optional(),
   })),
 });
 
@@ -28,7 +26,7 @@ export function normalizeScript(text: string): string {
   return text.toLowerCase().replace(/['’]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-/** Parses `fixtures/takes/manifest.json`. A bad shape, a repeated script or a second spike throws. */
+/** Parses `fixtures/takes/manifest.json`. A bad shape or a repeated script throws. */
 export function parseTakesManifest(input: unknown): TakesManifest {
   const result = takesManifestSchema.safeParse(input);
   if (!result.success) {
@@ -41,15 +39,10 @@ export function parseTakesManifest(input: unknown): TakesManifest {
     if (scripts.has(key)) throw new Error(`fixtures/takes/manifest.json has two takes for the script "${take.script}"`);
     scripts.add(key);
   }
-  if (result.data.takes.filter((take) => take.spike).length > 1) throw new Error("fixtures/takes/manifest.json has more than one spike take");
   return result.data;
 }
 
 export function findTake(manifest: TakesManifest, script: string): Take | undefined {
   const key = normalizeScript(script);
   return manifest.takes.find((take) => normalizeScript(take.script) === key);
-}
-
-export function spikeTake(manifest: TakesManifest): Take | undefined {
-  return manifest.takes.find((take) => take.spike);
 }

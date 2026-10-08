@@ -179,14 +179,18 @@ describe("skill handler", () => {
     expect(ssml(response)).toContain("Martina the music loving mermaid");
     expect(demoEvent).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", eventId: "evt-story", action: "read" });
   });
-  test("creation asks for a theme, then saves one name-free demo draft on the follow-up", async () => {
+  test("English creation starts the staged create flow and saves no draft (staged demo plan D1)", async () => {
+    const saveDraft = vi.fn();
+    const start = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) })(intent("StartStoryIntent", { theme: "mermaids" }));
+    expect(ssml(start)).toMatch(/Who is the story for\?/);
+    expect(start.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+
+  test("a draft already in the session saves one name-free demo draft on the follow-up", async () => {
     const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "draft-1", theme: "mermaids", outline: "A gentle mermaid helps a friend." });
     const agent = fakeAgent({ saveDraft });
     const handler = createHandler({ skillId: SKILL_ID, agent });
-    const start = await handler(intent("StartStoryIntent"));
-    expect(ssml(start)).toMatch(/what.*story.*about/i);
-    expect(start.sessionAttributes).toEqual({ demoFlow: "draft" });
-    expect(saveDraft).not.toHaveBeenCalled();
     const followup = intent("ThemeIntent", { theme: "mermaids" });
     followup.session = { ...followup.session!, attributes: { demoFlow: "draft" } };
     const saved = await handler(followup);
@@ -196,12 +200,12 @@ describe("skill handler", () => {
     expect(ssml(saved)).not.toMatch(/sent|delivered/i);
   });
 
-  test("named-listener creation and credits requests give safe app handoffs without writes", async () => {
+  test("named-listener creation enters the create flow without repeating an unknown name, and credits help writes nothing", async () => {
     const saveDraft = vi.fn();
     const agent = fakeAgent({ saveDraft });
     const handler = createHandler({ skillId: SKILL_ID, agent });
     const named = await handler(intent("CatchAllIntent", { text: "create a story for Lily" }));
-    expect(ssml(named)).toMatch(/Spoken Letter to choose the listener/i);
+    expect(ssml(named)).toMatch(/I don(?:'|&#39;)t see that name on your list/i);
     expect(ssml(named)).not.toContain("Lily");
     const credits = await handler(intent("HelpTopicIntent", { topic: "add credits" }));
     expect(ssml(credits)).toMatch(/add story credits.*Spoken Letter/i);
@@ -214,7 +218,8 @@ describe("skill handler", () => {
     const saveDraft = vi.fn().mockRejectedValue(new AgentHttpError(503, "draft_unavailable", "No demo draft was saved. Try again in a moment."));
     const agent = fakeAgent({ saveDraft });
     const handler = createHandler({ skillId: SKILL_ID, agent });
-    const event = intent("StartStoryIntent", { theme: "space" });
+    const event = intent("ThemeIntent", { theme: "space" });
+    event.session = { ...event.session!, attributes: { demoFlow: "draft" } };
     const response = await handler(event);
     expect(ssml(response)).toMatch(/no draft was saved/i);
     expect(response.sessionAttributes).toEqual({ demoFlow: "draft" });
@@ -676,17 +681,17 @@ describe("session friction recovery", () => {
 
   test.each(["mermaids", "space", "stars"])("S1 bare %s completes a prompted draft", async (theme) => {
     const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme, outline: "Safe outline." });
-    const turn = journey(fakeAgent({ saveDraft }));
-    const start = await turn("StartStoryIntent");
-    expect(reprompt(start)).toMatch(/mermaids.*space/i);
+    // English creation is the staged create flow now, so the draft starts from its session state (D1).
+    const turn = journey(fakeAgent({ saveDraft }), { demoFlow: "draft" });
+    const prompt = await turn("AMAZON.HelpIntent");
+    expect(reprompt(prompt)).toMatch(/mermaids.*space/i);
     const saved = await turn("ThemeChoiceIntent", { drafttheme: theme });
     expect(ssml(saved)).toMatch(/saved your story draft/i);
     expect(saveDraft).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ theme, requestId: "journey-2" }));
   });
   test("S3 consecutive fallbacks preserve the draft and escalate without writes", async () => {
     const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "mermaids", outline: "Safe." });
-    const turn = journey(fakeAgent({ saveDraft }));
-    await turn("StartStoryIntent");
+    const turn = journey(fakeAgent({ saveDraft }), { demoFlow: "draft" });
     const first = await turn("AMAZON.FallbackIntent");
     expect(first.sessionAttributes).toEqual({ demoFlow: "draft", fallbackCount: "1" });
     expect(reprompt(first)).toMatch(/mermaids.*space/i);
@@ -708,8 +713,7 @@ describe("session friction recovery", () => {
   });
   test.each(["AMAZON.CancelIntent", "AMAZON.NoIntent", "PlayStoryIntent", "HelpTopicIntent"])("S5 %s clears obsolete draft state", async (name) => {
     const saveDraft = vi.fn();
-    const turn = journey(fakeAgent({ saveDraft }));
-    await turn("StartStoryIntent");
+    const turn = journey(fakeAgent({ saveDraft }), { demoFlow: "draft" });
     const response = await turn(name);
     expect(response.sessionAttributes).toEqual({});
     await turn("ThemeChoiceIntent", { drafttheme: "space" });
@@ -719,8 +723,7 @@ describe("session friction recovery", () => {
     const saveDraft = vi.fn().mockRejectedValueOnce(new AgentHttpError(422, "unsupported_theme", "Lily private speech"))
       .mockRejectedValueOnce(new Error("private failure"))
       .mockResolvedValue({ status: "saved", draftId: "d1", theme: "space", outline: "Safe." });
-    const turn = journey(fakeAgent({ saveDraft }));
-    await turn("StartStoryIntent");
+    const turn = journey(fakeAgent({ saveDraft }), { demoFlow: "draft" });
     const missing = await turn("ThemeChoiceIntent");
     expect(reprompt(missing)).toMatch(/mermaids.*space/i);
     expect(saveDraft).not.toHaveBeenCalled();
@@ -759,7 +762,7 @@ describe("session friction recovery", () => {
   });
   test("S9 limit reached offers readback or later retry", async () => {
     const saveDraft = vi.fn().mockRejectedValue(new AgentHttpError(429, "draft_limit_reached", "untrusted"));
-    const response = await journey(fakeAgent({ saveDraft }))("StartStoryIntent", { theme: "space" });
+    const response = await journey(fakeAgent({ saveDraft }), { demoFlow: "draft" })("ThemeIntent", { theme: "space" });
     expect(ssml(response)).toMatch(/no draft was saved/i);
     expect(ssml(response)).toMatch(/read.*draft/i);
     expect(ssml(response)).toMatch(/later/i);
@@ -771,7 +774,10 @@ describe("additional phase 1 acceptance", () => {
   test("S2 explicit start theme and existing carrier each save their selected theme", async () => {
     const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "forest", outline: "Safe." });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
-    expect(ssml(await handler(intent("StartStoryIntent", { theme: "forest" })))).toMatch(/saved your story draft/i);
+    // An explicit start theme saves in Spanish only: English creation is the staged create flow (D1).
+    const spanish = intent("StartStoryIntent", { theme: "forest" });
+    spanish.request.locale = "es-ES";
+    expect((await handler(spanish)).response.shouldEndSession).toBe(true);
     const carrier = intent("ThemeIntent", { theme: "animals" });
     carrier.session = { ...carrier.session!, attributes: { demoFlow: "draft" } };
     carrier.request.requestId = "carrier-2";
@@ -826,7 +832,7 @@ test("pending draft handoff clears state and help resets only the fallback count
   const named = intent("CatchAllIntent", { text: "create a story for Lily" });
   named.session = { ...named.session!, attributes: { demoFlow: "draft" } };
   const handoff = await handler(named);
-  expect(handoff.sessionAttributes).toEqual({});
+  expect(handoff.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
   expect(ssml(handoff)).not.toContain("Lily");
   await handler(intent("ThemeChoiceIntent", { drafttheme: "mermaids" }));
   expect(saveDraft).not.toHaveBeenCalled();
@@ -848,8 +854,9 @@ describe("safe session diagnostics", () => {
     const info = vi.spyOn(log, "info");
     const saveDraft = vi.fn().mockResolvedValue({ status: "saved", draftId: "d1", theme: "space", outline: "Safe." });
     const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) });
-    let state: Record<string, string> = {};
-    for (const [i, name] of ["StartStoryIntent", "AMAZON.FallbackIntent", "AMAZON.FallbackIntent", "ThemeChoiceIntent"].entries()) {
+    // English creation is the staged create flow now (D1): the draft starts from its session state.
+    let state: Record<string, string> = { demoFlow: "draft" };
+    for (const [i, name] of ["AMAZON.HelpIntent", "AMAZON.FallbackIntent", "AMAZON.FallbackIntent", "ThemeChoiceIntent"].entries()) {
       const event = intent(name, name === "ThemeChoiceIntent" ? { drafttheme: "space" } : {});
       event.request.requestId = `turn-${i}`;
       event.session = { ...event.session!, new: false, attributes: state };
@@ -857,7 +864,7 @@ describe("safe session diagnostics", () => {
     }
     const lines = loggedSkillTurns(info);
     expect(lines.map((line) => [line.flowBefore, line.flowAfter, line.interactionResult, line.responseKey, line.fallbackCount, line.FallbackCount])).toEqual([
-      ["none", "draft", "awaiting_input", "theme_prompt", 0, 0],
+      ["draft", "draft", "awaiting_input", "theme_recovery", 0, 0],
       ["draft", "draft", "fallback", "theme_recovery", 1, 1],
       ["draft", "draft", "fallback", "theme_recovery", 2, 1],
       ["draft", "none", "completed", "draft_saved", 0, 0],
@@ -883,7 +890,7 @@ describe("safe session diagnostics", () => {
     expect(played).toMatchObject({ outcome: "ok", interactionResult: "completed", responseKey: "agent_reply", played: true, FallbackCount: 0 });
   });
   test.each([
-    ["StartStoryIntent", "saveDraft", { theme: "space" }],
+    ["ThemeIntent", "saveDraft", { theme: "space" }],
     ["ReadDemoDraftIntent", "latestDraft", {}],
     ["WishStoryIntent", "demoWish", {}],
     ["ReactToStoryIntent", "demoReact", { choice: "love" }],
@@ -895,6 +902,7 @@ describe("safe session diagnostics", () => {
     const handler = createHandler({ skillId: SKILL_ID, agent });
     const event = name === "LaunchRequest" ? envelope({ type: name }) : intent(name === "WishStoryIntent" ? "AMAZON.YesIntent" : name, slots);
     if (name === "WishStoryIntent") event.session = { ...event.session!, attributes: { demoFlow: "wish", demoTopic: "space" } };
+    if (name === "ThemeIntent") event.session = { ...event.session!, attributes: { demoFlow: "draft" } };
     await handler(event);
     const [line] = loggedSkillTurns(info);
     expect(line).toMatchObject({ outcome: "rejected", errorClass: "AgentHttpError:update_unavailable", interactionResult: "retry" });
@@ -907,7 +915,9 @@ describe("safe session diagnostics", () => {
     [Object.assign(new Error("Lily"), { name: "Lily" }), "agent_error", "Error"],
   ] as const)("T4 draft failure classification is bounded", async (error, outcome, errorClass) => {
     const info = vi.spyOn(log, "info");
-    await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft: vi.fn().mockRejectedValue(error) }) })(intent("StartStoryIntent", { theme: "space" }));
+    const event = intent("ThemeIntent", { theme: "space" });
+    event.session = { ...event.session!, attributes: { demoFlow: "draft" } };
+    await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft: vi.fn().mockRejectedValue(error) }) })(event);
     expect(loggedSkillTurns(info)[0]).toMatchObject({ outcome, errorClass, interactionResult: "retry", responseKey: "theme_recovery" });
   });
   test("T5 adversarial slot keys, values, state, and optional flags never enter diagnostics", async () => {
@@ -943,11 +953,12 @@ describe("safe session diagnostics", () => {
   });
 });
 
-test("bare app handoff and credit intents discard aliases without writes", async () => {
+test("app handoff and credit intents discard unknown aliases without writes", async () => {
   const agent = fakeAgent({ saveDraft: vi.fn(), demoWish: vi.fn(), demoReact: vi.fn(), playlist: vi.fn() });
   const handler = createHandler({ skillId: SKILL_ID, agent });
+  // English handoffs enter the staged create flow (D1); an unknown name is never repeated (SS7).
   const named = await handler(intent("AppHandoffIntent", { listeneralias: "Morgan" }));
-  expect(ssml(named)).toContain("Open Spoken Letter");
+  expect(ssml(named)).toMatch(/Who is the story for\?/);
   expect(ssml(named)).not.toContain("Morgan");
   expect(ssml(await handler(intent("CreditHelpIntent")))).toContain("add story credits in Spoken Letter");
   expect(agent.turn).not.toHaveBeenCalled();

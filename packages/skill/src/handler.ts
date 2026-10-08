@@ -6,8 +6,9 @@ import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistRe
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
 import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
-import { isCreateStage, type RecordingKey, recordingTurn } from "./recording.ts";
+import { type CreateKey, type CreateTurn, continueCreate, createAttributes, createStateFrom, resumeCreate, startCreate } from "./create-flow.ts";
 import { closing, type Directive, type OutputSpeech, question } from "./responses.ts";
+import { resolvedValue, slotValue } from "./slots.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
 
@@ -72,16 +73,19 @@ export type HandlerOptions = {
   publicBaseUrl?: string | undefined;
   /** Test injection point for the Directive Service call (phase-2.md section 2); defaults to global `fetch`. */
   progressiveFetch?: typeof fetch | undefined;
+  /** Seconds since the epoch, for the create flow's resume window; defaults to the clock. */
+  now?: (() => number) | undefined;
 };
 
 export type SkillHandler = (event: AlexaRequestEnvelope) => Promise<AlexaResponseEnvelope>;
 
 /** Both locales share canonical storyteller values; each adds its own spoken synonyms ("Auntie Whitney", "tía Whitney"). */
-const storytellerValues = [interactionModel, spanishModel].flatMap((model) =>
+type SlotTypeValue = { name: { value: string; synonyms?: string[] } };
+const storytellerValues: SlotTypeValue[] = [interactionModel, spanishModel].flatMap((model) =>
   model.interactionModel.languageModel.types.find((type) => type.name === "StorytellerName")?.values ?? []);
 const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.value));
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
-  [entry.name.value, ...entry.name.synonyms].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));
+  [entry.name.value, ...(entry.name.synonyms ?? [])].map((alias) => [alias.toLocaleLowerCase("en-US"), entry.name.value] as const)));
 
 
 /** Only fixture-safe topics cross the skill session boundary. A resolved slot is already canonical. */
@@ -113,10 +117,8 @@ function validatedSession(attributes: Record<string, string> | undefined): Recor
     state.demoTopic = attributes.demoTopic;
     if (attributes.demoStoryteller) state.demoStoryteller = attributes.demoStoryteller;
   }
-  if (flow === "create" && isCreateStage(attributes?.createStage)) {
-    state.demoFlow = "create";
-    state.createStage = attributes.createStage;
-  }
+  const create = flow === "create" ? createStateFrom(attributes) : null;
+  if (create) Object.assign(state, createAttributes(create));
   if (attributes?.fallbackCount === "1" || attributes?.fallbackCount === "2") state.fallbackCount = attributes.fallbackCount;
   return state;
 }
@@ -157,21 +159,6 @@ function resumablePlay(event: AlexaRequestEnvelope, offsetInMilliseconds: number
   const play = token ? decodeStreamToken(token) : null;
   if (!play) return question(m.nothingToResume, m.reprompt);
   return audioControl([playDirective(play, offsetInMilliseconds, { locale })]);
-}
-
-function slotValue(event: AlexaRequestEnvelope, name: string): string | undefined {
-  const value = event.request.intent?.slots?.[name]?.value?.trim();
-  return value === undefined || value === "" ? undefined : value;
-}
-
-/** The canonical value of a custom-type slot when Alexa resolved it, otherwise the raw value (plan D4). */
-function resolvedValue(event: AlexaRequestEnvelope, name: string): string | undefined {
-  const authorities = event.request.intent?.slots?.[name]?.resolutions?.resolutionsPerAuthority ?? [];
-  for (const authority of authorities) {
-    const canonical = authority.status?.code === "ER_SUCCESS_MATCH" ? authority.values?.[0]?.value?.name?.trim() : undefined;
-    if (canonical) return canonical;
-  }
-  return slotValue(event, name);
 }
 
 /** Best-effort title from a play request that Alexa routed through CatchAllIntent. */
@@ -238,6 +225,24 @@ function textForIntent(event: AlexaRequestEnvelope, match: Matchers): IntentText
   }
 }
 
+/**
+ * An en-US request that starts the staged create flow, with the listener it names, if any:
+ * "create a story", "record story", "create a story for Sam" and "send Sam a spoken letter".
+ */
+function createEntry(event: AlexaRequestEnvelope, match: Matchers): { listener?: string } | null {
+  if (event.request.type !== "IntentRequest") return null;
+  const intent = event.request.intent?.name;
+  if (intent === "StartStoryIntent" || intent === "RecordStoryIntent") return {};
+  if (intent === "AppHandoffIntent") {
+    const listener = slotValue(event, "listeneralias");
+    return listener ? { listener } : {};
+  }
+  const text = intent === "CatchAllIntent" ? slotValue(event, "text") : undefined;
+  if (!text || match.howToCreate.test(text) || !(match.createStory.test(text) || match.createFor.test(text) || match.send.test(text))) return null;
+  const named = /\bfor\s+(\S+)\s*$/i.exec(text)?.[1] ?? /\bsend\s+(?!a\b|the\b|it\b|story\b)(\S+)/i.exec(text)?.[1];
+  return named ? { listener: named } : {};
+}
+
 /** `outcome`/`errorClass` for an agent-turn failure (phase-1.md section 1). */
 const KNOWN_ERROR_CODES = new Set([
   "session_not_found", "malformed", "http_error", "skill_secret_missing", "unsupported_theme",
@@ -253,7 +258,7 @@ function classifyError(error: unknown): { outcome: "agent_error" | "timeout" | "
 }
 
 type ResponseKey =
-  "no_response" | "general_prompt" | "welcome" | "theme_prompt" | "theme_recovery" | "draft_saved" | "draft_limit" | "draft_read" | "draft_missing" | "draft_read_retry" | "reaction_prompt" | "reaction_saved" | "reaction_dismissed" | "reaction_retry" | "reaction_missing" | "wish_start" | "wish_confirm" | "wish_saved" | "wish_retry" | "general_recovery" | "reaction_recovery" | "wish_recovery" | "agent_reply" | "playback_control" | "playback_retry" | "updates" | "updates_retry" | "handoff" | "credits_help" | "creation_help" | "canceled" | RecordingKey;
+  "no_response" | "general_prompt" | "welcome" | "theme_prompt" | "theme_recovery" | "draft_saved" | "draft_limit" | "draft_read" | "draft_missing" | "draft_read_retry" | "reaction_prompt" | "reaction_saved" | "reaction_dismissed" | "reaction_retry" | "reaction_missing" | "wish_start" | "wish_confirm" | "wish_saved" | "wish_retry" | "general_recovery" | "reaction_recovery" | "wish_recovery" | "agent_reply" | "playback_control" | "playback_retry" | "updates" | "updates_retry" | "handoff" | "credits_help" | "creation_help" | "canceled" | CreateKey;
 type InteractionResult = "completed" | "awaiting_input" | "fallback" | "retry" | "handoff" | "canceled" | "no_action";
 type Flow = "none" | "draft" | "reaction" | "wish" | "create";
 function flowOf(state: Record<string, string>): Flow {
@@ -347,7 +352,33 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
         return ask(m.launch, m.reprompt, "welcome");
       };
-      if (type === "LaunchRequest") return nextDemoUpdate();
+      // The staged create flow is English only (plan D1); its record's copy lives with the agent (D5).
+      const english = locale === "en-US";
+      const createContext = { event, publicBaseUrl: options.publicBaseUrl };
+      const runCreate = async (turn: CreateTurn): Promise<AlexaResponseEnvelope> => {
+        if (turn.record && options.agent.createSave) {
+          try {
+            await options.agent.createSave({ deviceUserId, record: turn.record });
+          } catch (error) {
+            // The session still carries the flow; only a later resume is lost.
+            log.warn("create_save_failed", { errorClass: classifyError(error).errorClass });
+          }
+        }
+        return mark(turn.key, turn.result, turn.response);
+      };
+      const resumeFromRecord = async (fromDone: boolean): Promise<AlexaResponseEnvelope | null> => {
+        if (!english || !options.agent.createCurrent) return null;
+        try {
+          const current = await options.agent.createCurrent({ deviceUserId });
+          const now = options.now?.() ?? Math.floor(Date.now() / 1000);
+          const turn = current.status === "found" ? resumeCreate(createContext, current, now, fromDone) : null;
+          return turn ? await runCreate(turn) : null;
+        } catch (error) {
+          log.warn("create_current_failed", { errorClass: classifyError(error).errorClass });
+          return null;
+        }
+      };
+      if (type === "LaunchRequest") return await resumeFromRecord(false) ?? nextDemoUpdate();
       const playlist = options.agent.playlist;
       const playlistResult = (reply: PlaylistReply): AlexaResponseEnvelope => {
         if (reply.action === "play" && reply.play && reply.token) {
@@ -439,15 +470,24 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         log.warn("apl_runtime_error", { errors: (event.request.errors ?? []).map((error) => `${error.type ?? "unknown"}:${error.reason ?? "unknown"}`) });
         return { ...EMPTY, sessionAttributes: state };
       }
-      // The staged recording step is English only (plan D1); a Done tap arrives as an APL UserEvent.
-      const recording = locale === "en-US" ? recordingTurn(event, state, options.publicBaseUrl) : null;
       const intent = event.request.intent?.name ?? "";
       if (type === "IntentRequest") {
         telemetry.intent = intent;
         const slots = loggedSlots(event);
         if (slots !== undefined) telemetry.slots = slots;
       }
-      if (recording) return mark(recording.key, recording.result, recording.response);
+      if (english) {
+        const create = createStateFrom(state);
+        if (create) return runCreate(continueCreate(createContext, create));
+        // A Done tap or "the end" after the session dropped while reading (SS2).
+        const done = type === "Alexa.Presentation.APL.UserEvent" && event.request.arguments?.[0] === "done";
+        if (done || intent === "TheEndIntent") {
+          const resumed = await resumeFromRecord(true);
+          if (resumed) return resumed;
+        }
+        const entry = createEntry(event, match);
+        if (entry) return runCreate(startCreate(entry.listener));
+      }
       if (type !== "IntentRequest") return ask(m.help);
 
       const observed = event.context.AudioPlayer?.token;

@@ -10,6 +10,7 @@ import { parseTakesManifest } from "./takes.ts";
 const SCRIPT = path.resolve(import.meta.dirname, "../../../scripts/add-demo-take.mjs");
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0 && spawnSync("ffprobe", ["-version"]).status === 0;
 if (!hasFfmpeg) console.warn("add-demo-take tests skipped: ffmpeg and ffprobe are not on PATH");
+const hasOpus = hasFfmpeg && spawnSync("ffmpeg", ["-hide_banner", "-encoders"], { encoding: "utf8" }).stdout.includes("libopus");
 
 function probe(file: string): Record<string, string> {
   const out = spawnSync("ffprobe", ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name,sample_rate,bit_rate,channels", "-of", "default=noprint_wrappers=1", file], { encoding: "utf8" });
@@ -35,11 +36,11 @@ describe.skipIf(!hasFfmpeg)("add-demo-take.mjs (R7)", () => {
   });
 
   test("converts to MP3 at 48 kbps, 24000 Hz, mono and registers all four variants", () => {
-    const result = run("--name", "owl", "--script", "Once upon a time, an owl.", "--start", "1", "--duration", "3", "--plain", source, "--effects", source, "--music", source, "--both", source, "--spike");
+    const result = run("--name", "owl", "--script", "Once upon a time, an owl.", "--start", "1", "--duration", "3", "--plain", source, "--effects", source, "--music", source, "--both", source);
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     const manifest = parseTakesManifest(JSON.parse(readFileSync(path.join(cwd, "fixtures/takes/manifest.json"), "utf8")));
-    expect(manifest.takes).toEqual([{ script: "Once upon a time, an owl.", files: { plain: "owl_plain.mp3", effects: "owl_plain.mp3", music: "owl_plain.mp3", both: "owl_plain.mp3" }, spike: true }]);
+    expect(manifest.takes).toEqual([{ script: "Once upon a time, an owl.", files: { plain: "owl_plain.mp3", effects: "owl_plain.mp3", music: "owl_plain.mp3", both: "owl_plain.mp3" } }]);
     const output = path.join(cwd, "fixtures/takes/owl_plain.mp3");
     expect(probe(output)).toEqual({ codec_name: "mp3", sample_rate: "24000", bit_rate: "48000", channels: "1" });
     const seconds = Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", output], { encoding: "utf8" }).stdout);
@@ -66,7 +67,8 @@ describe.skipIf(!hasFfmpeg)("add-demo-take.mjs (R7)", () => {
     expect(readFileSync(shared).equals(before)).toBe(true);
   });
 
-  test("refuses an unknown flag", () => {
+  test("refuses an unknown flag, including the removed --spike", () => {
+    expect(run("--name", "owl", "--script", "x", "--plain", source, "--spike").stderr).toMatch(/unknown option --spike/);
     const result = run("--name", "owl", "--script", "x", "--plian", source);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/unknown option --plian/);
@@ -84,5 +86,12 @@ describe.skipIf(!hasFfmpeg)("add-demo-take.mjs (R7)", () => {
     const result = run("--name", "../owl", "--script", "x", "--plain", source, "--effects", source, "--music", source, "--both", source);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/--name/);
+  });
+
+  test.skipIf(!hasOpus)("converts a WebM/Opus narration like the app's", () => {
+    const webm = path.join(cwd, "in", "narration.webm");
+    expect(spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=330:duration=2", "-ac", "1", "-ar", "48000", "-c:a", "libopus", webm]).status).toBe(0);
+    expect(run("--name", "owl", "--script", "Once upon a time, an owl.", "--effects", webm).status).toBe(0);
+    expect(probe(path.join(cwd, "fixtures/takes/owl_effects.mp3"))).toEqual({ codec_name: "mp3", sample_rate: "24000", bit_rate: "48000", channels: "1" });
   });
 });

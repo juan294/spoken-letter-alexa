@@ -5,7 +5,11 @@
 //
 //   node scripts/pull-fixture-story.mjs --list
 //   node scripts/pull-fixture-story.mjs <storyDocId> --storyteller "<display name>" [--id st_<slug>]
-//   node scripts/pull-fixture-story.mjs <storyDocId> --as-take <script-file> --variant <plain|effects|music|both>[,…] [--name <slug>]
+//   node scripts/pull-fixture-story.mjs <storyDocId> --as-take <script-file> --variant <plain|effects|music|both>[,…]
+//     [--narration <variant>[,…]] [--name <slug>]
+//
+// `--narration` pulls the story's voice-only narration (the app's WebM) for those mixes, such
+// as `plain`, and the final mix for the `--variant` ones.
 //
 // The story read uses a field mask of title, status, mix, icon, delivery time and space only:
 // never recipient, sender or content fields (ADR 0013). Only a story the Owner delivered
@@ -25,7 +29,7 @@ const MEDIA_BUCKET = "gs://spoken-letter-media";
 const ADD_DEMO_TAKE = path.join(import.meta.dirname, "add-demo-take.mjs");
 const VARIANTS = ["plain", "effects", "music", "both"];
 
-export const STORY_FIELDS = ["title", "status", "finalMixRef", "mixStatus", "iconRef", "downloadedAt", "spaceId"];
+export const STORY_FIELDS = ["title", "status", "finalMixRef", "mixStatus", "narrationRef", "iconRef", "downloadedAt", "spaceId"];
 const LIST_FIELDS = ["title", "downloadedAt", "finalMixDurationSeconds"];
 
 /** The fixtures/README.md card: the 16×16 icon, hard-edged, on the brand's ink and lamplight ground. */
@@ -116,18 +120,38 @@ export async function pullStory(deps, docId, { storyteller, id }) {
   return { id: storyId, title: story.title };
 }
 
-/** Pulls the story's current final mix as one or more mixes of a demo take (phase 6, plan D3). */
-export async function pullTake(deps, docId, { name, scriptFile, variant }) {
+const variantList = (flag, value = "") => {
+  const variants = value.split(",").filter(Boolean);
+  if (variants.some((each) => !VARIANTS.includes(each))) throw new Error(`${flag} must be one of ${VARIANTS.join(", ")} (comma-separated)`);
+  return variants;
+};
+
+/**
+ * Pulls the story's current final mix, and optionally its voice-only narration, as mixes of a
+ * demo take (phase 6, plan D3).
+ */
+export async function pullTake(deps, docId, { name, scriptFile, variant, narration }) {
   const { run, root = "." } = deps;
-  const variants = variant.split(",");
-  if (variants.some((each) => !VARIANTS.includes(each))) throw new Error(`--variant must be one of ${VARIANTS.join(", ")} (comma-separated)`);
+  const mixVariants = variantList("--variant", variant);
+  const narrationVariants = variantList("--narration", narration);
+  if (mixVariants.length + narrationVariants.length === 0) throw new Error("--variant must be one of plain, effects, music, both (comma-separated)");
   const story = await deliveredStory(deps, docId);
+  if (narrationVariants.length > 0 && !story.narrationRef) throw new Error(`story ${docId}: no narrationRef`);
   const scratch = mkdtempSync(path.join(tmpdir(), "sla-take-"));
   try {
-    const mix = path.join(scratch, "final.mp3");
-    run("gcloud", ["storage", "cp", mediaSource(story.finalMixRef), mix]);
+    const sources = [];
+    if (mixVariants.length > 0) {
+      const mix = path.join(scratch, "final.mp3");
+      run("gcloud", ["storage", "cp", mediaSource(story.finalMixRef), mix]);
+      sources.push(...mixVariants.map((each) => [each, mix]));
+    }
+    if (narrationVariants.length > 0) {
+      const voice = path.join(scratch, `narration${path.extname(story.narrationRef)}`);
+      run("gcloud", ["storage", "cp", mediaSource(story.narrationRef), voice]);
+      sources.push(...narrationVariants.map((each) => [each, voice]));
+    }
     const script = readFileSync(scriptFile, "utf8").trim();
-    run(process.execPath, [ADD_DEMO_TAKE, "--name", name ?? slug(story.title), "--script", script, ...variants.flatMap((each) => [`--${each}`, mix])], { cwd: root });
+    run(process.execPath, [ADD_DEMO_TAKE, "--name", name ?? slug(story.title), "--script", script, ...sources.flatMap(([each, file]) => [`--${each}`, file])], { cwd: root });
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -160,13 +184,13 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
         console.log(`${story.id}  ${String(story.downloadedAt).slice(0, 10)}  ${story.durationSeconds}s  ${story.title}`);
       }
     } else if (args[0] && option("--as-take")) {
-      await pullTake(deps, args[0], { name: option("--name"), scriptFile: option("--as-take"), variant: option("--variant") ?? "" });
+      await pullTake(deps, args[0], { name: option("--name"), scriptFile: option("--as-take"), variant: option("--variant"), narration: option("--narration") });
       console.log(`registered the take from ${args[0]}`);
     } else if (args[0] && option("--storyteller")) {
       const { id, title } = await pullStory(deps, args[0], { storyteller: option("--storyteller"), id: option("--id") });
       console.log(`pulled ${id}: "${title}" (check the title and audio for a child's name before committing)`);
     } else {
-      console.error("usage: pull-fixture-story.mjs --list | <storyDocId> --storyteller <name> [--id st_<slug>] | <storyDocId> --as-take <script-file> --variant <v>[,…] [--name <slug>]");
+      console.error("usage: pull-fixture-story.mjs --list | <storyDocId> --storyteller <name> [--id st_<slug>] | <storyDocId> --as-take <script-file> --variant <v>[,…] [--narration <v>[,…]] [--name <slug>]");
       process.exit(2);
     }
   } catch (error) {

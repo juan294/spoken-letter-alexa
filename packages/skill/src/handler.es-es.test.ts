@@ -62,14 +62,15 @@ afterEach(() => {
 });
 
 type Step = { name: string; slots?: Record<string, SlotInput>; launch?: boolean };
-const JOURNEYS: [string, Step[], Partial<AgentClient>?][] = [
+const JOURNEYS: [string, Step[], Partial<AgentClient>?, Record<string, string>?][] = [
   ["launch", [{ name: "", launch: true }]],
   ["help", [{ name: "AMAZON.HelpIntent" }]],
   ["two fallbacks", [{ name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }]],
   ["resume, start over and previous with nothing playing", [{ name: "AMAZON.ResumeIntent" }, { name: "AMAZON.StartOverIntent" }, { name: "AMAZON.PreviousIntent" }]],
   ["loop and shuffle", [{ name: "AMAZON.LoopOnIntent" }, { name: "AMAZON.ShuffleOffIntent" }]],
   ["pause and stop", [{ name: "AMAZON.PauseIntent" }, { name: "AMAZON.StopIntent" }]],
-  ["draft fallbacks then cancel", [{ name: "StartStoryIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }]],
+  // English creation is the staged create flow (staged demo plan D1), so the draft starts from its session state.
+  ["draft fallbacks then cancel", [{ name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }], {}, { demoFlow: "draft" }],
   ["wish fallbacks then cancel", [{ name: "WishStoryIntent", slots: { wishtopic: { value: "space", resolved: "space" } } }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }]],
   ["reaction fallbacks then cancel", [{ name: "", launch: true }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }],
     { demoNext: vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_owl", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan" } }), demoReact: vi.fn().mockResolvedValue({ status: "dismissed" }) }],
@@ -77,10 +78,10 @@ const JOURNEYS: [string, Step[], Partial<AgentClient>?][] = [
   ["reading a missing draft", [{ name: "ReadDemoDraftIntent" }], { latestDraft: vi.fn().mockResolvedValue({ status: "missing" }) }],
 ];
 
-async function run(locale: string, steps: Step[], overrides: Partial<AgentClient> = {}) {
+async function run(locale: string, steps: Step[], overrides: Partial<AgentClient> = {}, initial: Record<string, string> = {}) {
   const info = vi.spyOn(log, "info");
   const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent(overrides) });
-  let attributes: Record<string, string> = {};
+  let attributes: Record<string, string> = initial;
   const responses: AlexaResponseEnvelope[] = [];
   for (const step of steps) {
     const event = step.launch ? request(locale, { type: "LaunchRequest" }, attributes) : intent(locale, step.name, step.slots, attributes);
@@ -94,9 +95,9 @@ async function run(locale: string, steps: Step[], overrides: Partial<AgentClient
 }
 
 describe("es-ES journeys match en-US structure (E1)", () => {
-  test.each(JOURNEYS)("%s", async (_label, steps, overrides) => {
-    const english = await run("en-US", steps, overrides);
-    const spanish = await run("es-ES", steps, overrides);
+  test.each(JOURNEYS)("%s", async (_label, steps, overrides, initial) => {
+    const english = await run("en-US", steps, overrides, initial);
+    const spanish = await run("es-ES", steps, overrides, initial);
     expect(spanish.lines.map((line) => [line.responseKey, line.interactionResult])).toEqual(english.lines.map((line) => [line.responseKey, line.interactionResult]));
     spanish.responses.forEach((response, index) => {
       const en = english.responses[index]!;

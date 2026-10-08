@@ -1,7 +1,9 @@
 import { CREATE_MESSAGES } from "../create-messages.ts";
+import status from "./status.json" with { type: "json" };
 import teleprompter from "./teleprompter.json" with { type: "json" };
 
 export const TELEPROMPTER_TOKEN = "teleprompter";
+export const STATUS_TOKEN = "status";
 
 export type AplCommand =
   | { type: "Sequential"; commands: AplCommand[] }
@@ -10,6 +12,7 @@ export type AplCommand =
 
 export type AplDirective =
   | { type: "Alexa.Presentation.APL.RenderDocument"; token: string; document: typeof teleprompter; datasources: ReturnType<typeof teleprompterDatasource> }
+  | { type: "Alexa.Presentation.APL.RenderDocument"; token: string; document: typeof status; datasources: { status: StatusScreen } }
   | { type: "Alexa.Presentation.APL.ExecuteCommands"; token: string; commands: AplCommand[] };
 
 /** Plan D8: the default 70-word script reads aloud in about 25 seconds. */
@@ -30,28 +33,39 @@ export function readMs(script: string): number {
   return Math.round(words(script).length * MS_PER_WORD);
 }
 
-/** The script's height in screens, by greedy word wrap at the estimated line length. */
+/** The script's height in screens, by greedy word wrap at the estimated line length; a blank line separates paragraphs. */
 export function estimatedPages(script: string): number {
-  let lines = 0;
-  let line = 0;
-  for (const word of words(script)) {
-    if (line === 0 || line + 1 + word.length > CHARS_PER_LINE) {
-      lines += 1;
-      line = word.length;
-    } else {
-      line += 1 + word.length;
+  const paragraphs = script.trim().split(/\n\s*\n/);
+  let lines = paragraphs.length - 1;
+  for (const paragraph of paragraphs) {
+    let line = 0;
+    for (const word of words(paragraph)) {
+      if (line === 0 || line + 1 + word.length > CHARS_PER_LINE) {
+        lines += 1;
+        line = word.length;
+      } else {
+        line += 1 + word.length;
+      }
     }
   }
   return lines / LINES_PER_PAGE;
 }
 
-export function teleprompterDatasource(script: string) {
+/** APL Text markup: the script's blank-line paragraphs become line breaks; anything else is escaped. */
+export function aplText(script: string): string {
+  return script.trim().split(/\n\s*\n/).map((paragraph) => paragraph.replace(/\s+/g, " ")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")).join("<br><br>");
+}
+
+/** In preview (before "record") the countdown and the Done button are hidden. */
+export function teleprompterDatasource(script: string, preview = false) {
   return {
     teleprompter: {
-      title: CREATE_MESSAGES.teleprompterTitle,
-      script,
+      title: preview ? CREATE_MESSAGES.scriptTitle : CREATE_MESSAGES.teleprompterTitle,
+      script: aplText(script),
       recordingLabel: CREATE_MESSAGES.recordingLabel,
       doneLabel: CREATE_MESSAGES.doneLabel,
+      preview,
     },
   };
 }
@@ -77,6 +91,18 @@ export function recordingCommands(script: string): AplCommand[] {
       ...scroll,
     ],
   }];
+}
+
+/** The script on screen before recording, scrolled by touch (script line 27). */
+export function scriptPreviewDirectives(script: string): AplDirective[] {
+  return [{ type: "Alexa.Presentation.APL.RenderDocument", token: TELEPROMPTER_TOKEN, document: teleprompter, datasources: teleprompterDatasource(script, true) }];
+}
+
+export type StatusScreen = { eyebrow: string; heading: string; detail: string };
+
+/** Who the story is for, its title and where it stands, after the recording. */
+export function statusDirectives(screen: StatusScreen): AplDirective[] {
+  return [{ type: "Alexa.Presentation.APL.RenderDocument", token: STATUS_TOKEN, document: status, datasources: { status: screen } }];
 }
 
 export function teleprompterDirectives(script: string): AplDirective[] {

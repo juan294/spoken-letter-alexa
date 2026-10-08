@@ -14,10 +14,12 @@ import {
   createSigV4Fetch,
   createTranscriber,
   DataUrlSpeechStore,
+  DynamoCreationStore,
   DynamoDemoDraftStore,
   DynamoDemoUpdateStore,
   DynamoSessionStore,
   DynamoPlaylistStore,
+  MemoryCreationStore,
   MemoryDemoDraftStore,
   MemoryDemoUpdateStore,
   MemorySessionStore,
@@ -201,6 +203,11 @@ export async function bootstrap(env: ServerEnv, options: { allowGenerated: boole
     store: env.DEMO_STATE_STORE === "dynamo"
       ? new DynamoDemoDraftStore({ client: documentClient(env), tableName: env.DEMO_STATE_TABLE })
       : new MemoryDemoDraftStore(),
+  };
+  agentDeps.creations = {
+    store: env.DEMO_STATE_STORE === "dynamo"
+      ? new DynamoCreationStore({ client: documentClient(env), tableName: env.DEMO_STATE_TABLE })
+      : new MemoryCreationStore(),
   };
   agentDeps.updates = {
     store: env.DEMO_STATE_STORE === "dynamo"

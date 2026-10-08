@@ -73,6 +73,16 @@ describe("bootstrap", () => {
     await expect(latest.json()).resolves.toEqual({ status: "none" });
   });
 
+  test("local creation records use an in-memory store behind the skill credential", async () => {
+    const secret = "local-skill-command-secret-0123456789";
+    const env = readServerEnv({ ...BASE, ALEXA_SKILL_COMMAND_SECRET: secret });
+    const { app } = await bootstrap(env, { allowGenerated: true });
+    const post = (path: string, body: unknown) => app.request(path, { method: "POST",
+      headers: { "content-type": "application/json", "x-alexa-skill-secret": secret }, body: JSON.stringify(body) });
+    expect((await post("/agent/demo/create/save", { deviceUserId: "parent-device", record: { stage: "review", listenerId: "samuel" } })).status).toBe(200);
+    await expect((await post("/agent/demo/create/current", { deviceUserId: "parent-device" })).json()).resolves.toMatchObject({ status: "found", record: { stage: "review" } });
+  });
+
   test("loads validated fixture updates into the authenticated demo inbox", async () => {
     const secret = "local-skill-command-secret-0123456789";
     const env = readServerEnv({ AGENT_OFFLINE: "1", ALEXA_SKILL_COMMAND_SECRET: secret });

@@ -30,4 +30,4 @@ export function speak(speech: string | OutputSpeech, options: { reprompt?: strin
 /** A question stays open with the caller's flow-specific reprompt. */
 export const question = (speech: string | OutputSpeech, reprompt: string) => speak(speech, { reprompt, endSession: false });
 /** A closing line, optionally with playback: the session ends. */
-export const closing = (text: string, directives?: Directive[]) => speak(text, { endSession: true, ...(directives && { directives }) });
+export const closing = (speech: string | OutputSpeech, directives?: Directive[]) => speak(speech, { endSession: true, ...(directives && { directives }) });

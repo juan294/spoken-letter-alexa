@@ -60,7 +60,7 @@ describe("pull-fixture-story.mjs (S5)", () => {
   });
 
   test("the story field mask is exactly the listed fields and names no recipient, sender or content", async () => {
-    expect([...STORY_FIELDS].sort()).toEqual(["downloadedAt", "finalMixRef", "iconRef", "mixStatus", "spaceId", "status", "title"]);
+    expect([...STORY_FIELDS].sort()).toEqual(["downloadedAt", "finalMixRef", "iconRef", "mixStatus", "narrationRef", "spaceId", "status", "title"]);
     const { calls, fetch } = fakeFirestore({ doc1: delivered });
     await pullStory(deps(fetch), "doc1", { storyteller: "Uncle Theo" });
     const get = new URL(calls[0]!.url);
@@ -157,6 +157,24 @@ describe("pull-fixture-story.mjs (S5)", () => {
     expect(take.slice(2, 6)).toEqual(["--name", "fox", "--script", "Once upon a time, a fox."]);
     expect(take[6]).toBe("--music");
     expect(take[7]).toBe(commands[0]?.at(-1));
+  });
+
+  test("--as-take --narration pulls the voice-only narration for its variants and the mix for the rest", async () => {
+    const scriptFile = path.join(root, "script.txt");
+    writeFileSync(scriptFile, "Once upon a time, a fox.\n");
+    const { fetch } = fakeFirestore({ doc1: { ...delivered, narrationRef: { stringValue: "spaces/space1/stories/doc1/narration-n1.webm" } } });
+    await pullTake(deps(fetch), "doc1", { name: "fox", scriptFile, variant: "effects,music,both", narration: "plain" });
+    const copies = commands.filter((command) => command[0] === "gcloud").map((command) => command[3]);
+    expect(copies).toEqual(["gs://spoken-letter-media/spaces/space1/stories/doc1/final.mp3", "gs://spoken-letter-media/spaces/space1/stories/doc1/narration-n1.webm"]);
+    const take = commands.at(-1)!;
+    expect(take.slice(6)).toEqual(["--effects", commands[0]?.at(-1), "--music", commands[0]?.at(-1), "--both", commands[0]?.at(-1), "--plain", commands[1]?.at(-1)]);
+    expect(commands[1]?.at(-1)).toMatch(/narration\.webm$/);
+  });
+
+  test("--as-take --narration refuses a story without a narration", async () => {
+    const { fetch } = fakeFirestore({ doc1: delivered });
+    await expect(pullTake(deps(fetch), "doc1", { name: "fox", scriptFile: "x", variant: "", narration: "plain" })).rejects.toThrow(/no narrationRef/);
+    expect(commands).toEqual([]);
   });
 
   test("--as-take refuses an unknown variant before any call", async () => {

@@ -1,0 +1,48 @@
+{
+  "type": "APL",
+  "version": "2024.3",
+  "theme": "dark",
+  "description": "Spoken Letter story status: who the story is for, its title and where it stands. Target: hub landscape small (960x480) and up.",
+  "mainTemplate": {
+    "parameters": [
+      "payload"
+    ],
+    "items": [
+      {
+        "type": "Container",
+        "width": "100vw",
+        "height": "100vh",
+        "backgroundColor": "#2E2738",
+        "justifyContent": "center",
+        "paddingLeft": "64dp",
+        "paddingRight": "64dp",
+        "items": [
+          {
+            "type": "Text",
+            "text": "${payload.status.eyebrow}",
+            "color": "#E4A45C",
+            "fontSize": "24dp",
+            "maxLines": 1
+          },
+          {
+            "type": "Text",
+            "text": "${payload.status.heading}",
+            "color": "#F7F1E7",
+            "fontSize": "56dp",
+            "fontWeight": "bold",
+            "maxLines": 2,
+            "paddingTop": "12dp"
+          },
+          {
+            "type": "Text",
+            "text": "${payload.status.detail}",
+            "color": "#F7F1E7",
+            "fontSize": "28dp",
+            "maxLines": 2,
+            "paddingTop": "16dp"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -51,6 +51,12 @@ describe("generateInteractionModel", () => {
         "StartPlaylistOverIntent",
         "RecordStoryIntent",
         "TheEndIntent",
+        "ChooseListenerIntent",
+        "StoryDetailIntent",
+        "PlaybackIntent",
+        "StoryTitleIntent",
+        "SoundChoiceIntent",
+        "SendStoryIntent",
         "PlayStoryIntent",
         "WhatIsNewIntent",
       ].sort(),
@@ -160,30 +166,53 @@ describe("generateInteractionModel", () => {
     const creditSamples = new Set(byName.CreditHelpIntent!.samples);
     // The staged recording step (plan D2): these fixed intents may say "record" and nothing else denied.
     const RECORDING_SAMPLES = new Set([...byName.RecordStoryIntent!.samples, ...byName.TheEndIntent!.samples]);
+    // The staged send step (plan D2, C13): only its fixed samples may say "send".
+    const SEND_SAMPLES = new Set(byName.SendStoryIntent!.samples);
     for (const sample of samples) {
       // These fixed intents only explain the app handoff. Raw training stays denied.
       const safeHandoff = handoffSamples.has(sample);
       const safeCreditHelp = creditSamples.has(sample);
       const safeRecording = RECORDING_SAMPLES.has(sample);
-      if (safeRecording) expect(utteranceAllowed(sample.replaceAll("record", ""))).toBe(true);
+      const safeSend = SEND_SAMPLES.has(sample);
+      // "record" alone is the script's own cue: nothing is left to check once it is removed.
+      if (safeRecording) expect(sample === "record" || utteranceAllowed(sample.replaceAll("record", ""))).toBe(true);
+      else if (safeSend) expect(utteranceAllowed(sample.replaceAll("send", ""))).toBe(true);
       else if (!safeHandoff && !safeCreditHelp) expect(utteranceAllowed(sample)).toBe(true);
       expect(sample).toMatch(/^[a-z0-9 {}']+$/);
       expect(sample).not.toMatch(/\b(?:demo|fixture)\b/i);
       for (const denied of CLASS_C_DENYLIST) {
-        if ((safeHandoff && denied.fragment === "send") || (safeCreditHelp && denied.fragment === "credit") || (safeRecording && denied.fragment === "record")) continue;
+        if (((safeHandoff || safeSend) && denied.fragment === "send") || (safeCreditHelp && denied.fragment === "credit") || (safeRecording && denied.fragment === "record")) continue;
         expect(sample.includes(denied.fragment)).toBe(false);
       }
       expect(sample).not.toMatch(/\b(kid|kids|child|children|son|daughter)\b/);
     }
     expect(samples.filter((sample) => !RECORDING_SAMPLES.has(sample)).some((sample) => /record|audio/.test(sample))).toBe(false);
+    expect(samples.filter((sample) => !SEND_SAMPLES.has(sample) && !handoffSamples.has(sample)).some((sample) => /\bsend\b/.test(sample))).toBe(false);
   });
 
-  test("R5 the English-only recording intents carry the planned samples", () => {
-    expect(EN_US_ONLY_INTENTS).toEqual(["RecordStoryIntent", "TheEndIntent"]);
-    expect(byName.RecordStoryIntent?.samples).toEqual(expect.arrayContaining(["record story", "record my story", "start recording", "i'm ready to record", "record again"]));
+  test("R5 the English-only create intents carry the script's own phrases", () => {
+    expect(EN_US_ONLY_INTENTS).toEqual(["RecordStoryIntent", "TheEndIntent", "ChooseListenerIntent", "StoryDetailIntent", "PlaybackIntent", "StoryTitleIntent", "SoundChoiceIntent", "SendStoryIntent"]);
+    expect(byName.RecordStoryIntent?.samples).toEqual(expect.arrayContaining(["record", "re record", "record story", "record my story", "start recording", "i'm ready to record", "record again"]));
+    expect(byName.PlaybackIntent?.samples).toContain("playback");
+    expect(byName.SendStoryIntent?.samples).toContain("send story");
+    expect(byName.SoundChoiceIntent?.samples).toContain("yes add {sound}");
+    expect(byName.StoryDetailIntent?.samples).toEqual(expect.arrayContaining(["an {detail}", "they {detail}"]));
     expect(byName.TheEndIntent?.samples).toEqual(expect.arrayContaining(["the end", "that's the end", "stop recording", "i'm done reading"]));
     expect(byName.RecordStoryIntent?.slots).toBeUndefined();
     expect(byName.TheEndIntent?.slots).toBeUndefined();
+  });
+
+  test("the create slot types come from the fixture: the listener, the story's title and the four mixes", () => {
+    const types = Object.fromEntries(model.interactionModel.languageModel.types.map((type) => [type.name, type.values]));
+    expect(types.ListenerName).toEqual([{ name: { value: "Samuel", synonyms: ["Sam"] } }]);
+    expect(types.StoryTitle).toEqual([{ name: { value: "Sam on the Moon" } }]);
+    expect(types.SoundChoice?.map((value) => value.name.value)).toEqual(["both", "music", "effects", "plain"]);
+    expect(types.SoundChoice?.[0]?.name.synonyms).toContain("add both");
+  });
+
+  test("story-answer carriers never prefix a play request", () => {
+    expect(() => { assertNoCarrierCollision(byName.PlayStoryIntent!.samples, byName.StoryDetailIntent!.samples); }).not.toThrow();
+    expect(() => { assertNoCarrierCollision(["a story about {title}"], ["a {detail}"]); }).toThrow(/a story about/);
   });
 
   test("training phrasings are appended to the catch-all, deduplicated and normalised", () => {

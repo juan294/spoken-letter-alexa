@@ -6,4 +6,4 @@ export const STORY_FIELDS: readonly string[];
 export function mediaSource(ref: string): string;
 export function listStories(deps: { fetch: Fetch; token: string }): Promise<{ id: string; title: string; downloadedAt: string; durationSeconds: number }[]>;
 export function pullStory(deps: Deps, docId: string, options: { storyteller: string; id?: string }): Promise<{ id: string; title: string }>;
-export function pullTake(deps: Deps, docId: string, options: { name?: string; scriptFile: string; variant: string }): Promise<void>;
+export function pullTake(deps: Deps, docId: string, options: { name?: string | undefined; scriptFile: string; variant?: string | undefined; narration?: string | undefined }): Promise<void>;

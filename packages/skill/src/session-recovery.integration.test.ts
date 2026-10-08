@@ -1,6 +1,7 @@
 import { log } from "@spoken-letter-alexa/shared";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { MemoryCreationStore } from "../../agent/src/create-flow.ts";
 import { type DraftGenerator, MemoryDemoDraftStore } from "../../agent/src/demo-drafts.ts";
 import { MemoryPlaylistStore } from "../../agent/src/playlist.ts";
 import { createAgentApp } from "../../agent/src/routes.ts";
@@ -31,6 +32,7 @@ async function rehearsal(generator: DraftGenerator = () => Promise.resolve(choic
     speech: { synthesize: () => Promise.resolve(null) }, transcribe: () => Promise.resolve(""),
     demoToken: mcp.serviceToken, offline: true,
     playlist: { store: new MemoryPlaylistStore(), secret: SECRET }, drafts: { store: drafts, generator },
+    creations: { store: new MemoryCreationStore() },
   });
   const requests: { path: string; status: number }[] = [];
   const network: typeof fetch = async (input, init) => {
@@ -73,6 +75,8 @@ async function rehearsal(generator: DraftGenerator = () => Promise.resolve(choic
     drafts, sessions, requests,
     state: () => drafts.get(deviceSessionId(DEVICE_ID)),
     turn: (name: string, slots: Record<string, string> = {}) => submit(eventFor(name, slots)),
+    /** A draft prompt already in the session: English creation is the staged create flow now (staged demo plan D1). */
+    draft: () => { attributes = { demoFlow: "draft" }; },
     open: () => { attributes = {}; sessionIndex += 1; return submit(eventFor("", {}, true)); },
     duplicate: () => { if (!previous) throw new Error("No prior turn"); return submit(previous); },
   };
@@ -84,7 +88,8 @@ describe("real skill session recovery rehearsal", () => {
   test("I1 two fallbacks make no write and one bare theme produces exact receipt readback", async () => {
     const info = vi.spyOn(log, "info");
     const h = await rehearsal();
-    const start = await h.turn("StartStoryIntent");
+    h.draft();
+    const start = await h.turn("AMAZON.HelpIntent");
     expect(start.response.reprompt?.outputSpeech.ssml).toMatch(/mermaids.*space/i);
     expect(await h.state()).toBeNull();
     await h.turn("AMAZON.FallbackIntent");
@@ -105,8 +110,8 @@ describe("real skill session recovery rehearsal", () => {
     const turns = info.mock.calls.filter(([event]) => event === "skill_turn").map(([, fields]) => fields as SafeTurn);
     expect(turns).toHaveLength(5);
     expect(turns.map((turn) => turn.interactionResult)).toEqual(["awaiting_input", "fallback", "fallback", "completed", "completed"]);
-    expect(turns.map((turn) => turn.responseKey)).toEqual(["theme_prompt", "theme_recovery", "theme_recovery", "draft_saved", "draft_read"]);
-    expect(turns.map((turn) => [turn.flowBefore, turn.flowAfter])).toEqual([["none", "draft"], ["draft", "draft"], ["draft", "draft"], ["draft", "none"], ["none", "none"]]);
+    expect(turns.map((turn) => turn.responseKey)).toEqual(["theme_recovery", "theme_recovery", "theme_recovery", "draft_saved", "draft_read"]);
+    expect(turns.map((turn) => [turn.flowBefore, turn.flowAfter])).toEqual([["draft", "draft"], ["draft", "draft"], ["draft", "draft"], ["draft", "none"], ["none", "none"]]);
     for (const turn of turns) expect(turn.sessionHash).toMatch(/^[a-f0-9]{64}$/);
     expect(new Set(turns.map((turn) => turn.sessionHash)).size).toBe(1);
     expect(new Set(turns.map((turn) => turn.requestHash)).size).toBe(5);
@@ -121,7 +126,7 @@ describe("real skill session recovery rehearsal", () => {
       generationCalls += 1;
       return generationCalls === 1 ? Promise.reject(new Error("private model failure")) : Promise.resolve(choices);
     });
-    await h.turn("StartStoryIntent");
+    h.draft();
     const failed = await h.turn("ThemeIntent", { theme: "forest" });
     expect(speech(failed)).toMatch(/no draft was saved/i);
     expect(failed.sessionAttributes).toEqual({ demoFlow: "draft" });
@@ -137,24 +142,24 @@ describe("real skill session recovery rehearsal", () => {
     expect(generationCalls).toBe(2);
     expect(h.requests.map((request) => request.status)).toEqual([503, 200, 200]);
     const turns = info.mock.calls.filter(([event]) => event === "skill_turn").map(([, fields]) => fields as SafeTurn);
-    expect(turns[1]).toMatchObject({ outcome: "rejected", errorClass: "AgentHttpError:draft_unavailable", interactionResult: "retry", responseKey: "theme_recovery" });
-    expect(turns[2]?.requestHash).toBe(turns[3]?.requestHash);
+    expect(turns[0]).toMatchObject({ outcome: "rejected", errorClass: "AgentHttpError:draft_unavailable", interactionResult: "retry", responseKey: "theme_recovery" });
+    expect(turns[1]?.requestHash).toBe(turns[2]?.requestHash);
     expect(JSON.stringify(turns)).not.toContain("private model failure");
   });
 
   test("I3 cancellation and reopening discard pending entry, fresh explicit flow works", async () => {
     const h = await rehearsal();
-    await h.turn("StartStoryIntent");
+    h.draft();
     const canceled = await h.turn("AMAZON.CancelIntent");
     expect(canceled.sessionAttributes).toEqual({});
     await h.turn("ThemeChoiceIntent", { drafttheme: "mermaids" });
     expect(await h.state()).toBeNull();
-    await h.turn("StartStoryIntent");
+    h.draft();
     await h.open();
     await h.turn("ThemeChoiceIntent", { drafttheme: "space" });
     expect(await h.state()).toBeNull();
     expect(h.requests.filter((request) => request.path === "/agent/demo/draft")).toHaveLength(0);
-    await h.turn("StartStoryIntent");
+    h.draft();
     const saved = await h.turn("ThemeIntent", { theme: "animals" });
     expect(speech(saved)).toMatch(/saved your story draft/i);
     expect((await h.state())?.receipts).toHaveLength(1);
@@ -164,12 +169,12 @@ describe("real skill session recovery rehearsal", () => {
   test("I4 handoff, unsupported input, and playback never turn names or playback into drafts", async () => {
     const info = vi.spyOn(log, "info");
     const h = await rehearsal();
-    await h.turn("StartStoryIntent");
+    h.draft();
     const named = await h.turn("CatchAllIntent", { text: "create a story for Lily" });
-    expect(named.sessionAttributes).toEqual({});
+    expect(named.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
     expect(speech(named)).not.toContain("Lily");
     expect(await h.state()).toBeNull();
-    await h.turn("StartStoryIntent");
+    h.draft();
     const unsupported = await h.turn("ThemeIntent", { theme: "for Lily" });
     expect(speech(unsupported)).toMatch(/no draft was saved/i);
     expect(speech(unsupported)).not.toContain("Lily");
@@ -182,7 +187,7 @@ describe("real skill session recovery rehearsal", () => {
     const session = await h.sessions.get(deviceSessionId(DEVICE_ID));
     expect(session).not.toBeNull();
     expect(JSON.stringify(session)).not.toContain("Lily");
-    await h.turn("StartStoryIntent");
+    h.draft();
     const saved = await h.turn("ThemeChoiceIntent", { drafttheme: "mermaids" });
     expect(speech(saved)).toMatch(/saved your story draft/i);
     const state = await h.state();
