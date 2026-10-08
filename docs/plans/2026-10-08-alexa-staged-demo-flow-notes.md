@@ -186,3 +186,27 @@ Identity sha256 `97cad23b…4d45`, 660 files, unchanged before and after the run
 - It decides where `CreateStage` lives.
 
 Phase 2 stays independent and waits for the Owner's story choices.
+
+## Phase 1 release (2026-10-08)
+
+The Owner accepted Phase 1 and authorized steps 1–4: the local merge, `pnpm build`, the two CDK stack deploys and `ask deploy`. The Owner then authorized continuing with Phase 2.
+
+1. **Merge.** `develop` was fast-forwarded to `e26e8b8` (`feat/demo-spike`), the tree the gate verified. Nothing was pushed. `main` was not updated: it is still at `c2c8316`, and the deployed code is `develop`'s. `docs/release.md` says a release merges `develop` into `main` first.
+2. **Build.** `pnpm build` passed. The skill bundle contains the takes manifest and the teleprompter document.
+3. **CDK.**
+   - **Diff.** Read-only `cdk diff SpokenLetterAlexaSkill SpokenLetterAlexaSimulator --exclusively`: code-asset changes only, with no IAM or resource changes. They were the skill Lambda, the two notification Lambdas (their bundle picks up `develop`'s shared code, including the undeployed es-ES work the Owner authorized for AWS on 2026-10-07) and the fixtures `BucketDeployment` source.
+   - **`SpokenLetterAlexaSkill`:** deployed (✅, 30.5 s).
+   - **`SpokenLetterAlexaSimulator`:** not deployed. Asset publishing of `Fixtures/Asset1` hung twice: about 16 minutes, then about 17 minutes, with near-zero CPU and S3 connections open. The zip never reached the CDK staging bucket, and both runs were stopped before CloudFormation. The stack stayed `UPDATE_COMPLETE` from 2026-09-29.
+   - **Consequence:** `fixtures/takes/` is not on S3 yet, so take playback (D3) has nothing to play until this stack deploys.
+   - **API.** The API stack was not part of this authorization. Per es-ES SS4, Spanish sessions keep English backend lines until it deploys; nothing fails.
+4. **`ask deploy`.** Passed with ask-cli 2.30.7; the models built at 13:37. Amazon accepted the APL interface without `supportedViewports` (F8 resolved).
+   - **Read-back** of the development stage: the interfaces are `AUDIO_PLAYER` and `ALEXA_PRESENTATION_APL`. en-US has 38 intents, including `RecordStoryIntent` and `TheEndIntent`; es-ES has 36, without them.
+   - The ASK CLI's rewrite of `skill.json` was semantically equal and was discarded.
+
+**Device check D1–D5:** not run. D1 and D2 can run now, since the teleprompter and the window don't depend on S3. D3 needs the simulator deploy.
+
+## Phase 2 status (2026-10-08)
+
+- A worktree was created: `/Users/juan/code/spoken-letter-alexa-storytellers` on `feat/more-storytellers` off `e26e8b8`. No changes yet.
+- Writing `pull-fixture-story.mjs`'s first test was blocked by the session's permission classifier as data exfiltration. The plan copies production stories from the Owner's account into this public repository, with per-story Owner consent. This needs the Owner's decision: allow it, or run the pulls themselves.
+- `--list` has not been run. The Owner's story choices and per-story confirmations are still needed (phase-2.md Entry).
