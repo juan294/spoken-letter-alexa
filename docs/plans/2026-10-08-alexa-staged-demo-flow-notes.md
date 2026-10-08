@@ -23,7 +23,7 @@
 - No other tests ran for these planning-only files.
 
 **Open items** (none blocks plan acceptance):
-- Phase 2 needs the Owner's MP3s, with consent and no-child-name confirmations.
+- Phase 2 needs the Owner's story picks (from `pull-fixture-story.mjs --list`), with consent and no-child-name confirmations. The MP3s are pulled by script, not exported by hand.
 - Phase 6 needs Jordan's script.
 - `graphify_local` failed to connect this session, so structure came from direct reads.
 

@@ -20,8 +20,8 @@
    1. Run one local rehearsal against real Bedrock with her lines, so the script is cached (D6).
    2. Print the frozen script with `pnpm -F @spoken-letter-alexa/agent demo:script`. This phase adds that new script, `packages/agent/scripts/demo-script.ts`: it reads the latest creation record for a device key with one read-only DynamoDB GetItem (profile `archy`) when deployed, or from memory locally, and prints the title and script without names.
    3. Jordan reads it in the real Spoken Letter app with effects and music.
-   4. The Owner exports the four MP3s.
-   5. `scripts/add-demo-take.mjs` converts and registers them.
+   4. After each enhancement setting (as is, effects, music, both), pull the current final mix with `scripts/pull-fixture-story.mjs <storyDocId> --as-take <frozen-script-file> --variant <name>`. The story keeps one current mix, so there are four pulls in sequence. If the app can't return to "as is" after mixing, pull `plain` first.
+   5. `--as-take` converts and registers each pull through `scripts/add-demo-take.mjs`; J3 confirms all four variants are present.
 4. **Deploy order** (SS10): API, then simulator assets, then the skill Lambda, then the ASK model. Each deploy needs separate Owner authorization.
 
 ## Behavioral oracles
