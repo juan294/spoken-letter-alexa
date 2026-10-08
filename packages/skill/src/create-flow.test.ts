@@ -289,6 +289,12 @@ describe("stages", () => {
     expect(response.response.shouldEndSession).toBe(false);
   });
 
+  test("SS5 after the sound choice, playback without a host offers only send", async () => {
+    const response = await at({ demoFlow: "create", createStage: "finish", createSound: "both" }, null)("PlaybackIntent");
+    expect(speech(response)).toBe(spoken(c.finishMissing));
+    expect(speech(response)).not.toMatch(/re-record/);
+  });
+
   test("stop ends the flow", async () => {
     const response = await at(review)("AMAZON.StopIntent");
     expect(speech(response)).toBe(spoken(c.canceled));

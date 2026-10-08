@@ -258,7 +258,7 @@ Then: pull into the worktree, regenerate the models, update the simulator mock a
 **Open for implementation:**
 - `pull-fixture-story.mjs --as-take` fetches only `finalMixRef`. The voice-only narration needs a pull option for the narration ref and a WebM-to-MP3 conversion through `add-demo-take.mjs`.
 - The narration opens with a greeting that is not in the on-screen script, and ends with "The end."
-- The script is about 450 words (136 s of narration) against D8's 70-word budget. The script relies on a time cut, so the session-window outcome of the device check (D1–D5, still pending) decides the fallback. Line 30 has "The end" without the wake word.
+- The script is 311 words (counted from the verbatim text; an earlier estimate here said about 450), read in 136 s of narration including the greeting, against D8's 70-word budget. The script relies on a time cut, so the session-window outcome of the device check (D1–D5, still pending) decides the fallback. Line 30 has "The end" without the wake word.
 - The finished mix alone is 139.5 s, so the clips must be trimmed to keep the video under three minutes.
 - Phrases differ from the spike: "record" (spike: "record story"), "playback", "re-record", "next", "send story".
 - Script lines 5–7 need "El Trasgu" by Tío Manuel. Production holds a delivered "El Trasgu del Sotano" in the same family space. The Owner confirmed Tío Manuel narrates it, so it became Phase 2's second storyteller (below). Spanish names in an en-US model need synonym coverage and a device check.

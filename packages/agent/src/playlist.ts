@@ -1,5 +1,5 @@
 import { type DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { foldName, randomToken, sha256Hex, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 import { AGENT_MESSAGES, type PlaylistMessages } from "./messages.ts";
 import { type Play } from "./schema.ts";
@@ -112,7 +112,7 @@ export type PlaylistResult = {
 
 const none = (say: string | null): PlaylistResult => ({ action: "none", say });
 /** Case- and accent-insensitive, so "tio manuel" heard without its accent still matches "Tío Manuel". */
-const normalize = (value: string): string => value.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("en-US");
+const normalize = foldName;
 
 function tokenFor(generation: number, position: number): string {
   return `pl_${generation}_${position}_${randomToken(24)}`;

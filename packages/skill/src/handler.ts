@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { emfEnvelope, isDemoTopic, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
+import { emfEnvelope, foldName, isDemoTopic, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
 import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
-import { type CreateKey, type CreateTurn, continueCreate, createAttributes, createStateFrom, resumeCreate, startCreate } from "./create-flow.ts";
+import { type CreateKey, type CreateTurn, continueCreate, createAttributes, createStateFrom, isDoneEvent, resumeCreate, startCreate } from "./create-flow.ts";
 import { closing, type Directive, type OutputSpeech, question } from "./responses.ts";
 import { resolvedValue, slotValue } from "./slots.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
@@ -84,8 +84,6 @@ type SlotTypeValue = { name: { value: string; synonyms?: string[] } };
 const storytellerValues: SlotTypeValue[] = [interactionModel, spanishModel].flatMap((model) =>
   model.interactionModel.languageModel.types.find((type) => type.name === "StorytellerName")?.values ?? []);
 const SAFE_STORYTELLERS = new Set(storytellerValues.map((entry) => entry.name.value));
-/** Case- and accent-insensitive, so "tio manuel" heard without its accent still names "Tío Manuel". */
-const foldName = (name: string) => name.trim().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase("en-US");
 const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
   [entry.name.value, ...(entry.name.synonyms ?? [])].map((alias) => [foldName(alias), entry.name.value] as const)));
 
@@ -129,7 +127,7 @@ function validatedSession(attributes: Record<string, string> | undefined): Recor
     state.demoTopic = attributes.demoTopic;
     if (attributes.demoStoryteller) state.demoStoryteller = attributes.demoStoryteller;
   }
-  const create = flow === "create" ? createStateFrom(attributes) : null;
+  const create = createStateFrom(attributes);
   if (create) Object.assign(state, createAttributes(create));
   if (attributes?.fallbackCount === "1" || attributes?.fallbackCount === "2") state.fallbackCount = attributes.fallbackCount;
   return state;
@@ -492,8 +490,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         const create = createStateFrom(state);
         if (create) return runCreate(continueCreate(createContext, create));
         // A Done tap or "the end" after the session dropped while reading (SS2).
-        const done = type === "Alexa.Presentation.APL.UserEvent" && event.request.arguments?.[0] === "done";
-        if (done || intent === "TheEndIntent") {
+        if (isDoneEvent(event) || intent === "TheEndIntent") {
           const resumed = await resumeFromRecord(true);
           if (resumed) return resumed;
         }
@@ -546,6 +543,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           break;
       }
 
+      // English creation enters the staged create flow above (createEntry), so the theme-to-draft
+      // branches below are reached in Spanish, or from an English session already in a draft.
       if (pendingDraft && intent === "AMAZON.NoIntent") return tell(m.draftCanceled, undefined, "canceled", "canceled");
       if (intent === "ThemeChoiceIntent") {
         if (!pendingDraft) return pendingWish || pendingReaction ? recovery(state, false) : ask(m.creationHelp, m.reprompt, "creation_help", "handoff");

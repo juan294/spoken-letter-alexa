@@ -33,16 +33,8 @@ const TAKE = findTake(parseTakesManifest(takesManifest), SCRIPT);
 /** A resume is offered only soon after the session dropped, so a rehearsal never changes the next run's lines. */
 export const RESUME_SECONDS = 15 * 60;
 
-export type CreateState = {
-  stage: CreateStage;
-  listenerId?: string;
-  /** Conversation answers given so far (0–2). */
-  answers?: number;
-  title?: string;
-  sound?: TakeVariant;
-  /** In `recording`: the teleprompter is running, so the microphone stays closed. */
-  reading?: boolean;
-};
+/** The record, plus whether the teleprompter is running (the microphone then stays closed). */
+export type CreateState = CreationRecord & { reading?: boolean };
 
 export type CreateKey =
   | "create_start" | "create_listener" | "create_wish" | "create_question" | "create_script" | "record_start" | "record_help"
@@ -89,13 +81,7 @@ export function createAttributes(state: CreateState): Record<string, string> {
   };
 }
 
-const recordOf = (state: CreateState): CreationRecord => ({
-  stage: state.stage,
-  ...(state.listenerId && { listenerId: state.listenerId }),
-  ...(state.answers && { answers: state.answers }),
-  ...(state.title && { title: state.title }),
-  ...(state.sound && { sound: state.sound }),
-});
+const recordOf = ({ reading: _reading, ...record }: CreateState): CreationRecord => record;
 
 export function supportsApl(event: AlexaRequestEnvelope): boolean {
   return Object.hasOwn(event.context.System.device?.supportedInterfaces ?? {}, "Alexa.Presentation.APL");
@@ -112,9 +98,9 @@ function ask(key: CreateKey, state: CreateState, speech: string | OutputSpeech, 
  * Speech with the session left open and the microphone closed (`shouldEndSession` absent): on a
  * screen device the adult then has about 30 seconds to say "Alexa, the end".
  */
-function open(key: CreateKey, state: CreateState, speech: OutputSpeech, directives?: Directive[]): CreateTurn {
+function open(key: CreateKey, state: CreateState, speech: OutputSpeech, directives?: Directive[], save = true): CreateTurn {
   return { key, result: "awaiting_input", response: { version: "1.0", sessionAttributes: createAttributes(state),
-    response: { outputSpeech: speech, ...(directives && { directives }) } }, record: recordOf(state) };
+    response: { outputSpeech: speech, ...(directives && { directives }) } }, ...(save && { record: recordOf(state) }) };
 }
 
 function startReading(ctx: Context, state: CreateState): CreateTurn {
@@ -133,10 +119,10 @@ function screen(ctx: Context, state: CreateState, detail: string): Directive[] |
 const takeUrl = (ctx: Context, variant: TakeVariant): string | undefined =>
   TAKE && ctx.publicBaseUrl ? `${ctx.publicBaseUrl.replace(/\/$/, "")}/fixtures/takes/${TAKE.files[variant]}` : undefined;
 
-function listenerNames(): string {
+const LISTENER_NAMES = (() => {
   const all = DEMO.listeners.map((listener) => listener.name);
-  return all.length === 1 ? all.join("") : `${all.slice(0, -1).join(", ")} or ${all.at(-1) ?? ""}`;
-}
+  return all.length === 1 ? all[0] ?? "" : `${all.slice(0, -1).join(", ")} or ${all.at(-1) ?? ""}`;
+})();
 
 function anySlotText(event: AlexaRequestEnvelope): string | undefined {
   return Object.keys(event.request.intent?.slots ?? {}).map((name) => slotValue(event, name)).find(Boolean);
@@ -144,7 +130,7 @@ function anySlotText(event: AlexaRequestEnvelope): string | undefined {
 
 /** A listener named in speech: the resolved slot, or the raw words after a carrier ("it's for Sam"). */
 function spokenListener(event: AlexaRequestEnvelope): string | undefined {
-  const spoken = resolvedValue(event, "listener") ?? slotValue(event, "listeneralias") ?? anySlotText(event);
+  const spoken = resolvedValue(event, "listener") ?? anySlotText(event);
   return spoken?.replace(/^(?:it's |it is |the story is )?for\s+/i, "").trim();
 }
 
@@ -153,7 +139,7 @@ function chooseListener(spoken: string | undefined, prefix?: string): CreateTurn
   const lead = prefix ? `${prefix} ` : "";
   if (!listener) {
     // SS7: the name is never repeated back; a bare "who is it for?" only repeats the prompt.
-    const line = spoken ? `${c.unknownListener(listenerNames())} ${c.whoFor}` : c.whoFor;
+    const line = spoken ? `${c.unknownListener(LISTENER_NAMES)} ${c.whoFor}` : c.whoFor;
     return ask(spoken ? "create_listener" : "create_start", { stage: "listener" }, `${lead}${line}`, c.whoFor, undefined, prefix !== undefined);
   }
   if (listener.wish) {
@@ -230,7 +216,7 @@ function prompt(state: CreateState): CreateTurn {
     case "wish": return again("create_wish", listener?.wish ? c.wishOffer(listener.name, listener.wish.phrase, listener.wish.topic) : c.firstQuestion);
     case "conversation": return again("create_question", (state.answers ? DEMO.story.replies[state.answers - 1] : undefined) ?? c.firstQuestion);
     case "recording":
-      if (state.reading) return { key: "record_help", result: "awaiting_input", response: { version: "1.0", sessionAttributes: createAttributes(state), response: { outputSpeech: ssml(c.recordingHelp) } } };
+      if (state.reading) return open("record_help", state, ssml(c.recordingHelp), undefined, false);
       return again("create_script", c.recordReprompt);
     case "review": return again("take_review", c.reviewReprompt);
     case "title": return again("create_title", c.titleReprompt);
@@ -244,10 +230,14 @@ function prompt(state: CreateState): CreateTurn {
  * cancel and help is the next answer, so speech recognition never derails the fixed lines;
  * elsewhere a reply the stage does not take repeats its question.
  */
+/** The teleprompter's Done button (`apl/teleprompter.json`), as an APL UserEvent. */
+export const isDoneEvent = (event: AlexaRequestEnvelope): boolean =>
+  event.request.type === "Alexa.Presentation.APL.UserEvent" && event.request.arguments?.[0] === "done";
+
 export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
   const { event } = ctx;
   const intent = event.request.type === "IntentRequest" ? event.request.intent?.name : undefined;
-  const done = event.request.type === "Alexa.Presentation.APL.UserEvent" && event.request.arguments?.[0] === "done";
+  const done = isDoneEvent(event);
   const listener = listenerById(state.listenerId);
 
   if (intent === "AMAZON.StopIntent" || intent === "AMAZON.CancelIntent" || intent === "AMAZON.PauseIntent") {
@@ -311,7 +301,7 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
       if (isPlayback(event, intent)) {
         return audio
           ? ask("create_finish", state, ssml({ audio }, c.finishPrompt), c.finishPrompt, undefined, false)
-          : ask("take_missing", state, c.takeMissing, c.finishPrompt, undefined, false);
+          : ask("take_missing", state, c.finishMissing, c.finishPrompt, undefined, false);
       }
       if (intent !== "SendStoryIntent" && intent !== "AMAZON.YesIntent") return prompt(state);
       const title = state.title ?? c.yourStory;

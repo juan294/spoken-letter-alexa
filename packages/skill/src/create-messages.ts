@@ -44,6 +44,8 @@ export type CreateMessages = {
   afterPlayback: string;
   /** SS5: no take matches the script, or takes cannot be served. */
   takeMissing: string;
+  /** SS5 after the sound choice. */
+  finishMissing: string;
   /** Line 35. */
   titleQuestion: string;
   titleReprompt: string;
@@ -94,6 +96,7 @@ export const CREATE_MESSAGES: CreateMessages = {
   reviewReprompt: "Say \"playback\", \"re-record\", or \"next\".",
   afterPlayback: "Say \"re-record\" to try again, or \"next\" to continue.",
   takeMissing: "That recording isn't ready to play yet. Say \"re-record\" to try again, or \"next\" to continue.",
+  finishMissing: "That story isn't ready to play yet. Say \"send story\" when you're ready.",
   titleQuestion: "Time for the finishing touches. What would you like to call your story?",
   titleReprompt: "What would you like to call your story?",
   soundQuestion: (title) => `Would you like to add music or sound effects to ${title}?`,

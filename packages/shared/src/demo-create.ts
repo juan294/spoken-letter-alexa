@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { TAKE_VARIANTS } from "./takes.ts";
+import { foldName } from "./text.ts";
 
 /**
  * `fixtures/demo-create.json`: everything the staged create flow says that is not generic copy
@@ -44,7 +45,7 @@ export function parseDemoCreate(input: unknown): DemoCreate {
     if (ids.has(listener.id)) throw new Error(`fixtures/demo-create.json repeats the listener id "${listener.id}"`);
     ids.add(listener.id);
     for (const name of [listener.name, ...listener.synonyms]) {
-      const key = name.toLowerCase();
+      const key = foldName(name);
       if (spoken.has(key)) throw new Error(`fixtures/demo-create.json names two listeners "${name}"`);
       spoken.add(key);
     }
@@ -52,10 +53,10 @@ export function parseDemoCreate(input: unknown): DemoCreate {
   return result.data;
 }
 
-/** The listener a spoken or resolved name means, ignoring case. */
+/** The listener a spoken or resolved name means, ignoring case and accents. */
 export function findListener(demo: DemoCreate, name: string): DemoListener | undefined {
-  const key = name.trim().toLowerCase();
-  return demo.listeners.find((listener) => [listener.name, ...listener.synonyms].some((form) => form.toLowerCase() === key));
+  const key = foldName(name);
+  return demo.listeners.find((listener) => [listener.name, ...listener.synonyms].some((form) => foldName(form) === key));
 }
 
 /**

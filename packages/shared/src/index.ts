@@ -1,16 +1,13 @@
 export { readEnv, type EnvSource } from "./env.ts";
 export { log } from "./logger.ts";
 export { isSkillLocale, resolveLocale, SKILL_LOCALES, type SkillLocale } from "./locale.ts";
-export { spanishPattern } from "./text.ts";
+export { foldName, spanishPattern } from "./text.ts";
 export { findTake, parseTakesManifest, type Take, TAKE_VARIANTS, type TakeVariant } from "./takes.ts";
 export {
-  CONVERSATION_ANSWERS,
-  CREATE_STAGES,
   type CreateStage,
   type CreationRecord,
   creationRecordSchema,
   type DemoCreate,
-  type DemoListener,
   findListener,
   isCreateStage,
   parseDemoCreate,
