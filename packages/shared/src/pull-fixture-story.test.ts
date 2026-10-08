@@ -177,6 +177,12 @@ describe("pull-fixture-story.mjs (S5)", () => {
     expect(commands).toEqual([]);
   });
 
+  test("--as-take refuses a mix named by both --variant and --narration", async () => {
+    const { calls, fetch } = fakeFirestore({ doc1: delivered });
+    await expect(pullTake(deps(fetch), "doc1", { name: "fox", scriptFile: "x", variant: "plain,both", narration: "plain" })).rejects.toThrow(/both name plain/);
+    expect(calls).toEqual([]);
+  });
+
   test("--as-take refuses an unknown variant before any call", async () => {
     const { calls, fetch } = fakeFirestore({ doc1: delivered });
     await expect(pullTake(deps(fetch), "doc1", { name: "fox", scriptFile: "x", variant: "loud" })).rejects.toThrow(/--variant must be one of/);

@@ -447,7 +447,10 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
     }
     if (unused.size > 0) throw new Error(`${locale} samples name unknown intents: ${[...unused].join(", ")}`);
   } else {
-    intents.push(...EN_US_ONLY.map((intent) => ({ ...intent, samples: [...intent.samples] })));
+    // A story answer can open with the listener's name ("Sam has to go home…"), which no fixed carrier covers.
+    const demo = input.demo ?? loadDemoCreate();
+    const nameCarriers = demo.listeners.flatMap((listener) => [listener.name, ...listener.synonyms]).map((name) => `${name.toLowerCase()} {detail}`);
+    intents.push(...EN_US_ONLY.map((intent) => ({ ...intent, samples: intent.name === "StoryDetailIntent" ? [...intent.samples, ...nameCarriers] : [...intent.samples] })));
   }
 
   const playSamples = intents.find((intent) => intent.name === "PlayStoryIntent")?.samples ?? [];

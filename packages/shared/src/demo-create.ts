@@ -60,10 +60,11 @@ export function findListener(demo: DemoCreate, name: string): DemoListener | und
 }
 
 /**
- * The create flow's stages, in order. `sent` is stored only: the session ends with the send.
+ * The create flow's stages, in order. `sent` and `stopped` are stored only: the session ends,
+ * and neither resumes.
  * Kept here because the skill's session attributes and the agent's record share it.
  */
-export const CREATE_STAGES = ["listener", "wish", "conversation", "recording", "review", "title", "sound", "finish", "sent"] as const;
+export const CREATE_STAGES = ["listener", "wish", "conversation", "recording", "review", "title", "sound", "finish", "sent", "stopped"] as const;
 export type CreateStage = (typeof CREATE_STAGES)[number];
 export const isCreateStage = (value: unknown): value is CreateStage => (CREATE_STAGES as readonly unknown[]).includes(value);
 
@@ -80,5 +81,7 @@ export const creationRecordSchema = z.strictObject({
   answers: z.int().min(0).max(CONVERSATION_ANSWERS - 1).optional(),
   title: z.string().trim().min(1).max(60).optional(),
   sound: z.enum(TAKE_VARIANTS).optional(),
+  /** In `recording`: the adult said "record", so a dropped session resumes at review (SS2). */
+  reading: z.literal(true).optional(),
 });
 export type CreationRecord = z.infer<typeof creationRecordSchema>;

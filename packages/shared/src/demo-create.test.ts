@@ -53,7 +53,7 @@ describe("findListener", () => {
 
 describe("creation record", () => {
   test("stages are a closed, ordered set", () => {
-    expect(CREATE_STAGES).toEqual(["listener", "wish", "conversation", "recording", "review", "title", "sound", "finish", "sent"]);
+    expect(CREATE_STAGES).toEqual(["listener", "wish", "conversation", "recording", "review", "title", "sound", "finish", "sent", "stopped"]);
     expect(isCreateStage("review")).toBe(true);
     expect(isCreateStage("script")).toBe(false);
     expect(isCreateStage(undefined)).toBe(false);

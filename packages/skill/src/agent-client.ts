@@ -45,6 +45,7 @@ export type DemoInbox = { events: { eventId: string; type: string; detail: strin
 
 /** The cross-session copy of the device's creation record (staged demo plan D5, revised). */
 export type CreationCurrent = { status: "none" } | { status: "found"; record: CreationRecord; updatedAt: number };
+const CREATE_CURRENT_BUDGET_MS = 2_000;
 const creationCurrentSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("none") }),
   z.object({ status: z.literal("found"), record: creationRecordSchema, updatedAt: z.number() }),
@@ -131,10 +132,10 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   }
 
   const skillSecret = options.skillSecret;
-  async function skillPost<T>(path: string, body: unknown): Promise<T> {
+  async function skillPost<T>(path: string, body: unknown, timeoutMs = options.timeoutMs): Promise<T> {
     if (!skillSecret) throw new AgentHttpError(503, "skill_secret_missing", "The skill action is unavailable");
     const controller = new AbortController();
-    const timer = setTimeout(() => { controller.abort(); }, options.timeoutMs);
+    const timer = setTimeout(() => { controller.abort(); }, timeoutMs);
     try {
       return await post<T>(path, body, controller.signal, { "x-alexa-skill-secret": skillSecret });
     } finally {
@@ -182,7 +183,8 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
         return reply as LatestDraft;
       },
       async createCurrent(input: { deviceUserId: string }): Promise<CreationCurrent> {
-        const reply = creationCurrentSchema.safeParse(await skillPost("/agent/demo/create/current", input));
+        // Launch makes up to three agent calls inside Alexa's 8 seconds; a resume check must not use them all.
+        const reply = creationCurrentSchema.safeParse(await skillPost("/agent/demo/create/current", input, Math.min(options.timeoutMs, CREATE_CURRENT_BUDGET_MS)));
         if (!reply.success) throw new AgentHttpError(200, "malformed", "agent creation reply is incomplete");
         return reply.data;
       },

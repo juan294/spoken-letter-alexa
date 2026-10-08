@@ -29,7 +29,7 @@ the family that recorded the demo story. Which steps are real and which are stag
 | Recording | Staged: nothing is captured; "playback" plays a take recorded beforehand of the same script in the Spoken Letter app |
 | Music and sound effects | Staged: the finished mix the Spoken Letter app produced for that take |
 | Send | Staged: a confirmation only; nothing is delivered |
-| Creation progress | Real: a creation record in DynamoDB (`sla-demo-state`), so a dropped session resumes at take review |
+| Creation progress | Real: a creation record in DynamoDB (`sla-demo-state`), so a session that drops while the adult reads resumes at take review on a launch within 15 minutes |
 
 The listener's first name in the demo is used with the family's consent. The
 [Alexa+ simulator](#architecture) at `/demo` runs the real agent on Bedrock; the staged

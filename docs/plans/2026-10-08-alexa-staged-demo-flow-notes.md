@@ -294,3 +294,48 @@ The Owner's "acceptable" answer is a recorded exception to Entry (b), alongside 
 **Gate.** `python3 .rpi/scripts/rpi-verify.py` passed all 5 checks on `f21dcbe`: 786 tests, 8 of 8 E2E.
 
 **Accepted.** The Owner accepted Phase 2 on 2026-10-08 and authorized continuing through the remaining phases' local implementation ("keep going until everything is implemented and we'll test at the end"). Deploys, push and the device check stay separate Owner gates. `feat/more-storytellers` was merged into `develop` locally; this notes file was the only conflict.
+
+## Phases 3–4 revised: the scripted create flow and playback lines (2026-10-08)
+
+**Entry.** Owner authorization of 2026-10-08 (above). Base `develop` `cbb10c3`, worktree `/Users/juan/code/spoken-letter-alexa-create`, branch `feat/scripted-create`. The plan's "Revision for Jordan's script" (`48c22f8`) replaces Phases 3–6. `graphify_local` failed to connect, so structure came from direct reads.
+
+**Commits:** `48c22f8` (plan revision), `a23527b` (create flow), `efd047d` (playback lines and disclosure), `6ff29a0` (simplify), then the review repairs and this notes commit.
+
+**Built:**
+- `fixtures/demo-create.json` and `parseDemoCreate` (`packages/shared/src/demo-create.ts`): credits 20, the listener Samuel ("Sam"), the saved wish, the two story-specific replies, the title, and Jordan's script verbatim (311 words, paragraphs kept). The closed stage set and the creation record schema live there too.
+- Take `sam_on_the_moon`, pulled with the new `--narration` option of `pull-fixture-story.mjs` (field `narrationRef`, VERIFIED in the private repo's source): plain is the voice-only narration (136.0 s), and the finished mix (139.5 s) stands in for effects, music and both. The spike take and the standalone spike path are gone.
+- Agent: `DynamoCreationStore` / `MemoryCreationStore` (`create_<deviceKey>`, 7-day TTL, Get and Put only, matching `infra/lib/api-stack.ts:108-111`) and `POST /agent/demo/create/current` and `/save`, behind the skill secret.
+- Skill: `create-flow.ts` (state machine), `create-messages.ts` (every line), the teleprompter's preview mode and a status screen (`apl/status.json`), the en-US-only intents `ChooseListenerIntent`, `StoryDetailIntent`, `PlaybackIntent`, `StoryTitleIntent`, `SoundChoiceIntent`, `SendStoryIntent` and the slot types `ListenerName`, `StoryTitle`, `SoundChoice`. `es-ES.json` is byte-identical to `develop`.
+- Lines 1–7: Jordan's launch line; "play <title> by <storyteller>" split in the skill; a misheard title still plays when the storyteller has one story; the fixture title "El Trasgu".
+- Disclosure: README "What the video shows", friction log entry, `testingInstructions`, device script section 6, fixtures README.
+
+**Oracles:** J1 and J2 in `packages/skill/src/demo-rehearsal.integration.test.ts` (every line of the script through the real handler, client, routes and MCP catalog); J3 in `create-flow.test.ts`; stage, resume, privacy and SS1/SS2/SS5/SS7 cases in `packages/skill/src/create-flow.test.ts`; C12 store contract in `packages/agent/src/create-flow.test.ts`; F10 in `packages/skill/src/disclosure.test.ts`. TDD note: the agent store and route tests were written and seen failing first (missing module); the skill flow's tests were written alongside the implementation.
+
+**Deviations:**
+1. Phase 4 (Bedrock conversation, script review, generation cache) is dropped by the Owner's fixed-lines decision.
+2. Session attributes carry the flow; the agent record is a best-effort copy for resume (plan revision D5). A failed save is logged as `create_save_failed` and the flow continues.
+3. Resume is limited to a reading that started (`reading` on the record) or review, within 15 minutes. Stop, cancel or pause inside the flow stores `stopped`, so the next launch opens plainly.
+4. In the conversation, any intent except stop, cancel and help is the next answer (replaces SS8 there). `StoryDetailIntent` also gets carriers built from the listener's names ("sam {detail}") for line 25.
+5. Music-only and effects-only play the finished mix until separate mixes are pulled.
+6. The final line plays the finished mix through SSML `<audio>` with an `AudioPlayer.Stop` and the sent screen, and ends the session; no AudioPlayer card for the demo story.
+7. es-ES test files changed: E1's draft journey now starts from a draft session (the English entry is the create flow by D1), and E5's unknown-locale launch lines follow the new English launch copy. en-US draft tests in `handler.test.ts` and `session-recovery.integration.test.ts` start from a draft session; the draft branches stay for Spanish.
+8. No rate limit on creation saves: one item per device is overwritten, so nothing grows.
+
+**Simplify (reviewer, 13 items):** applied 1–8 (shared `foldName`, `CreateState` from the record, `isDoneEvent`, `open` for the reading help, dropped a redundant slot lookup, constant listener names, a finish-stage "not ready" line, one less guard) and removed the unused shared exports from 10. Skipped: 9 (save only on stage change; the per-turn save keeps the record in step for resume and costs one fast call), 11 (removing the English draft copy would make `Messages` asymmetric; a comment marks the branches), 12 (field-by-field validation keeps valid fields), 13 (the two script walks test different layers).
+
+**Independent review (CHANGES REQUESTED on `6ff29a0`):**
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| 1 | Resume said "saved" after the hand-over, before any reading | Fixed: `reading` stored; resume needs it; tests added |
+| 2 | Stop left a resumable record, changing the next run's opening | Fixed: stores `stopped`; test added; device script 6.5 reworded |
+| 3 | Launch could spend 3 × 7 s | Fixed: the resume check has a 2 s budget |
+| 4 | El Trasgu not stopped at line 9 | Device check (6.4). A Stop directive with an open session is not proven safe, so the stop stays on the send |
+| 5 | Create-only intents outside the flow got a dead end | Fixed: they get the fallback recovery; tests added |
+| 6 | Line 25 has no carrier | Name carriers added; any non-stop intent advances; device script records the intent |
+| 7 | S2 weakened; es-ES edits unrecorded | S2 asserts the Spanish saved line and the forest save; deviations 7 above |
+| 8 | `create_unavailable` logged as unknown | Fixed |
+| 9 | A mix in both `--variant` and `--narration` | Fixed: refused; test added |
+| 10 | README resume condition, testing instructions screen claim, "1 story credits" | Fixed |
+
+**Device checks to add to A1–A5:** whether "Alexa, next" barges into the take playback and reaches the skill; whether El Trasgu resumes during the teleprompter; how each scripted answer routes; the countdown and scroll timing (D1); APL `display` binding in preview.

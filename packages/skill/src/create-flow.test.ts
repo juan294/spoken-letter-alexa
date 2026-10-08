@@ -295,10 +295,24 @@ describe("stages", () => {
     expect(speech(response)).not.toMatch(/re-record/);
   });
 
-  test("stop ends the flow", async () => {
-    const response = await at(review)("AMAZON.StopIntent");
+  test("stop ends the flow and stores it as stopped, so the next launch opens plainly", async () => {
+    const agent = creations({ record: { stage: "review", listenerId: "samuel" }, updatedAt: NOW - 60 });
+    const response = await device(agent)("AMAZON.StopIntent", {}, { attributes: review });
     expect(speech(response)).toBe(spoken(c.canceled));
     expect(response.response.shouldEndSession).toBe(true);
+    expect(agent.stored()?.record).toEqual({ stage: "stopped" });
+    const launch = await createHandler({ skillId: SKILL_ID, agent: { turn: vi.fn(), ...agent }, publicBaseUrl: BASE_URL, now: () => NOW })(envelope({ type: "LaunchRequest" }, { newSession: true }));
+    expect(speech(launch)).not.toContain("Welcome back");
+  });
+
+  test.each(["ChooseListenerIntent", "SoundChoiceIntent", "StoryDetailIntent", "SendStoryIntent"])("%s outside the flow gets the fallback recovery", async (name) => {
+    const response = await device()(name, { detail: "a story by aunt whitney" });
+    expect(response.sessionAttributes).toEqual({ fallbackCount: "1" });
+    expect(response.response.shouldEndSession).toBe(false);
+  });
+
+  test("one credit is said in the singular", () => {
+    expect(c.start(1)).toBe("Okay, create a story. You have 1 story credit, and this story uses one.");
   });
 
   test("tampered session values are dropped", async () => {
@@ -314,16 +328,18 @@ describe("stages", () => {
 describe("resume (SS2)", () => {
   const launch = (agent: Partial<AgentClient>) => createHandler({ skillId: SKILL_ID, agent: { turn: vi.fn(), ...agent }, publicBaseUrl: BASE_URL, now: () => NOW })(envelope({ type: "LaunchRequest" }, { newSession: true }));
 
-  test("a launch soon after the session dropped in recording or review resumes at review", async () => {
-    for (const stage of ["recording", "review"] as const) {
-      const response = await launch(creations({ record: { stage, listenerId: "samuel" }, updatedAt: NOW - 60 }));
+  test("a launch soon after the session dropped while reading or in review resumes at review", async () => {
+    for (const record of [{ stage: "recording" as const, reading: true as const }, { stage: "review" as const }]) {
+      const response = await launch(creations({ record: { ...record, listenerId: "samuel" }, updatedAt: NOW - 60 }));
       expect(speech(response)).toBe(spoken(c.resumeReview));
       expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "review", createListener: "samuel" });
     }
   });
 
   test.each([
-    ["an old recording", { record: { stage: "recording" as const }, updatedAt: NOW - RESUME_SECONDS - 1 }],
+    ["an old recording", { record: { stage: "recording" as const, reading: true as const }, updatedAt: NOW - RESUME_SECONDS - 1 }],
+    ["the script on screen before record", { record: { stage: "recording" as const }, updatedAt: NOW - 60 }],
+    ["a stopped run", { record: { stage: "stopped" as const }, updatedAt: NOW - 60 }],
     ["another stage", { record: { stage: "finish" as const }, updatedAt: NOW - 60 }],
     ["a sent story", { record: { stage: "sent" as const }, updatedAt: NOW - 60 }],
   ])("%s gives the plain launch, so the next run's opening line never changes", async (_label, stored) => {
@@ -337,7 +353,7 @@ describe("resume (SS2)", () => {
   });
 
   test("a done tap after the session closed finishes a recent reading", async () => {
-    const agent = creations({ record: { stage: "recording", listenerId: "samuel" }, updatedAt: NOW - 60 });
+    const agent = creations({ record: { stage: "recording", listenerId: "samuel", reading: true }, updatedAt: NOW - 60 });
     expect(speech(await device(agent)("done", {}, { newSession: true }))).toBe(spoken(c.saved));
   });
 

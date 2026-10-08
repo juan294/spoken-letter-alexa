@@ -135,6 +135,8 @@ export async function pullTake(deps, docId, { name, scriptFile, variant, narrati
   const mixVariants = variantList("--variant", variant);
   const narrationVariants = variantList("--narration", narration);
   if (mixVariants.length + narrationVariants.length === 0) throw new Error("--variant must be one of plain, effects, music, both (comma-separated)");
+  const both = mixVariants.filter((each) => narrationVariants.includes(each));
+  if (both.length > 0) throw new Error(`--variant and --narration both name ${both.join(", ")}`);
   const story = await deliveredStory(deps, docId);
   if (narrationVariants.length > 0 && !story.narrationRef) throw new Error(`story ${docId}: no narrationRef`);
   const scratch = mkdtempSync(path.join(tmpdir(), "sla-take-"));

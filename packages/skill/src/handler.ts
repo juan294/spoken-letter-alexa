@@ -235,6 +235,8 @@ function textForIntent(event: AlexaRequestEnvelope, match: Matchers): IntentText
   }
 }
 
+const CREATE_ONLY_INTENTS = new Set(["ChooseListenerIntent", "StoryDetailIntent", "PlaybackIntent", "StoryTitleIntent", "SoundChoiceIntent", "SendStoryIntent", "TheEndIntent"]);
+
 /**
  * An en-US request that starts the staged create flow, with the listener it names, if any:
  * "create a story", "record story", "create a story for Sam" and "send Sam a spoken letter".
@@ -257,7 +259,7 @@ function createEntry(event: AlexaRequestEnvelope, match: Matchers): { listener?:
 const KNOWN_ERROR_CODES = new Set([
   "session_not_found", "malformed", "http_error", "skill_secret_missing", "unsupported_theme",
   "draft_unavailable", "draft_limit_reached", "update_unavailable", "no_pending_reaction",
-  "confirmation_required", "server_error", "unauthorized", "unavailable", "invalid_request",
+  "confirmation_required", "server_error", "unauthorized", "unavailable", "invalid_request", "create_unavailable",
 ]);
 
 function classifyError(error: unknown): { outcome: "agent_error" | "timeout" | "rejected"; errorClass: string } {
@@ -662,6 +664,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
       }
 
+      // The create flow's own replies ("Samuel", "add both", "a dragon who…") mean nothing outside it.
+      if (CREATE_ONLY_INTENTS.has(intent)) return recovery(state, true);
       const intentText = textForIntent(event, match);
       if (intentText === null) return ask(m.nothingToPlay);
       const { text, playOriented } = intentText;

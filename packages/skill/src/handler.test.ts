@@ -777,7 +777,9 @@ describe("additional phase 1 acceptance", () => {
     // An explicit start theme saves in Spanish only: English creation is the staged create flow (D1).
     const spanish = intent("StartStoryIntent", { theme: "forest" });
     spanish.request.locale = "es-ES";
-    expect((await handler(spanish)).response.shouldEndSession).toBe(true);
+    const saved = await handler(spanish);
+    expect(saved.response.shouldEndSession).toBe(true);
+    expect(ssml(saved)).toMatch(/borrador/i);
     const carrier = intent("ThemeIntent", { theme: "animals" });
     carrier.session = { ...carrier.session!, attributes: { demoFlow: "draft" } };
     carrier.request.requestId = "carrier-2";

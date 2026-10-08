@@ -33,8 +33,8 @@ const TAKE = findTake(parseTakesManifest(takesManifest), SCRIPT);
 /** A resume is offered only soon after the session dropped, so a rehearsal never changes the next run's lines. */
 export const RESUME_SECONDS = 15 * 60;
 
-/** The record, plus whether the teleprompter is running (the microphone then stays closed). */
-export type CreateState = CreationRecord & { reading?: boolean };
+/** The flow's state is its record; `reading` means the teleprompter runs and the microphone stays closed. */
+export type CreateState = CreationRecord;
 
 export type CreateKey =
   | "create_start" | "create_listener" | "create_wish" | "create_question" | "create_script" | "record_start" | "record_help"
@@ -57,7 +57,7 @@ const withListener = (stage: CreateStage, state: CreateState): CreateState => ({
 
 /** Rebuilds the flow from session attributes; anything outside the closed values is dropped. */
 export function createStateFrom(attributes: Record<string, string> | undefined): CreateState | null {
-  if (attributes?.demoFlow !== "create" || !isCreateStage(attributes.createStage) || attributes.createStage === "sent") return null;
+  if (attributes?.demoFlow !== "create" || !isCreateStage(attributes.createStage) || attributes.createStage === "sent" || attributes.createStage === "stopped") return null;
   const state: CreateState = { stage: attributes.createStage };
   const listener = listenerById(attributes.createListener);
   if (listener) state.listenerId = listener.id;
@@ -81,7 +81,6 @@ export function createAttributes(state: CreateState): Record<string, string> {
   };
 }
 
-const recordOf = ({ reading: _reading, ...record }: CreateState): CreationRecord => record;
 
 export function supportsApl(event: AlexaRequestEnvelope): boolean {
   return Object.hasOwn(event.context.System.device?.supportedInterfaces ?? {}, "Alexa.Presentation.APL");
@@ -91,7 +90,7 @@ export function supportsApl(event: AlexaRequestEnvelope): boolean {
 function ask(key: CreateKey, state: CreateState, speech: string | OutputSpeech, reprompt: string, directives?: Directive[], save = true): CreateTurn {
   const response = question(speech, reprompt);
   if (directives) response.response.directives = directives;
-  return { key, result: "awaiting_input", response: { ...response, sessionAttributes: createAttributes(state) }, ...(save && { record: recordOf(state) }) };
+  return { key, result: "awaiting_input", response: { ...response, sessionAttributes: createAttributes(state) }, ...(save && { record: state }) };
 }
 
 /**
@@ -100,7 +99,7 @@ function ask(key: CreateKey, state: CreateState, speech: string | OutputSpeech, 
  */
 function open(key: CreateKey, state: CreateState, speech: OutputSpeech, directives?: Directive[], save = true): CreateTurn {
   return { key, result: "awaiting_input", response: { version: "1.0", sessionAttributes: createAttributes(state),
-    response: { outputSpeech: speech, ...(directives && { directives }) } }, ...(save && { record: recordOf(state) }) };
+    response: { outputSpeech: speech, ...(directives && { directives }) } }, ...(save && { record: state }) };
 }
 
 function startReading(ctx: Context, state: CreateState): CreateTurn {
@@ -165,9 +164,10 @@ function saved(ctx: Context, state: CreateState, resumed = false): CreateTurn {
  * Anything older, or any other stage, starts the next run clean.
  */
 export function resumeCreate(ctx: Context, stored: { record: CreationRecord; updatedAt: number }, nowSeconds: number, fromDone: boolean): CreateTurn | null {
-  const { stage } = stored.record;
+  const { stage, reading } = stored.record;
   if (nowSeconds - stored.updatedAt > RESUME_SECONDS) return null;
-  if (stage !== "recording" && (fromDone || stage !== "review")) return null;
+  // Only a reading that started: the script on screen before "record" has nothing saved yet.
+  if (!(stage === "recording" && reading) && (fromDone || stage !== "review")) return null;
   const listener = listenerById(stored.record.listenerId);
   return saved(ctx, { stage, ...(listener && { listenerId: listener.id }) }, !fromDone);
 }
@@ -241,7 +241,8 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
   const listener = listenerById(state.listenerId);
 
   if (intent === "AMAZON.StopIntent" || intent === "AMAZON.CancelIntent" || intent === "AMAZON.PauseIntent") {
-    return { key: "create_canceled", result: "canceled", response: closing(c.canceled) };
+    // Stored as stopped, so the next launch opens plainly instead of resuming this run.
+    return { key: "create_canceled", result: "canceled", response: closing(c.canceled), record: { stage: "stopped" } };
   }
   if (intent === "AMAZON.HelpIntent" || (!intent && !done)) return prompt(state);
 
@@ -310,7 +311,7 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
       // A story still playing from before the flow stops, so only the finished story is heard.
       const directives: Directive[] = [STOP_DIRECTIVE, ...(screen(ctx, sent, c.status.sent(name)) ?? [])];
       const response = audio ? closing(ssml(c.sent(title, name), { audio }), directives) : closing(c.sentNoAudio(title, name), directives);
-      return { key: "create_sent", result: "completed", response, record: recordOf(sent) };
+      return { key: "create_sent", result: "completed", response, record: sent };
     }
   }
 }

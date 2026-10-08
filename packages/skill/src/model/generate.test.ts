@@ -196,7 +196,7 @@ describe("generateInteractionModel", () => {
     expect(byName.PlaybackIntent?.samples).toContain("playback");
     expect(byName.SendStoryIntent?.samples).toContain("send story");
     expect(byName.SoundChoiceIntent?.samples).toContain("yes add {sound}");
-    expect(byName.StoryDetailIntent?.samples).toEqual(expect.arrayContaining(["an {detail}", "they {detail}"]));
+    expect(byName.StoryDetailIntent?.samples).toEqual(expect.arrayContaining(["an {detail}", "they {detail}", "samuel {detail}", "sam {detail}"]));
     expect(byName.TheEndIntent?.samples).toEqual(expect.arrayContaining(["the end", "that's the end", "stop recording", "i'm done reading"]));
     expect(byName.RecordStoryIntent?.slots).toBeUndefined();
     expect(byName.TheEndIntent?.slots).toBeUndefined();

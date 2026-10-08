@@ -77,7 +77,7 @@ export type CreateMessages = {
 };
 
 export const CREATE_MESSAGES: CreateMessages = {
-  start: (credits) => `Okay, create a story. You have ${credits} story credits, and this story uses one.`,
+  start: (credits) => `Okay, create a story. You have ${credits} story ${credits === 1 ? "credit" : "credits"}, and this story uses one.`,
   whoFor: "Who is the story for?",
   unknownListener: (names) => `I don't see that name on your list. You can choose ${names}.`,
   wishOffer: (name, phrase, topic) => `There's a saved wish for ${name}: ${phrase}. Would you like to create a story about ${topic}?`,
