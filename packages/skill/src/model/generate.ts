@@ -151,6 +151,9 @@ const CATCH_ALL_SAMPLES = [
   "tell spoken letter {text}",
 ];
 
+/** Intents of the English-only creation flow (staged demo plan D1, D13): absent from every other locale's model. */
+export const EN_US_ONLY_INTENTS = ["RecordStoryIntent", "TheEndIntent"] as const;
+
 const BUILT_IN_INTENTS = [
   "AMAZON.CancelIntent",
   "AMAZON.FallbackIntent",
@@ -371,10 +374,16 @@ export function generateInteractionModel(input: { locale?: SkillLocale; training
       samples: ["play my stories from {storyteller}", "play stories from {storyteller}", "play all stories by {storyteller}"],
     },
     { name: "StartPlaylistOverIntent", samples: ["start the playlist over", "restart the playlist", "play the playlist from the beginning"] },
+    // The staged recording step (staged demo plan, phase 1). English only (D13), and the only
+    // samples that may say "record" (generate.test.ts RECORDING_SAMPLES).
+    { name: "RecordStoryIntent", samples: ["record story", "record my story", "start recording", "i'm ready to record", "record again", "record it again"] },
+    { name: "TheEndIntent", samples: ["the end", "that's the end", "stop recording", "i'm done reading"] },
   );
 
   if (tables.samples) {
-    // Same intents, slots and order as en-US (plan D8); only the samples change.
+    // Same intents, slots and order as en-US (plan D8) apart from the English-only ones (staged
+    // demo plan D13); only the samples change.
+    for (const name of EN_US_ONLY_INTENTS) intents.splice(intents.findIndex((intent) => intent.name === name), 1);
     const unused = new Set(Object.keys(tables.samples));
     for (const intent of intents) {
       if (intent.name === "CatchAllIntent") continue;

@@ -3,9 +3,12 @@ import { createHash } from "node:crypto";
 import { emfEnvelope, isDemoTopic, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
+import { type AplDirective } from "./apl/recording.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
 import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
+import { isCreateStage, type RecordingKey, recordingTurn } from "./recording.ts";
+import { type OutputSpeech, ssml } from "./ssml.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
 
@@ -23,6 +26,8 @@ export type AlexaRequestEnvelope = {
       /** Directive Service base URL, for a progressive response while the agent call is in flight (phase-2.md section 2). */
       apiEndpoint?: string;
       apiAccessToken?: string;
+      /** `supportedInterfaces` names `Alexa.Presentation.APL` on a screen device (`supportsApl`). */
+      device?: { deviceId?: string; supportedInterfaces?: Record<string, unknown> };
     };
     AudioPlayer?: { token?: string; offsetInMilliseconds?: number; playerActivity?: string };
   };
@@ -38,10 +43,11 @@ export type AlexaRequestEnvelope = {
     reason?: string;
     /** `SessionEndedRequest` only: present when `reason` is `"ERROR"`. */
     error?: { type: string; message: string };
+    /** `Alexa.Presentation.APL.UserEvent` only: the `SendEvent` arguments and the component that sent them. */
+    arguments?: unknown[];
+    source?: unknown;
   };
 };
-
-type OutputSpeech = { type: "SSML"; ssml: string };
 
 export type AlexaResponseEnvelope = {
   version: "1.0";
@@ -49,7 +55,7 @@ export type AlexaResponseEnvelope = {
   response: {
     outputSpeech?: OutputSpeech;
     reprompt?: { outputSpeech: OutputSpeech };
-    directives?: AudioDirective[];
+    directives?: (AudioDirective | AplDirective)[];
     shouldEndSession?: boolean;
   };
 };
@@ -62,6 +68,8 @@ export type HandlerOptions = {
   recordUtterance?: ((utterance: { locale: string; text: string }) => void) | undefined;
   /** Deprecated compatibility control. Model speech logging is intentionally disabled. */
   logSay?: boolean | undefined;
+  /** The host serving `/fixtures/*` (CloudFront), for in-session take playback. Without it no take plays (SS5). */
+  publicBaseUrl?: string | undefined;
   /** Test injection point for the Directive Service call (phase-2.md section 2); defaults to global `fetch`. */
   progressiveFetch?: typeof fetch | undefined;
 };
@@ -105,6 +113,10 @@ function validatedSession(attributes: Record<string, string> | undefined): Recor
     state.demoTopic = attributes.demoTopic;
     if (attributes.demoStoryteller) state.demoStoryteller = attributes.demoStoryteller;
   }
+  if (flow === "create" && isCreateStage(attributes?.createStage)) {
+    state.demoFlow = "create";
+    state.createStage = attributes.createStage;
+  }
   if (attributes?.fallbackCount === "1" || attributes?.fallbackCount === "2") state.fallbackCount = attributes.fallbackCount;
   return state;
 }
@@ -130,14 +142,6 @@ function recoverFlow(m: Messages, state: Record<string, string>, fallback: boole
     text = m.generalRecoveryRepeated;
   }
   return { ...question(text, reprompt), sessionAttributes: next };
-}
-
-function escapeSsml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function ssml(text: string): OutputSpeech {
-  return { type: "SSML", ssml: `<speak>${escapeSsml(text)}</speak>` };
 }
 
 function speak(text: string, options: { reprompt?: string; endSession: boolean; directives?: AudioDirective[] }): AlexaResponseEnvelope {
@@ -265,11 +269,11 @@ function classifyError(error: unknown): { outcome: "agent_error" | "timeout" | "
 }
 
 type ResponseKey =
-  "no_response" | "general_prompt" | "welcome" | "theme_prompt" | "theme_recovery" | "draft_saved" | "draft_limit" | "draft_read" | "draft_missing" | "draft_read_retry" | "reaction_prompt" | "reaction_saved" | "reaction_dismissed" | "reaction_retry" | "reaction_missing" | "wish_start" | "wish_confirm" | "wish_saved" | "wish_retry" | "general_recovery" | "reaction_recovery" | "wish_recovery" | "agent_reply" | "playback_control" | "playback_retry" | "updates" | "updates_retry" | "handoff" | "credits_help" | "creation_help" | "canceled";
+  "no_response" | "general_prompt" | "welcome" | "theme_prompt" | "theme_recovery" | "draft_saved" | "draft_limit" | "draft_read" | "draft_missing" | "draft_read_retry" | "reaction_prompt" | "reaction_saved" | "reaction_dismissed" | "reaction_retry" | "reaction_missing" | "wish_start" | "wish_confirm" | "wish_saved" | "wish_retry" | "general_recovery" | "reaction_recovery" | "wish_recovery" | "agent_reply" | "playback_control" | "playback_retry" | "updates" | "updates_retry" | "handoff" | "credits_help" | "creation_help" | "canceled" | RecordingKey;
 type InteractionResult = "completed" | "awaiting_input" | "fallback" | "retry" | "handoff" | "canceled" | "no_action";
-type Flow = "none" | "draft" | "reaction" | "wish";
+type Flow = "none" | "draft" | "reaction" | "wish" | "create";
 function flowOf(state: Record<string, string>): Flow {
-  return state.demoFlow === "draft" || state.demoFlow === "reaction" || state.demoFlow === "wish" ? state.demoFlow : "none";
+  return state.demoFlow === "draft" || state.demoFlow === "reaction" || state.demoFlow === "wish" || state.demoFlow === "create" ? state.demoFlow : "none";
 }
 
 type Telemetry = {
@@ -446,7 +450,9 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
       }
       if (type.startsWith("AudioPlayer.") || type.startsWith("PlaybackController.")) return EMPTY;
-      if (type !== "IntentRequest") return ask(m.help);
+      // The staged recording step is English only (plan D1); a Done tap arrives as an APL UserEvent.
+      const recording = locale === "en-US" ? recordingTurn(event, state, options.publicBaseUrl) : null;
+      if (type !== "IntentRequest") return recording ? mark(recording.key, recording.result, recording.response) : ask(m.help);
 
       const intent = event.request.intent?.name ?? "";
       const observed = event.context.AudioPlayer?.token;
@@ -457,6 +463,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       telemetry.intent = intent;
       const slots = loggedSlots(event);
       if (slots !== undefined) telemetry.slots = slots;
+      if (recording) return mark(recording.key, recording.result, recording.response);
 
       switch (intent) {
         case "AMAZON.PauseIntent":
@@ -666,7 +673,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         telemetry.interactionResult = "fallback";
         telemetry.fallbackCount = nextState.fallbackCount ? Number(nextState.fallbackCount) : 1;
       }
-      return type === "IntentRequest" || type === "LaunchRequest"
+      return type === "IntentRequest" || type === "LaunchRequest" || type === "Alexa.Presentation.APL.UserEvent"
         ? { ...response, sessionAttributes: nextState }
         : response;
     } finally {

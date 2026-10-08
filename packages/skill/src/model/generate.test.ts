@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { CLASS_C_DENYLIST } from "@spoken-letter-alexa/shared";
 import { describe, expect, test } from "vitest";
 
-import { assertNoCarrierCollision, assertSlotsDeclared, generateExamplePhrases, generateInteractionModel, loadStories, MODEL_PATH, readTraining, storytellerSlotType, utteranceAllowed } from "./generate.ts";
+import { assertNoCarrierCollision, assertSlotsDeclared, EN_US_ONLY_INTENTS, generateExamplePhrases, generateInteractionModel, loadStories, MODEL_PATH, readTraining, storytellerSlotType, utteranceAllowed } from "./generate.ts";
 
 const stories = loadStories();
 const model = generateInteractionModel({ training: [], stories });
@@ -49,6 +49,8 @@ describe("generateInteractionModel", () => {
         "PlayNewStoriesIntent",
         "PlayCreatorStoriesIntent",
         "StartPlaylistOverIntent",
+        "RecordStoryIntent",
+        "TheEndIntent",
         "PlayStoryIntent",
         "WhatIsNewIntent",
       ].sort(),
@@ -156,20 +158,32 @@ describe("generateInteractionModel", () => {
     const samples = intents.flatMap((intent) => intent.samples);
     const handoffSamples = new Set(byName.AppHandoffIntent!.samples);
     const creditSamples = new Set(byName.CreditHelpIntent!.samples);
+    // The staged recording step (plan D2): these fixed intents may say "record" and nothing else denied.
+    const RECORDING_SAMPLES = new Set([...byName.RecordStoryIntent!.samples, ...byName.TheEndIntent!.samples]);
     for (const sample of samples) {
       // These fixed intents only explain the app handoff. Raw training stays denied.
       const safeHandoff = handoffSamples.has(sample);
       const safeCreditHelp = creditSamples.has(sample);
-      if (!safeHandoff && !safeCreditHelp) expect(utteranceAllowed(sample)).toBe(true);
+      const safeRecording = RECORDING_SAMPLES.has(sample);
+      if (safeRecording) expect(utteranceAllowed(sample.replaceAll("record", ""))).toBe(true);
+      else if (!safeHandoff && !safeCreditHelp) expect(utteranceAllowed(sample)).toBe(true);
       expect(sample).toMatch(/^[a-z0-9 {}']+$/);
       expect(sample).not.toMatch(/\b(?:demo|fixture)\b/i);
       for (const denied of CLASS_C_DENYLIST) {
-        if ((safeHandoff && denied.fragment === "send") || (safeCreditHelp && denied.fragment === "credit")) continue;
+        if ((safeHandoff && denied.fragment === "send") || (safeCreditHelp && denied.fragment === "credit") || (safeRecording && denied.fragment === "record")) continue;
         expect(sample.includes(denied.fragment)).toBe(false);
       }
       expect(sample).not.toMatch(/\b(kid|kids|child|children|son|daughter)\b/);
     }
-    expect(samples.some((sample) => /record|audio/.test(sample))).toBe(false);
+    expect(samples.filter((sample) => !RECORDING_SAMPLES.has(sample)).some((sample) => /record|audio/.test(sample))).toBe(false);
+  });
+
+  test("R5 the English-only recording intents carry the planned samples", () => {
+    expect(EN_US_ONLY_INTENTS).toEqual(["RecordStoryIntent", "TheEndIntent"]);
+    expect(byName.RecordStoryIntent?.samples).toEqual(expect.arrayContaining(["record story", "record my story", "start recording", "i'm ready to record", "record again"]));
+    expect(byName.TheEndIntent?.samples).toEqual(expect.arrayContaining(["the end", "that's the end", "stop recording", "i'm done reading"]));
+    expect(byName.RecordStoryIntent?.slots).toBeUndefined();
+    expect(byName.TheEndIntent?.slots).toBeUndefined();
   });
 
   test("training phrasings are appended to the catch-all, deduplicated and normalised", () => {

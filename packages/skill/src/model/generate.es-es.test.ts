@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import {
   assertNoCarrierCollision,
   assertSlotsDeclared,
+  EN_US_ONLY_INTENTS,
   generateExamplePhrases,
   generateInteractionModel,
   loadStories,
@@ -32,8 +33,12 @@ describe("es-ES interaction model", () => {
 
   test("M3 declares exactly the en-US intents with the same slot names and types", () => {
     expect(spanish.interactionModel.languageModel.invocationName).toBe("spoken letter");
-    const shape = (model: typeof english) => model.interactionModel.languageModel.intents.map((intent) => [intent.name, intent.slots ?? null]);
+    const shape = (model: typeof english) => model.interactionModel.languageModel.intents
+      .filter((intent) => !(EN_US_ONLY_INTENTS as readonly string[]).includes(intent.name))
+      .map((intent) => [intent.name, intent.slots ?? null]);
     expect(shape(spanish)).toEqual(shape(english));
+    // Plan D13: the English-only creation intents never reach the Spanish model.
+    for (const name of EN_US_ONLY_INTENTS) expect(esByName[name], name).toBeUndefined();
     for (const intent of esIntents) {
       if (intent.name.startsWith("AMAZON.")) expect(intent.samples).toEqual([]);
       else expect(intent.samples.length, intent.name).toBeGreaterThan(0);

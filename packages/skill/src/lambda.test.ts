@@ -41,6 +41,21 @@ describe("skill Lambda cold start", () => {
     });
   });
 
+  test("passes the public host to the handler so takes play from CloudFront", async () => {
+    vi.stubEnv("PUBLIC_BASE_URL", "https://alexa.spokenletter.com");
+    vi.stubEnv("SKILL_ID", "amzn1.ask.skill.test");
+    vi.stubEnv("SECRETS_SKILL_COMMAND_ARN", "arn:aws:secretsmanager:us-east-1:123:secret:sla/skill-command");
+    mocks.getSecret.mockResolvedValue({ SecretString: "example-command-secret-0123456789" });
+
+    const { handler } = await import("./lambda.ts");
+    const response = await handler({
+      version: "1.0",
+      context: { System: { application: { applicationId: "amzn1.ask.skill.test" }, user: { userId: "amzn1.ask.account.OWNER" } } },
+      request: { type: "IntentRequest", requestId: "r1", timestamp: "2026-10-08T18:00:00Z", locale: "en-US", intent: { name: "TheEndIntent" } },
+    });
+    expect(response.response.outputSpeech?.ssml).toContain('<audio src="https://alexa.spokenletter.com/fixtures/takes/');
+  });
+
   test("fails closed when the command secret has no string value", async () => {
     vi.stubEnv("PUBLIC_BASE_URL", "https://alexa.spokenletter.com");
     vi.stubEnv("SKILL_ID", "amzn1.ask.skill.test");

@@ -305,6 +305,26 @@
           ]
         },
         {
+          "name": "RecordStoryIntent",
+          "samples": [
+            "record story",
+            "record my story",
+            "start recording",
+            "i'm ready to record",
+            "record again",
+            "record it again"
+          ]
+        },
+        {
+          "name": "TheEndIntent",
+          "samples": [
+            "the end",
+            "that's the end",
+            "stop recording",
+            "i'm done reading"
+          ]
+        },
+        {
           "name": "AMAZON.CancelIntent",
           "samples": []
         },

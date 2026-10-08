@@ -18,7 +18,7 @@ test("playDirective output for every fixture story is unchanged", async () => {
   for (const id of BASELINE_STORIES) {
     const story = await provider.getStory("demo", id);
     if (!story) throw new Error(`fixture story ${id} did not resolve`);
-    const play: Play = { id: story.id, url: story.audio.url, title: story.title, storyteller: story.storyteller, durationSeconds: story.durationSeconds, artUrl: story.artUrl ?? null };
+    const play: Play = { id: story.id, url: story.audio.url, title: story.title, storyteller: story.storyteller, durationSeconds: story.durationSeconds ?? null, artUrl: story.artUrl ?? null };
     directives.push(
       playDirective(play),
       playDirective(play, 42_000, { locale: "es-ES" }),

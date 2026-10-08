@@ -31,6 +31,8 @@ if (logSay) log.warn("raw_recording_disabled", { control: "LOG_SAY" });
 const skill = createHandler({
   skillId,
   agent: createAgentClient({ baseUrl: publicBaseUrl, timeoutMs: AGENT_BUDGET_MS, skillSecret: command.SecretString }),
+  // Takes play from the same host's `/fixtures/takes/*` (CloudFront in front of S3).
+  publicBaseUrl,
   // Compatibility switches remain accepted, but raw recording is intentionally inert.
   logSay,
 });
