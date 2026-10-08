@@ -192,3 +192,27 @@ Deploys are Owner gates.
 - **Objective and scope:** as above. Owner decisions D1–D4 were given 2026-10-08 in this session. No implementation is authorized yet.
 - **Base:** `develop` `c2c8316`, clean. Notes: `docs/plans/2026-10-08-alexa-staged-demo-flow-notes.md`.
 - **Next:** the Owner accepts this plan and authorizes Phase 1. On entry, revalidate `develop` and the citations above. Phase 2 needs the Owner to choose stories from `pull-fixture-story.mjs --list`, plus consent and a no-child-name check per story.
+
+## Revision for Jordan's script (2026-10-08)
+
+Jordan's final script (private-repo issue #2263, recorded in the notes under "Jordan's demo script") and the Owner's answers of 2026-10-08 change the contract for Phases 3–6. The Owner accepted Phase 2 and authorized continuing through all remaining local implementation; deploys, push and the device run stay separate Owner gates.
+
+**What changes:**
+
+| Plan item | Revised |
+| --- | --- |
+| Goal steps 1, 4 | No same-name disambiguation and no script revision (removed by the script). |
+| D6 | Fixed lines: every Alexa line is fixed copy, and the on-screen script is Jordan's text verbatim. No Bedrock call in the create flow and no generation cache. Phase 4 is dropped. |
+| D9 | `fixtures/demo-create.json` holds one listener, "Samuel" (Owner exception to D9 and ADR 0013 for this demo), with the saved wish, the credit balance, the story's fixed replies, its title and its script. No families. |
+| D10 | Credits only: the account has credits, and Alexa says one is used. No purchase, pack, price or currency. |
+| D5 | The skill's session attributes carry the flow within a session. The agent API keeps a copy of the creation record in `sla-demo-state` (`create_<deviceKey>`, 7-day TTL, GetItem and PutItem only), saved best-effort on each step. Launch reads it to resume only a recent `recording` or `review` stage (SS2), so a rehearsal never changes the filming's opening lines. A failed save never stops the flow; SS10 becomes "the flow works, resume is unavailable". |
+| D7, D11 | Review is on request ("playback"), not automatic. The send line is Jordan's: "<title> has been sent to <listener>'s family. Here it is.", then the finished mix plays in the same response (SSML audio) and the session ends. |
+| Takes | `sam_on_the_moon`: plain is the voice-only narration (WebM converted to MP3), both is the finished mix. Music-only and effects-only stand in with the finished mix until separate mixes exist. The spike take and the standalone spike path are removed (phase-5.md F9). |
+| Playback | "play <title> by <storyteller>" is split in the skill when the tail names a known storyteller. A title that misses (ASR) still plays when that storyteller has exactly one story. The fixture title "El Trasgu del Sotano" becomes "El Trasgu" to match line 6. |
+
+**Stages** (en-US, closed set): `listener` → `wish` → `conversation` (three answers) → `recording` → `review` → `title` → `sound` → `finish` → `sent`. In `conversation`, any utterance except stop, cancel and help counts as the next answer, so ASR variation never derails fixed lines (replaces SS8 for this stage).
+
+**Phases now:**
+- **Phase 3 (revised): the scripted create flow,** turns 8–42 in the skill, the agent's creation store and routes, the interaction model, the screens and the takes.
+- **Phase 4 (revised): playback lines and release prep,** turns 1–7, disclosure (README, friction log, `testingInstructions`, device script) and the rehearsal test J1 that runs every line of the script through the real handler, client and routes.
+- Both run in one worktree with the atomic loop and one full gate each; the device run (A1–A5) follows the Owner-gated deploys in the order API, simulator assets, skill Lambda, ASK model.
