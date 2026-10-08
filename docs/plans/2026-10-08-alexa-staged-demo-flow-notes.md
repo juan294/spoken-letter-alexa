@@ -27,4 +27,6 @@
 - Phase 6 needs Jordan's script.
 - `graphify_local` failed to connect this session, so structure came from direct reads.
 
-**Next:** Owner acceptance of the plan, then Phase 1 authorization.
+**Accepted:** the Owner accepted the plan and authorized Phase 1 on 2026-10-08 ("go ahead"), at `develop` `6ea2132`. Phase 1 covers local implementation only; its deploys and device check remain separate Owner gates. No continuation past Phase 1.
+
+**Next:** Phase 1 through `/rpi-implement` (Owner-invoked).
