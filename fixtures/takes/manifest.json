@@ -1,0 +1,14 @@
+{
+  "takes": [
+    {
+      "script": "So once upon a time, in a cozy garden filled with buzzing bees and sweet-smelling flowers, there lived a very brave little snail named Ignacio. Now Ignacio wasn't just any snail. He had heard whispers on the wind, carried by the morning dew, about a faraway cow pasture.",
+      "files": {
+        "plain": "spike_plain.mp3",
+        "effects": "spike_plain.mp3",
+        "music": "spike_plain.mp3",
+        "both": "spike_plain.mp3"
+      },
+      "spike": true
+    }
+  ]
+}
