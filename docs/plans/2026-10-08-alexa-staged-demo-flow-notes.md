@@ -212,3 +212,25 @@ The Owner accepted Phase 1 and authorized steps 1–4: the local merge, `pnpm bu
 - A worktree was created: `/Users/juan/code/spoken-letter-alexa-storytellers` on `feat/more-storytellers` off `e26e8b8`. No changes yet.
 - Writing `pull-fixture-story.mjs`'s first test was blocked by the session's permission classifier as data exfiltration. The plan copies production stories from the Owner's account into this public repository, with per-story Owner consent. This needs the Owner's decision: allow it, or run the pulls themselves.
 - `--list` has not been run. The Owner's story choices and per-story confirmations are still needed (phase-2.md Entry).
+
+## Jordan's demo script (2026-10-08)
+
+**Source.** Jordan filed her final demo script as private-repo issue #2263 ("Sam on the Moon" walkthrough, 42 turns). A verbatim copy is kept locally in `docs/agents/2026-10-08-jordan-demo-script-issue-2263.md` (gitignored: family names and production paths). It is Phase 6's input and changes Phases 3–5 as recorded below.
+
+**Owner decisions (2026-10-08):**
+- **Listener name (exception to D9 and ADR 0013 for this demo).** The listener's real first name, as used in Jordan's script and spoken in the supplied narration, may appear in the skill copy, the fixtures and the audio in this public repository. Owner answer: yes. No other recipient data is exposed.
+- **Fixed lines (deviation from D6).** Every Alexa line in the script is fixed copy, and the on-screen script is Jordan's supplied text verbatim. Bedrock no longer generates the demo conversation or script. The AWS Builder rule still holds through the agent API and the simulator's Strands agent on Bedrock. The README and friction log must say the demo's create flow uses fixed copy.
+- **Credits (narrows D10).** The purchase scene (script lines 9–15) is dropped in favour of Jordan's own fallback: the account already has credits. No pack names, prices or currency are spoken.
+- **Removed from scope by the script:** same-name listener disambiguation (D9's two listeners named Sam), and script review with revision feedback (Goal step 4).
+
+**Supplied material, delivered.** "Sam on the Moon" was `sent`, not `downloaded`, so the delivered-only rule and `pull-fixture-story.mjs` refused it. The Owner approved it with the app's Prepare MP3 download (not Send to Yoto, which would deliver to a real player). A field-masked read then showed `status: downloaded`, `mixStatus: ready`. Pulled into the session scratchpad only, not into the repository yet:
+- voice-only narration: WebM/Opus, mono, 48 kHz, 135.96 s (script line 33)
+- finished mix with music and effects: MP3, 139.46 s (line 42). It is byte-identical to the Owner's downloaded MP3.
+
+**Open for implementation:**
+- `pull-fixture-story.mjs --as-take` fetches only `finalMixRef`. The voice-only narration needs a pull option for the narration ref and a WebM-to-MP3 conversion through `add-demo-take.mjs`.
+- The narration opens with a greeting that is not in the on-screen script, and ends with "The end."
+- The script is about 450 words (136 s of narration) against D8's 70-word budget. The script relies on a time cut, so the session-window outcome of the device check (D1–D5, still pending) decides the fallback. Line 30 has "The end" without the wake word.
+- The finished mix alone is 139.5 s, so the clips must be trimmed to keep the video under three minutes.
+- Phrases differ from the spike: "record" (spike: "record story"), "playback", "re-record", "next", "send story".
+- Script lines 5–7 need "El Trasgu" by Tío Manuel. Production holds a delivered "El Trasgu del Sotano" in the same family space. Its narrator is being checked from a local transcript; if it is Tío Manuel, Phase 2 has its second storyteller. Spanish names in an en-US model need synonym coverage and a device check.
