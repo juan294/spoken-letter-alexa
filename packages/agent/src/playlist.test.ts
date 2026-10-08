@@ -36,6 +36,12 @@ describe("playlist controller", () => {
     expect(second.play?.id).not.toBe(first.play?.id);
   });
 
+  test("matches titles and storytellers regardless of accents, so unresolved speech finds a Spanish name", async () => {
+    const { controller } = harness([...stories, { id: "d", title: "El Trasgu del Sótano", storyteller: "Tío Manuel", deliveredAt: "2026-07-27T00:00:00Z" }]);
+    expect((await controller.command("owner", { command: "start", order: "shuffle", storyteller: "tio manuel" })).play?.id).toBe("d");
+    expect((await controller.command("owner", { command: "title", title: "el trasgu del sotano", storyteller: "Tio Manuel" })).play?.id).toBe("d");
+  });
+
   test("disambiguates titles and creators, and offers an available choice for a missing title", async () => {
     const duplicate = [{ ...stories[0]!, title: "Owl" }, { ...stories[1]!, title: "Owl" }];
     const { controller } = harness(duplicate);

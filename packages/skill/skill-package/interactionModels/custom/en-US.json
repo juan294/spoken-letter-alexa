@@ -395,10 +395,29 @@
           "values": [
             {
               "name": {
+                "value": "Aunt Jordan",
+                "synonyms": [
+                  "Auntie Jordan",
+                  "Jordan"
+                ]
+              }
+            },
+            {
+              "name": {
                 "value": "Aunt Whitney",
                 "synonyms": [
                   "Auntie Whitney",
                   "Whitney"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "Tío Manuel",
+                "synonyms": [
+                  "Manuel",
+                  "Tio Manuel",
+                  "Uncle Manuel"
                 ]
               }
             }

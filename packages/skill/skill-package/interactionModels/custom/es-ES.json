@@ -383,6 +383,18 @@
           "values": [
             {
               "name": {
+                "value": "Aunt Jordan",
+                "synonyms": [
+                  "Jordan",
+                  "la tita Jordan",
+                  "la tía Jordan",
+                  "tita Jordan",
+                  "tía Jordan"
+                ]
+              }
+            },
+            {
+              "name": {
                 "value": "Aunt Whitney",
                 "synonyms": [
                   "Whitney",
@@ -390,6 +402,17 @@
                   "la tía Whitney",
                   "tita Whitney",
                   "tía Whitney"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "Tío Manuel",
+                "synonyms": [
+                  "Manuel",
+                  "el tito Manuel",
+                  "el tío Manuel",
+                  "tito Manuel"
                 ]
               }
             }

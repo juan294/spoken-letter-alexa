@@ -128,6 +128,11 @@ describe("es-ES interaction model", () => {
     ]);
   });
 
+  test("M6 a Spanish kinship word in the catalog name gains its article and diminutive forms", () => {
+    const type = storytellerSlotType([{ storyteller: "Tío Manuel" }], "es-ES");
+    expect(type.values).toEqual([{ name: { value: "Tío Manuel", synonyms: ["Manuel", "el tito Manuel", "el tío Manuel", "tito Manuel"] } }]);
+  });
+
   test("M7 the manifest carries the es-ES locale, its generated example phrases and both countries", () => {
     const manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as Manifest;
     const info = manifest.manifest.publishingInformation;
@@ -136,7 +141,7 @@ describe("es-ES interaction model", () => {
     expect(es?.examplePhrases).toEqual(generateExamplePhrases(stories, "es-ES"));
     expect(es?.examplePhrases).toEqual([
       "Alexa, abre spoken letter",
-      "Alexa, pide a spoken letter que ponga la historia que mandó Aunt Whitney",
+      "Alexa, pide a spoken letter que ponga la historia que mandó Aunt Jordan",
       "Alexa, pregunta a spoken letter qué hay de nuevo",
     ]);
     expect(es?.smallIconUri).toBe(info.locales["en-US"]?.smallIconUri);

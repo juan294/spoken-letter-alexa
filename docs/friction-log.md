@@ -486,8 +486,9 @@ Recorded here because the same session produced them and the fixes are planned t
 
 - **The skill teaches an utterance that cannot succeed.** `packages/skill/src/handler.ts`
   lines 48, 50 and 53, and `skill.json`'s `examplePhrases` and `testingInstructions`, all
-  offer "play the story Grandpa sent". `fixtures/stories.json` holds three stories, all by
-  Aunt Whitney. Every prompt the skill speaks steers the speaker into a miss.
+  offer "play the story Grandpa sent". `fixtures/stories.json` then held three stories, all
+  by Aunt Whitney. Every prompt the skill speaks steers the speaker into a miss. (Since
+  2026-10-08 it holds seven, by Aunt Whitney, Aunt Jordan and Tío Manuel.)
 - **A play request dead-ended after 6.36 s.** The 08:56:43 turn called no tools, played
   nothing and answered with a question. Why is not recoverable from the logs.
 - **`suggest_next_story` is registered but the agent is never told it exists.**

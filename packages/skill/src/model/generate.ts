@@ -250,12 +250,15 @@ const KINSHIP_SYNONYM_FORMS: Record<string, string[]> = {
   grandpa: ["grandfather", "gramps"],
   mom: ["mommy", "mother"],
   dad: ["daddy", "father"],
+  // A Spanish kinship word in a catalog name ("Tío Manuel"): en-US speech may drop the accent or translate it.
+  tío: ["tio", "uncle"],
 };
 
 /**
- * The Spanish kinship forms for the same English kinship words (plan D2: the catalog name is
- * spoken as is). Spain Spanish puts an article before tía and abuelo ("pídele a la tía Whitney"),
- * and Alexa fills the slot with it, so those forms are synonyms too.
+ * The Spanish kinship forms for the same kinship words (plan D2: the catalog name is spoken as
+ * is). Spain Spanish puts an article before tía and abuelo ("pídele a la tía Whitney"), and Alexa
+ * fills the slot with it, so those forms are synonyms too. A name that is already Spanish
+ * ("Tío Manuel") gains only its article and diminutive forms.
  */
 const SPANISH_KINSHIP_FORMS: Record<string, string[]> = {
   aunt: ["tía", "tita", "la tía", "la tita"],
@@ -263,6 +266,7 @@ const SPANISH_KINSHIP_FORMS: Record<string, string[]> = {
   grandpa: ["abuelo", "el abuelo"],
   mom: ["mamá"],
   dad: ["papá"],
+  tío: ["tito", "el tío", "el tito"],
 };
 
 /**
@@ -277,7 +281,7 @@ export function storytellerSlotType(stories: CatalogStoryteller[], locale: Skill
   const values = distinct.map((storyteller) => {
     const [kinshipWord, ...rest] = storyteller.split(" ");
     const bareName = rest.join(" ");
-    const kinshipVariants = bareName ? (kinshipForms[kinshipWord?.toLowerCase() ?? ""] ?? []) : [];
+    const kinshipVariants = bareName ? (kinshipForms[kinshipWord?.normalize("NFC").toLowerCase() ?? ""] ?? []) : [];
     const synonyms = bareName
       ? [bareName, ...kinshipVariants.map((variant) => `${kinshipSpoken(variant)} ${bareName}`)].sort()
       : [];

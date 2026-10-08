@@ -41,7 +41,7 @@ export type McpHarness = {
   userToken: (subject: string) => Promise<string>;
 };
 
-export async function mcpHarness(): Promise<McpHarness> {
+export async function mcpHarness(stories: FixtureStory[] = TEST_STORIES): Promise<McpHarness> {
   const signer = await LocalSigner.create();
   const app = await createServerApp({
     issuer: ISSUER,
@@ -55,7 +55,7 @@ export async function mcpHarness(): Promise<McpHarness> {
     store: new MemoryStore(),
     signer,
     providerMode: "fixtures",
-    fixtures: new FixtureProvider({ stories: TEST_STORIES, publicBaseUrl: ISSUER }),
+    fixtures: new FixtureProvider({ stories, publicBaseUrl: ISSUER }),
   });
   const fetchImpl: typeof fetch = (input, init) => Promise.resolve(app.request(input instanceof Request ? input : String(input), init));
   const serviceToken = async () => {

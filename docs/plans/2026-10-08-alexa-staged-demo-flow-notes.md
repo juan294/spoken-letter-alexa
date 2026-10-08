@@ -220,3 +220,31 @@ Rejected:
 - Or the Owner accepts Aunt Jordan alone, recorded as a deviation.
 
 Then: pull into the worktree, regenerate the models, update the simulator mock and its tests, then review, simplify and the full gate.
+
+## Phase 2 implementation (2026-10-08, after the reboot)
+
+**Second storyteller.** Jordan's demo script (private-repo issue #2263, recorded on `develop` in "Jordan's demo script") needs "El Trasgu" by Tío Manuel. Production holds it as "El Trasgu del Sotano", delivered on 2026-07-27. The Owner confirmed Tío Manuel is the narrator. Further sampling stopped.
+
+**Deviation: a Spanish story in the catalog.** "Spanish" was a rejection reason during sampling, because the add-on locale is en-US. Jordan's script plays a short clip of this story, so it is included as is, with its production title. The en-US model gains `tío` kinship forms ("Tio Manuel", "Uncle Manuel"), and playlist and simulator matching ignore accents.
+
+**Per-story confirmations (phase-2.md Entry; yes or no, no names):**
+
+| Story id | Storyteller consent to publish | Child's name check | Display name |
+| --- | --- | --- | --- |
+| `st_andrea_and_the_crocodile` | yes (Owner, 2026-10-08) | names acceptable (Owner, 2026-10-08) | Aunt Jordan |
+| `st_peach_and_walla` | yes | names acceptable | Aunt Jordan |
+| `st_a_kitten_book_club` | yes | names acceptable | Aunt Jordan |
+| `st_el_trasgu` | yes | names acceptable | Tío Manuel (Owner-confirmed narrator) |
+
+The Owner's "acceptable" answer is a recorded exception to Entry (b), alongside the demo-listener exception on `develop`.
+
+**Pulled with `scripts/pull-fixture-story.mjs`:** each story was `downloaded` with `mixStatus: ready`. The newest is now A Kitten Book Club; the first in catalog order is still Ignacio.
+
+**Independent review findings and dispositions:**
+1. Example-phrase tests pinned to Aunt Whitney: fixed. The gate found the same failure.
+2. Consent and child-name record: recorded above.
+3. Device script order (5.3) and the storyteller claim (4.1): fixed.
+4. The simulator mock missed typed "Tio Manuel": fixed with accent folding and an unaccented test.
+5. Kinship lookup assumed NFC: now normalizes to NFC first.
+6. The playlist normalize change only widens matching ("Peña" matches "Pena"): accepted, no change.
+7. The README lacked `--as-take`, and its provenance wording was inaccurate: fixed.
