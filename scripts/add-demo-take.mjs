@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { findTake, normalizeScript, parseTakesManifest, TAKE_VARIANTS } from "../packages/shared/src/takes.ts";
+import { findTake, parseTakesManifest, TAKE_VARIANTS } from "../packages/shared/src/takes.ts";
 
 const fail = (message, code = 2) => {
   console.error(message);
@@ -72,7 +72,7 @@ for (const variant of given) {
 
 const entry = { script: existing?.script ?? script.trim(), files, ...((options.spike || existing?.spike) && { spike: true }) };
 const takes = manifest.takes
-  .filter((take) => normalizeScript(take.script) !== normalizeScript(script))
+  .filter((take) => take !== existing)
   .map((take) => (options.spike ? { script: take.script, files: take.files } : take));
 const next = parseTakesManifest({ takes: [...takes, entry] });
 

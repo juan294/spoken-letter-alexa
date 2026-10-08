@@ -34,7 +34,7 @@ describe("es-ES interaction model", () => {
   test("M3 declares exactly the en-US intents with the same slot names and types", () => {
     expect(spanish.interactionModel.languageModel.invocationName).toBe("spoken letter");
     const shape = (model: typeof english) => model.interactionModel.languageModel.intents
-      .filter((intent) => !(EN_US_ONLY_INTENTS as readonly string[]).includes(intent.name))
+      .filter((intent) => !EN_US_ONLY_INTENTS.includes(intent.name))
       .map((intent) => [intent.name, intent.slots ?? null]);
     expect(shape(spanish)).toEqual(shape(english));
     // Plan D13: the English-only creation intents never reach the Spanish model.

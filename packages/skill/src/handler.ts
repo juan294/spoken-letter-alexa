@@ -3,12 +3,11 @@ import { createHash } from "node:crypto";
 import { emfEnvelope, isDemoTopic, log, resolveLocale, type SkillLocale } from "@spoken-letter-alexa/shared";
 
 import { AgentHttpError, type AgentClient, type PlaylistCommand, type PlaylistReply } from "./agent-client.ts";
-import { type AplDirective } from "./apl/recording.ts";
 import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE } from "./audio.ts";
 import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import { isCreateStage, type RecordingKey, recordingTurn } from "./recording.ts";
-import { type OutputSpeech, ssml } from "./ssml.ts";
+import { closing, type Directive, type OutputSpeech, question } from "./responses.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
 import spanishModel from "../skill-package/interactionModels/custom/es-ES.json" with { type: "json" };
 
@@ -27,7 +26,7 @@ export type AlexaRequestEnvelope = {
       apiEndpoint?: string;
       apiAccessToken?: string;
       /** `supportedInterfaces` names `Alexa.Presentation.APL` on a screen device (`supportsApl`). */
-      device?: { deviceId?: string; supportedInterfaces?: Record<string, unknown> };
+      device?: { supportedInterfaces?: Record<string, unknown> };
     };
     AudioPlayer?: { token?: string; offsetInMilliseconds?: number; playerActivity?: string };
   };
@@ -43,9 +42,8 @@ export type AlexaRequestEnvelope = {
     reason?: string;
     /** `SessionEndedRequest` only: present when `reason` is `"ERROR"`. */
     error?: { type: string; message: string };
-    /** `Alexa.Presentation.APL.UserEvent` only: the `SendEvent` arguments and the component that sent them. */
+    /** `Alexa.Presentation.APL.UserEvent` only: the `SendEvent` arguments. */
     arguments?: unknown[];
-    source?: unknown;
     /** `Alexa.Presentation.APL.RuntimeError` only. `message` can quote the document, so it is never logged. */
     errors?: { type?: string; reason?: string; message?: string }[];
   };
@@ -57,7 +55,7 @@ export type AlexaResponseEnvelope = {
   response: {
     outputSpeech?: OutputSpeech;
     reprompt?: { outputSpeech: OutputSpeech };
-    directives?: (AudioDirective | AplDirective)[];
+    directives?: Directive[];
     shouldEndSession?: boolean;
   };
 };
@@ -146,24 +144,8 @@ function recoverFlow(m: Messages, state: Record<string, string>, fallback: boole
   return { ...question(text, reprompt), sessionAttributes: next };
 }
 
-function speak(text: string, options: { reprompt?: string; endSession: boolean; directives?: AudioDirective[] }): AlexaResponseEnvelope {
-  return {
-    version: "1.0",
-    response: {
-      outputSpeech: ssml(text),
-      ...(options.reprompt !== undefined && { reprompt: { outputSpeech: ssml(options.reprompt) } }),
-      ...(options.directives && { directives: options.directives }),
-      shouldEndSession: options.endSession,
-    },
-  };
-}
-
 const EMPTY: AlexaResponseEnvelope = { version: "1.0", response: {} };
 
-/** A question stays open with the caller's flow-specific reprompt. */
-const question = (text: string, reprompt: string) => speak(text, { reprompt, endSession: false });
-/** A closing line, optionally with playback: the session ends. */
-const closing = (text: string, directives?: AudioDirective[]) => speak(text, { endSession: true, ...(directives && { directives }) });
 /** Playback control without speech. */
 const audioControl = (directives: AudioDirective[]): AlexaResponseEnvelope => ({ version: "1.0", response: { directives, shouldEndSession: true } });
 const themeQuestion = (m: Messages, text = m.themePrompt): AlexaResponseEnvelope => ({ ...question(text, m.themePrompt), sessionAttributes: { demoFlow: "draft" } });
@@ -459,18 +441,20 @@ export function createHandler(options: HandlerOptions): SkillHandler {
       }
       // The staged recording step is English only (plan D1); a Done tap arrives as an APL UserEvent.
       const recording = locale === "en-US" ? recordingTurn(event, state, options.publicBaseUrl) : null;
-      if (type !== "IntentRequest") return recording ? mark(recording.key, recording.result, recording.response) : ask(m.help);
-
       const intent = event.request.intent?.name ?? "";
+      if (type === "IntentRequest") {
+        telemetry.intent = intent;
+        const slots = loggedSlots(event);
+        if (slots !== undefined) telemetry.slots = slots;
+      }
+      if (recording) return mark(recording.key, recording.result, recording.response);
+      if (type !== "IntentRequest") return ask(m.help);
+
       const observed = event.context.AudioPlayer?.token;
       const tokenInput = observed ? { observedToken: observed } : {};
       const pendingDraft = state.demoFlow === "draft";
       const pendingReaction = state.demoFlow === "reaction";
       const pendingWish = state.demoFlow === "wish";
-      telemetry.intent = intent;
-      const slots = loggedSlots(event);
-      if (slots !== undefined) telemetry.slots = slots;
-      if (recording) return mark(recording.key, recording.result, recording.response);
 
       switch (intent) {
         case "AMAZON.PauseIntent":

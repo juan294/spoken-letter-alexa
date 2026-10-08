@@ -1,9 +1,9 @@
-import { findTake, parseTakesManifest, spikeTake } from "@spoken-letter-alexa/shared";
+import { parseTakesManifest, spikeTake, type Take } from "@spoken-letter-alexa/shared";
 
 import { teleprompterDirectives } from "./apl/recording.ts";
 import { CREATE_MESSAGES as c } from "./create-messages.ts";
 import type { AlexaRequestEnvelope, AlexaResponseEnvelope } from "./handler.ts";
-import { escapeSsml, type OutputSpeech, ssml } from "./ssml.ts";
+import { closing, type OutputSpeech, question, ssml } from "./responses.ts";
 import takesManifest from "../../../fixtures/takes/manifest.json" with { type: "json" };
 
 /**
@@ -12,11 +12,10 @@ import takesManifest from "../../../fixtures/takes/manifest.json" with { type: "
  * end" (or the Done button) plays a take an adult recorded beforehand of the same script.
  * Until the creation flow exists (phase 3), the script is the manifest's spike passage.
  */
-const TAKES = parseTakesManifest(takesManifest);
+const SPIKE = spikeTake(parseTakesManifest(takesManifest));
 
-export const CREATE_STAGES = ["recording", "review"] as const;
-export type CreateStage = (typeof CREATE_STAGES)[number];
-export const isCreateStage = (value: string | undefined): value is CreateStage => (CREATE_STAGES as readonly (string | undefined)[]).includes(value);
+export type CreateStage = "recording" | "review";
+export const isCreateStage = (value: string | undefined): value is CreateStage => value === "recording" || value === "review";
 
 export type RecordingKey = "record_start" | "record_help" | "take_review" | "take_missing" | "take_question" | "record_finish";
 export type RecordingTurn = { key: RecordingKey; result: "awaiting_input" | "completed"; response: AlexaResponseEnvelope };
@@ -37,28 +36,19 @@ const openSession = (text: string, extra: Partial<AlexaResponseEnvelope["respons
   response: { outputSpeech: ssml(text), ...extra },
 });
 
-const review = (outputSpeech: OutputSpeech): AlexaResponseEnvelope => ({
-  version: "1.0",
-  sessionAttributes: at("review"),
-  response: { outputSpeech, reprompt: { outputSpeech: ssml(c.takeQuestion) }, shouldEndSession: false },
-});
+const review = (speech: string | OutputSpeech): AlexaResponseEnvelope => ({ ...question(speech, c.takeQuestion), sessionAttributes: at("review") });
 
-function startRecording(event: AlexaRequestEnvelope, script: string): RecordingTurn {
+function startRecording(event: AlexaRequestEnvelope, take: Take): RecordingTurn {
   const response = supportsApl(event)
-    ? openSession(c.recordCue, { directives: teleprompterDirectives(script) })
-    : openSession(`${c.scriptIntro} ${script} ${c.readAloudCue}`); // SS1: no screen.
+    ? openSession(c.recordCue, { directives: teleprompterDirectives(take.script) })
+    : openSession(`${c.scriptIntro} ${take.script} ${c.readAloudCue}`); // SS1: no screen.
   return { key: "record_start", result: "awaiting_input", response };
 }
 
-function reviewTake(script: string, publicBaseUrl: string | undefined): RecordingTurn {
-  const take = findTake(TAKES, script);
-  if (!take || !publicBaseUrl) return { key: "take_missing", result: "awaiting_input", response: review(ssml(c.takeMissing)) };
-  const src = `${publicBaseUrl.replace(/\/$/, "")}/fixtures/takes/${take.files.plain}`;
-  return {
-    key: "take_review",
-    result: "awaiting_input",
-    response: review({ type: "SSML", ssml: `<speak>${escapeSsml(c.takeIntro)} <audio src="${escapeSsml(src)}"/> ${escapeSsml(c.takeQuestion)}</speak>` }),
-  };
+function reviewTake(take: Take, publicBaseUrl: string | undefined): RecordingTurn {
+  if (!publicBaseUrl) return { key: "take_missing", result: "awaiting_input", response: review(c.takeMissing) };
+  const audio = `${publicBaseUrl.replace(/\/$/, "")}/fixtures/takes/${take.files.plain}`;
+  return { key: "take_review", result: "awaiting_input", response: review(ssml(c.takeIntro, { audio }, c.takeQuestion)) };
 }
 
 /**
@@ -67,20 +57,19 @@ function reviewTake(script: string, publicBaseUrl: string | undefined): Recordin
  * A Done tap after the session closed still plays the take: the spike has only one script.
  */
 export function recordingTurn(event: AlexaRequestEnvelope, state: Record<string, string>, publicBaseUrl: string | undefined): RecordingTurn | null {
-  const script = spikeTake(TAKES)?.script;
-  if (script === undefined) return null;
+  if (!SPIKE) return null;
   const { request } = event;
   const intent = request.type === "IntentRequest" ? request.intent?.name : undefined;
   const done = request.type === "Alexa.Presentation.APL.UserEvent" && request.arguments?.[0] === "done";
-  const stage = state.demoFlow === "create" ? state.createStage : undefined;
+  const stage = state.createStage;
 
-  if (intent === "RecordStoryIntent") return startRecording(event, script);
-  if (intent === "TheEndIntent" || done) return reviewTake(script, publicBaseUrl);
+  if (intent === "RecordStoryIntent") return startRecording(event, SPIKE);
+  if (intent === "TheEndIntent" || done) return reviewTake(SPIKE, publicBaseUrl);
   if (stage === "review" && (intent === "AMAZON.ResumeIntent" || intent === "AMAZON.NextIntent")) {
-    return { key: "record_finish", result: "completed", response: { version: "1.0", response: { outputSpeech: ssml(c.takeContinue), shouldEndSession: true } } };
+    return { key: "record_finish", result: "completed", response: closing(c.takeContinue) };
   }
   if (intent === "AMAZON.FallbackIntent" || intent === "AMAZON.HelpIntent") {
-    if (stage === "review") return { key: "take_question", result: "awaiting_input", response: review(ssml(c.takeQuestion)) };
+    if (stage === "review") return { key: "take_question", result: "awaiting_input", response: review(c.takeQuestion) };
     if (stage === "recording") return { key: "record_help", result: "awaiting_input", response: openSession(c.recordingHelp) };
   }
   return null;

@@ -17,7 +17,7 @@ function envelope(request: Record<string, unknown>, options: { apl?: boolean; at
   return {
     version: "1.0",
     session: { new: false, sessionId: "amzn1.echo-api.session.1", application: { applicationId: SKILL_ID }, user: { userId: "amzn1.ask.account.OWNER" }, ...(options.attributes && { attributes: options.attributes }) },
-    context: { System: { application: { applicationId: SKILL_ID }, user: { userId: "amzn1.ask.account.OWNER" }, ...(options.apl && { device: { deviceId: "device-1", supportedInterfaces: APL } }) } },
+    context: { System: { application: { applicationId: SKILL_ID }, user: { userId: "amzn1.ask.account.OWNER" }, ...(options.apl && { device: { supportedInterfaces: APL } }) } },
     request: { requestId: "amzn1.echo-api.request.1", timestamp: "2026-10-08T18:00:00Z", locale: options.locale ?? "en-US", ...request } as AlexaRequestEnvelope["request"],
   };
 }
