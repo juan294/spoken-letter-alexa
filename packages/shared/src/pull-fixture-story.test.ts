@@ -121,6 +121,9 @@ describe("pull-fixture-story.mjs (S5)", () => {
 
   test("mediaSource builds the gs:// path and refuses a ref outside a story folder", () => {
     expect(mediaSource("spaces/s/stories/d/final.mp3")).toBe("gs://spoken-letter-media/spaces/s/stories/d/final.mp3");
+    // The audio-profile rendition the product writes (profileFinalMixPath).
+    expect(mediaSource("spaces/s/stories/d/final/brand-chime-v1.mp3")).toBe("gs://spoken-letter-media/spaces/s/stories/d/final/brand-chime-v1.mp3");
+    expect(() => mediaSource("spaces/s/stories/d/final/../../e/final.mp3")).toThrow(/unexpected storage ref/);
     expect(() => mediaSource("spaces/s/stories/d/../../x.mp3")).toThrow(/unexpected storage ref/);
     expect(() => mediaSource("gs://other/x.mp3")).toThrow(/unexpected storage ref/);
   });

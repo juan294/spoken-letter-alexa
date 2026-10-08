@@ -48,7 +48,7 @@ const firestore = ({ fetch, token }, url, init = {}) => fetch(url, { ...init, he
 
 /** `gs://` source for a story's storage ref; anything outside a story folder is refused. */
 export function mediaSource(ref) {
-  if (!/^spaces\/[A-Za-z0-9_-]+\/stories\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/.test(ref) || ref.split("/").includes("..")) {
+  if (!/^spaces\/[A-Za-z0-9_-]+\/stories\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_.-]+)+$/.test(ref) || ref.split("/").includes("..")) {
     throw new Error(`unexpected storage ref: ${ref}`);
   }
   return `${MEDIA_BUCKET}/${ref}`;
@@ -141,7 +141,16 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   };
   const token = execFileSync("gcloud", ["auth", "print-access-token"], { encoding: "utf8" }).trim();
   const deps = {
-    fetch: globalThis.fetch,
+    // A transient "fetch failed" (seen on this network) retries twice; HTTP errors do not.
+    fetch: async (url, init) => {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return await globalThis.fetch(url, init);
+        } catch (error) {
+          if (attempt === 3) throw error;
+        }
+      }
+    },
     token,
     run: (command, commandArgs, options = {}) => execFileSync(command, commandArgs, { stdio: ["ignore", "ignore", "inherit"], ...options }),
   };
