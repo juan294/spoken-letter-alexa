@@ -12,7 +12,8 @@ the hackathon; everything else follows "latest stable at pin time".
 | `@modelcontextprotocol/hono` | 2.0.0 | Hono adapter matching the server package; one Hono app serves `/mcp`, OAuth and the agent API locally and on Lambda. |
 | `@modelcontextprotocol/node` | 2.0.0 | Node runtime helpers for the same SDK generation. |
 | `@modelcontextprotocol/client` | 2.0.0 | Test-side and agent-side MCP client from the same generation. The plan's fallback (`@modelcontextprotocol/sdk` 1.30.0 for the Strands transport) is only pulled in if Phase 5 hits the type mismatch listed in the risks table. |
-| `hono` | 4.13.7 | Latest 4.x. Works unchanged on Node, Lambda (`hono/aws-lambda`, `RESPONSE_STREAM`) and in tests via `app.request()`. |
+| `hono` | 4.13.13 | Latest 4.x. Works unchanged on Node, Lambda (`RESPONSE_STREAM` via `@hono/aws-lambda`) and in tests via `app.request()`. |
+| `@hono/aws-lambda` | 1.0.0 | Hono 4.13.13 deprecated the bundled `hono/aws-lambda` (removed in v5); `streamHandle` now comes from this package. 1.0.0, not 1.0.1: 1.0.1 was published 2026-10-08, inside pnpm's release-age gate (exceptions live in `minimumReleaseAgeExclude`), and its dist is otherwise identical. Peer `hono >=4.13.9`. |
 | `zod` | 4.5.4 | Latest 4.x. The MCP SDK v2 and the vendored agent-tool contract both use `z.toJSONSchema`, which only exists in zod 4. |
 | `@strands-agents/sdk` | 1.16.0 | Version named in the plan; the agent loop, `BedrockModel`, `McpClient` and structured output. Its `McpClient` takes an MCP SDK **1.x** transport, which is why `@modelcontextprotocol/sdk` 1.30.0 is pinned next to it (the plan's risk-table fallback, now the normal path). |
 | `@modelcontextprotocol/sdk` | 1.30.0 | `StreamableHTTPClientTransport` for the agent's MCP client only; the server stays on v2. |
