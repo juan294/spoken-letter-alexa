@@ -618,4 +618,10 @@ The final full Alexa simulator still returned Amazon's generic unexpected error 
   so "the end" needs the wake word and a long reading needs a cut in the edit. An on-screen
   Done button and a resume on the next launch cover a dropped session. Fix: document the
   window per device and per Alexa+ mode.
+- **A purchase scene without in-skill purchasing.** Severity low. Jordan's script buys a
+  credit pack by voice. The development-stage skill speaks the pack list, the confirmation
+  and "credits added" as fixed lines; no in-skill product, store or payment is involved, and
+  nothing is charged. A certified skill could not do this: Amazon requires in-skill
+  purchasing for digital goods sold by voice. Fix: none needed for the video; a real product
+  would use in-skill purchasing or send the parent to the app.
 

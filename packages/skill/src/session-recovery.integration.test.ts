@@ -171,7 +171,7 @@ describe("real skill session recovery rehearsal", () => {
     const h = await rehearsal();
     h.draft();
     const named = await h.turn("CatchAllIntent", { text: "create a story for Lily" });
-    expect(named.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
+    expect(named.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
     expect(speech(named)).not.toContain("Lily");
     expect(await h.state()).toBeNull();
     h.draft();

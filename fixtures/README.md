@@ -75,12 +75,14 @@ other three mixes (music-only and effects-only stand in with it).
 ## The staged create flow
 
 `demo-create.json` holds what the English create flow says that is not generic copy: the
-credit balance, the listener and the saved wish, Alexa's two story-specific replies, the
+credit balance, the packs of the staged purchase scene, the listener and the saved wish, Alexa's two story-specific replies, the
 title, and the script shown on screen. The script must match a take in
 `takes/manifest.json` (`packages/shared/src/demo-create.test.ts`). The listener's first name
 is used with the family's consent, as an exception to the no-real-names rule for this demo.
-Regenerate the interaction models after changing it: the `ListenerName` and `StoryTitle`
-slot types come from this file.
+Regenerate the interaction models after changing it: the `PackName`, `ListenerName` and
+`StoryTitle` slot types come from this file. `credits` 0 plays the purchase scene of Jordan's
+script (lines 9-15); a positive balance skips it and says how many credits the account has,
+which is her fallback if the scene runs long or fails on the device.
 
 For a file that is not in production, `scripts/add-fixture-story.mjs <mp3> --title …
 --storyteller … --delivered-at …` registers an MP3 already copied to `fixtures/audio/`.

@@ -13,4 +13,6 @@ test("the README's video section names every staged step", () => {
     expect(section).toMatch(new RegExp(`\\| ${step} \\| Staged:`));
   }
   expect(section).toMatch(/\| Creation progress \| Real: .*DynamoDB/);
+  // The purchase scene: no store, payment or entitlement is involved.
+  expect(section).toMatch(/\| Credits \| Staged: .*purchase.*nothing is charged/);
 });

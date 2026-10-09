@@ -22,7 +22,7 @@ the family that recorded the demo story. Which steps are real and which are stag
 | Step | Treatment |
 | --- | --- |
 | Playing stories by storyteller or by title | Real: skill → agent API → MCP server → delivered fixture stories, played with the AudioPlayer |
-| Credits | Staged: the balance comes from a fixture; nothing is charged |
+| Credits | Staged: the account starts with no credits and a fixed purchase scene offers three packs from `fixtures/demo-create.json`; no store or payment is involved, so nothing is charged, and the next run starts with no credits again |
 | Listener and saved wish | Staged: one listener and one wish from `fixtures/demo-create.json` |
 | Story conversation | Staged: fixed replies from the demo script; no model call |
 | Script on screen | Real: an APL teleprompter with a 3-2-1 countdown, showing the script the storyteller wrote in the Spoken Letter app |

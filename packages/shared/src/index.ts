@@ -8,7 +8,9 @@ export {
   type CreationRecord,
   creationRecordSchema,
   type DemoCreate,
+  type DemoPack,
   findListener,
+  findPack,
   isCreateStage,
   parseDemoCreate,
 } from "./demo-create.ts";

@@ -180,8 +180,9 @@ describe("skill handler", () => {
   test("English creation starts the staged create flow and saves no draft (staged demo plan D1)", async () => {
     const saveDraft = vi.fn();
     const start = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ saveDraft }) })(intent("StartStoryIntent", { theme: "mermaids" }));
-    expect(ssml(start)).toMatch(/Who is the story for\?/);
-    expect(start.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
+    // Jordan's script line 9: the staged purchase scene comes first.
+    expect(ssml(start)).toMatch(/There are no story credits on your account\. Would you like to buy some\?/);
+    expect(start.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
     expect(saveDraft).not.toHaveBeenCalled();
   });
 
@@ -203,7 +204,9 @@ describe("skill handler", () => {
     const agent = fakeAgent({ saveDraft });
     const handler = createHandler({ skillId: SKILL_ID, agent });
     const named = await handler(intent("CatchAllIntent", { text: "create a story for Lily" }));
-    expect(ssml(named)).toMatch(/I don(?:'|&#39;)t see that name on your list/i);
+    // An unknown name at entry is dropped (SS7: never repeated); "who is it for?" follows the purchase.
+    expect(ssml(named)).toMatch(/There are no story credits on your account\. Would you like to buy some\?/);
+    expect(named.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
     expect(ssml(named)).not.toContain("Lily");
     const credits = await handler(intent("HelpTopicIntent", { topic: "add credits" }));
     expect(ssml(credits)).toMatch(/add story credits.*Spoken Letter/i);
@@ -832,7 +835,7 @@ test("pending draft handoff clears state and help resets only the fallback count
   const named = intent("CatchAllIntent", { text: "create a story for Lily" });
   named.session = { ...named.session!, attributes: { demoFlow: "draft" } };
   const handoff = await handler(named);
-  expect(handoff.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
+  expect(handoff.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
   expect(ssml(handoff)).not.toContain("Lily");
   await handler(intent("ThemeChoiceIntent", { drafttheme: "mermaids" }));
   expect(saveDraft).not.toHaveBeenCalled();
@@ -957,7 +960,7 @@ test("app handoff and credit intents discard unknown aliases without writes", as
   const handler = createHandler({ skillId: SKILL_ID, agent });
   // English handoffs enter the staged create flow (D1); an unknown name is never repeated (SS7).
   const named = await handler(intent("AppHandoffIntent", { listeneralias: "Morgan" }));
-  expect(ssml(named)).toMatch(/Who is the story for\?/);
+  expect(ssml(named)).toMatch(/There are no story credits on your account\. Would you like to buy some\?/);
   expect(ssml(named)).not.toContain("Morgan");
   expect(ssml(await handler(intent("CreditHelpIntent")))).toContain("add story credits in Spoken Letter");
   expect(agent.turn).not.toHaveBeenCalled();

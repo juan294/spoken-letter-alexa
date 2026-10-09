@@ -1,5 +1,40 @@
 {
-  "credits": 20,
+  "credits": 0,
+  "purchase": {
+    "currency": "euros",
+    "packs": [
+      {
+        "id": "small",
+        "name": "Small story pack",
+        "credits": 2,
+        "price": "2.99",
+        "synonyms": [
+          "small pack",
+          "the small one"
+        ]
+      },
+      {
+        "id": "family",
+        "name": "Family story pack",
+        "credits": 10,
+        "price": "11.99",
+        "synonyms": [
+          "family pack"
+        ]
+      },
+      {
+        "id": "founding",
+        "name": "Founding family pack",
+        "credits": 20,
+        "price": "19.99",
+        "synonyms": [
+          "founding family",
+          "founding pack",
+          "founders pack"
+        ]
+      }
+    ]
+  },
   "listeners": [
     {
       "id": "samuel",

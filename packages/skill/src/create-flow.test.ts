@@ -2,7 +2,7 @@ import { type CreationRecord, findTake, parseDemoCreate, parseTakesManifest } fr
 import { describe, expect, test, vi } from "vitest";
 
 import { type AgentClient } from "./agent-client.ts";
-import { RESUME_SECONDS } from "./create-flow.ts";
+import { RESUME_SECONDS, startCreate } from "./create-flow.ts";
 import { CREATE_MESSAGES as c } from "./create-messages.ts";
 import { createHandler, type AlexaRequestEnvelope, type AlexaResponseEnvelope } from "./handler.ts";
 import { escapeSsml } from "./responses.ts";
@@ -59,6 +59,20 @@ function device(agent: Partial<AgentClient> = creations(), publicBaseUrl: string
   };
 }
 
+/** One turn from a given session state. */
+function at(attributes: Record<string, string>, publicBaseUrl: string | null = BASE_URL) {
+  const turn = device(creations(), publicBaseUrl);
+  return (name: string, slots: Record<string, SlotInput> = {}, options: Options = {}) => turn(name, slots, { attributes, ...options });
+}
+
+/** "create a story", then lines 10-14: yes, the Founding family pack, yes. The flow then asks who it's for. */
+async function buy(turn: ReturnType<typeof device>) {
+  await turn("StartStoryIntent");
+  await turn("AMAZON.YesIntent");
+  await turn("ChoosePackIntent", { pack: "founding family pack" });
+  await turn("AMAZON.YesIntent");
+}
+
 /** Same copy rules as the handler suite (handler.test.ts `ssml`). */
 function speech(response: AlexaResponseEnvelope): string {
   const text = response.response.outputSpeech?.ssml ?? "";
@@ -91,10 +105,20 @@ describe("Jordan's script, lines 8 to 42", () => {
     const agent = creations();
     const turn = device(agent);
 
-    const start = await turn("StartStoryIntent", {}, { newSession: true });
-    expect(speech(start)).toBe(spoken("Okay, create a story. You have 20 story credits, and this story uses one. Who is the story for?"));
+    const start = await turn("StartStoryIntent", {}, { newSession: true }); // 8
+    expect(speech(start)).toBe(spoken("Okay, create a story. There are no story credits on your account. Would you like to buy some?")); // 9
     expect(start.response.shouldEndSession).toBe(false);
-    expect(start.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
+    expect(start.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
+
+    expect(speech(await turn("AMAZON.YesIntent"))).toBe(spoken( // 10-11
+      "Small story pack, 2 credits, for 2.99 euros. Family story pack, 10 credits, for 11.99. Or Founding family pack, 20 credits, for 19.99. Which would you like?"));
+    const confirm = await turn("ChoosePackIntent", { pack: { value: "the founding family pack", canonical: "Founding family pack" } }); // 12
+    expect(speech(confirm)).toBe(spoken("Founding family pack, 20 credits, for 19.99 euros. Shall I complete the purchase?")); // 13
+    expect(confirm.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
+
+    const bought = await turn("AMAZON.YesIntent"); // 14
+    expect(speech(bought)).toBe(spoken("Thank you. 20 story credits added. Who is the story for?")); // 15-16
+    expect(bought.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
 
     const wish = await turn("ChooseListenerIntent", { listener: { value: "samuel", canonical: "Samuel" } });
     expect(speech(wish)).toBe(spoken("There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?"));
@@ -156,7 +180,7 @@ describe("Jordan's script, lines 8 to 42", () => {
   test("the record never stores what the adult said, only codes, counts and the title", async () => {
     const agent = creations();
     const turn = device(agent);
-    await turn("StartStoryIntent");
+    await buy(turn);
     await turn("ChooseListenerIntent", { listener: "Samuel" });
     await turn("AMAZON.YesIntent");
     await turn("StoryDetailIntent", { detail: "astronaut named sam travels to the moon" });
@@ -169,14 +193,19 @@ describe("entries", () => {
   test.each([
     ["create a story for Sam", "CatchAllIntent", { text: "create a story for Sam" }],
     ["AppHandoffIntent", "AppHandoffIntent", { listeneralias: "Samuel" }],
-  ])("%s skips the listener question", async (_label, name, slots) => {
-    const response = await device()(name, slots);
-    expect(speech(response)).toBe(spoken(`${c.start(DEMO.credits)} There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?`));
+  ])("%s keeps the listener through the purchase, then skips the listener question", async (_label, name, slots) => {
+    const turn = device();
+    const offer = await turn(name, slots);
+    expect(speech(offer)).toBe(spoken(c.noCredits));
+    expect(offer.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits", createListener: "samuel" });
+    await turn("AMAZON.YesIntent");
+    await turn("ChoosePackIntent", { pack: "founding family pack" });
+    expect(speech(await turn("AMAZON.YesIntent"))).toBe(spoken("Thank you. 20 story credits added. There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?"));
   });
 
   test("SS7 an unknown listener lists the names without repeating what was said, and keeps the stage", async () => {
     const turn = device();
-    await turn("StartStoryIntent");
+    await buy(turn);
     const response = await turn("ChooseListenerIntent", { listener: "Mia" });
     expect(speech(response)).toBe(spoken(`${c.unknownListener("Samuel")} ${c.whoFor}`));
     expect(speech(response)).not.toContain("Mia");
@@ -184,12 +213,18 @@ describe("entries", () => {
   });
 
   test("record story outside the flow starts it (phase-5.md F9)", async () => {
-    expect(speech(await device()("RecordStoryIntent"))).toBe(spoken(`${c.start(DEMO.credits)} ${c.whoFor}`));
+    expect(speech(await device()("RecordStoryIntent"))).toBe(spoken(c.noCredits));
+  });
+
+  test("with credits in the fixture, the purchase is skipped: Jordan's fallback", () => {
+    const turn = startCreate(undefined, 20);
+    expect(turn.response.response.outputSpeech?.ssml).toBe(spoken("Okay, create a story. You have 20 story credits, and this story uses one. Who is the story for?"));
+    expect(turn.record).toEqual({ stage: "listener" });
   });
 
   test("a no to the wish still asks for the characters", async () => {
     const turn = device();
-    await turn("StartStoryIntent");
+    await buy(turn);
     await turn("ChooseListenerIntent", { listener: "Samuel" });
     expect(speech(await turn("AMAZON.NoIntent"))).toBe(spoken(`${c.wishNo} ${c.firstQuestion}`));
   });
@@ -205,11 +240,87 @@ describe("entries", () => {
   });
 });
 
+describe("the purchase scene (lines 9-15)", () => {
+  const atCredits = { demoFlow: "create", createStage: "credits" };
+  const atPacks = { demoFlow: "create", createStage: "pack" };
+  const atConfirm = { demoFlow: "create", createStage: "purchase", createPack: "family" };
+
+  test("a pack heard through another intent or without a resolution still counts", async () => {
+    for (const [name, slots] of [["StoryTitleIntent", { storytitle: "the founding family pack" }], ["CatchAllIntent", { text: "the founding family pack please" }], ["ChooseListenerIntent", { listener: "founding family" }]] as const) {
+      const response = await at(atPacks)(name, slots);
+      expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
+    }
+  });
+
+  test("an unknown pack lists the packs again without saving", async () => {
+    const agent = creations();
+    const response = await device(agent)("ChoosePackIntent", { pack: "the biggest one" }, { attributes: atPacks });
+    expect(speech(response)).toBe(spoken(c.packList(DEMO.purchase?.packs ?? [], "euros")));
+    expect(response.sessionAttributes).toEqual(atPacks);
+    expect(agent.createSave).not.toHaveBeenCalled();
+  });
+
+  test("no to buying ends the flow as stopped", async () => {
+    const agent = creations();
+    const response = await device(agent)("AMAZON.NoIntent", {}, { attributes: atCredits });
+    expect(speech(response)).toBe(spoken(c.noPurchase));
+    expect(response.response.shouldEndSession).toBe(true);
+    expect(agent.stored()?.record).toEqual({ stage: "stopped" });
+  });
+
+  test("no to the confirmation lists the packs again", async () => {
+    const response = await at(atConfirm)("AMAZON.NoIntent");
+    expect(speech(response)).toBe(spoken(`${c.notPurchased} ${c.packList(DEMO.purchase?.packs ?? [], "euros")}`));
+    expect(response.sessionAttributes).toEqual(atPacks);
+  });
+
+  test("yes to the confirmation adds that pack's credits", async () => {
+    expect(speech(await at(atConfirm)("AMAZON.YesIntent"))).toBe(spoken(`Thank you. 10 story credits added. ${c.whoFor}`));
+  });
+
+  test.each(["AMAZON.HelpIntent", "AMAZON.FallbackIntent"])("%s repeats each stage's question without saving", async (name) => {
+    for (const [attributes, expected] of [[atCredits, c.buyReprompt], [atPacks, c.packList(DEMO.purchase?.packs ?? [], "euros")], [atConfirm, "Family story pack, 10 credits, for 11.99 euros. Shall I complete the purchase?"]] as const) {
+      const agent = creations();
+      const response = await device(agent)(name, {}, { attributes });
+      expect(speech(response)).toBe(spoken(expected));
+      expect(response.sessionAttributes).toEqual(attributes);
+      expect(agent.createSave).not.toHaveBeenCalled();
+    }
+  });
+
+  test("a pack named with the yes goes straight to its confirmation", async () => {
+    const response = await at(atCredits)("CatchAllIntent", { text: "yes the founding family pack" });
+    expect(speech(response)).toBe(spoken("Founding family pack, 20 credits, for 19.99 euros. Shall I complete the purchase?"));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
+  });
+
+  test("naming another pack at the confirmation switches to it", async () => {
+    const response = await at(atConfirm)("ChoosePackIntent", { pack: { value: "small pack", canonical: "Small story pack" } });
+    expect(speech(response)).toBe(spoken("Small story pack, 2 credits, for 2.99 euros. Shall I complete the purchase?"));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "small" });
+  });
+
+  test("a confirmation without a known pack goes back to the pack list", async () => {
+    const response = await at({ demoFlow: "create", createStage: "purchase", createPack: "platinum" })("AMAZON.YesIntent");
+    expect(response.sessionAttributes).toEqual(atPacks);
+  });
+
+  test.each([
+    { stage: "credits" as const },
+    { stage: "pack" as const },
+    { stage: "purchase" as const, packId: "founding" },
+  ])("the $stage stage is never resumed, by a launch or a Done tap", async (record) => {
+    const handler = createHandler({ skillId: SKILL_ID, agent: { turn: vi.fn(), ...creations({ record, updatedAt: NOW - 60 }) }, publicBaseUrl: BASE_URL, now: () => NOW });
+    expect(speech(await handler(envelope({ type: "LaunchRequest" }, { newSession: true })))).toBe(spoken("Here's Spoken Letter. Which story would you like to hear?"));
+    expect(speech(await handler(done({ newSession: true })))).not.toContain("recording is saved");
+  });
+
+  test("one credit is said in the singular", () => {
+    expect(c.purchased(1)).toBe("Thank you. 1 story credit added.");
+  });
+});
+
 describe("stages", () => {
-  const at = (attributes: Record<string, string>, publicBaseUrl: string | null = BASE_URL) => {
-    const turn = device(creations(), publicBaseUrl);
-    return (name: string, slots: Record<string, SlotInput> = {}, options: Options = {}) => turn(name, slots, { attributes, ...options });
-  };
   const review = { demoFlow: "create", createStage: "review", createListener: "samuel" };
 
   test.each(["AMAZON.HelpIntent", "AMAZON.FallbackIntent", "ChooseListenerIntent"])("%s in review repeats the review prompt", async (name) => {
@@ -305,7 +416,7 @@ describe("stages", () => {
     expect(speech(launch)).not.toContain("Welcome back");
   });
 
-  test.each(["ChooseListenerIntent", "SoundChoiceIntent", "StoryDetailIntent", "SendStoryIntent"])("%s outside the flow gets the fallback recovery", async (name) => {
+  test.each(["ChooseListenerIntent", "ChoosePackIntent", "SoundChoiceIntent", "StoryDetailIntent", "SendStoryIntent"])("%s outside the flow gets the fallback recovery", async (name) => {
     const response = await device()(name, { detail: "a story by aunt whitney" });
     expect(response.sessionAttributes).toEqual({ fallbackCount: "1" });
     expect(response.response.shouldEndSession).toBe(false);
@@ -361,7 +472,8 @@ describe("resume (SS2)", () => {
     const { log } = await import("@spoken-letter-alexa/shared");
     const warn = vi.spyOn(log, "warn");
     const response = await device({ createSave: vi.fn().mockRejectedValue(new Error("down")) })("StartStoryIntent");
-    expect(speech(response)).toBe(spoken(`${c.start(DEMO.credits)} ${c.whoFor}`));
+    expect(speech(response)).toBe(spoken(c.noCredits));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
     expect(warn).toHaveBeenCalledWith("create_save_failed", { errorClass: "Error" });
     warn.mockRestore();
   });

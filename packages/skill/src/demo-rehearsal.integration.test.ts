@@ -28,8 +28,7 @@ type Slot = string | { heard: string; canonical: string };
 /**
  * J1 (staged demo plan, revised for Jordan's script): her lines, verbatim, through the real
  * handler, agent client, agent routes and MCP fixture catalog, on a screen device. Alexa's
- * replies are compared with her script's wording; line 9 is the credits-only replacement for
- * the dropped purchase scene (D10).
+ * replies are compared with her script's wording, the staged purchase scene (lines 9-15) included.
  */
 async function rehearsal() {
   const mcp = await mcpHarness(await loadFixtureCatalog(FIXTURES_PATH));
@@ -96,8 +95,15 @@ describe("Jordan's demo script (J1, J2)", () => {
     expect(said(trasgu)).toBe("Playing El Trasgu by Tío Manuel."); // 6
     expect(played(trasgu)?.audioItem.stream.url).toMatch(/\/fixtures\/audio\/st_el_trasgu\.mp3$/); // 7
 
-    // Credits (D10: the account already has credits) and shaping the story.
-    expect(said(await h.say("StartStoryIntent", {}, true))).toBe("Okay, create a story. You have 20 story credits, and this story uses one. Who is the story for?"); // 8, 9, 16
+    // Credits: the staged purchase (nothing is charged).
+    expect(said(await h.say("StartStoryIntent", {}, true))).toBe("Okay, create a story. There are no story credits on your account. Would you like to buy some?"); // 8-9
+    expect(said(await h.say("AMAZON.YesIntent"))) // 10
+      .toBe("Small story pack, 2 credits, for 2.99 euros. Family story pack, 10 credits, for 11.99. Or Founding family pack, 20 credits, for 19.99. Which would you like?"); // 11
+    expect(said(await h.say("ChoosePackIntent", { pack: { heard: "the founding family pack", canonical: "Founding family pack" } }))) // 12
+      .toBe("Founding family pack, 20 credits, for 19.99 euros. Shall I complete the purchase?"); // 13
+    expect(said(await h.say("AMAZON.YesIntent"))).toBe("Thank you. 20 story credits added. Who is the story for?"); // 14-16
+
+    // Shaping the story.
     expect(said(await h.say("ChooseListenerIntent", { listener: { heard: "samuel", canonical: "Samuel" } }))) // 17
       .toBe("There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?"); // 18
     expect(said(await h.say("AMAZON.YesIntent"))).toBe("A space story it is. Who are the characters, and what happens?"); // 19–20
@@ -133,6 +139,9 @@ describe("Jordan's demo script (J1, J2)", () => {
   test("J2 the same lines heard without resolutions, capitals or punctuation give the same replies", async () => {
     const h = await rehearsal();
     await h.say("StartStoryIntent", {}, true);
+    await h.say("AMAZON.YesIntent");
+    expect(said(await h.say("CatchAllIntent", { text: "the founding family pack" }))).toMatch(/^Founding family pack, 20 credits/);
+    expect(said(await h.say("AMAZON.YesIntent"))).toMatch(/^Thank you\. 20 story credits added\./);
     expect(said(await h.say("ChooseListenerIntent", { listener: "samuel" }))).toContain("There's a saved wish for Samuel");
     await h.say("AMAZON.YesIntent");
     await h.say("CatchAllIntent", { text: "an astronaut named sam travels to the moon and meets an alien named monica" });

@@ -248,7 +248,7 @@ Then: pull into the worktree, regenerate the models, update the simulator mock a
 **Owner decisions (2026-10-08):**
 - **Listener name (exception to D9 and ADR 0013 for this demo).** The listener's real first name, as used in Jordan's script and spoken in the supplied narration, may appear in the skill copy, the fixtures and the audio in this public repository. Owner answer: yes. No other recipient data is exposed.
 - **Fixed lines (deviation from D6).** Every Alexa line in the script is fixed copy, and the on-screen script is Jordan's supplied text verbatim. Bedrock no longer generates the demo conversation or script. The AWS Builder rule still holds through the agent API and the simulator's Strands agent on Bedrock. The README and friction log must say the demo's create flow uses fixed copy.
-- **Credits (narrows D10).** The purchase scene (script lines 9–15) is dropped in favour of Jordan's own fallback: the account already has credits. No pack names, prices or currency are spoken.
+- **Credits (narrows D10).** The purchase scene (script lines 9–15) is dropped in favour of Jordan's own fallback: the account already has credits. No pack names, prices or currency are spoken. *Superseded on 2026-10-09: the purchase scene is built, staged; see "Purchase scene (2026-10-09)" below.*
 - **Removed from scope by the script:** same-name listener disambiguation (D9's two listeners named Sam), and script review with revision feedback (Goal step 4).
 
 **Supplied material, delivered.** "Sam on the Moon" was `sent`, not `downloaded`, so the delivered-only rule and `pull-fixture-story.mjs` refused it. The Owner approved it with the app's Prepare MP3 download (not Send to Yoto, which would deliver to a real player). A field-masked read then showed `status: downloaded`, `mixStatus: ready`. Pulled into the session scratchpad only, not into the repository yet:
@@ -357,3 +357,23 @@ The Owner's "acceptable" answer is a recorded exception to Entry (b), alongside 
 4. **Live round trip** (`aws lambda invoke sla-alexa-skill`, synthetic en-US requests from a test user id): `StartStoryIntent` answered "Okay, create a story. You have 20 story credits, and this story uses one. Who is the story for?"; "el trasgu by tio manuel" answered "Playing El Trasgu by Tío Manuel." with `st_el_trasgu.mp3`. A fresh device's launch spoke the seeded demo update ("A family birthday is coming up…") instead of line 1, as designed for a device with a pending update; clear pending updates on the Echo before filming.
 
 **Tooling notes:** `cdk deploy` and `ask deploy` were blocked by Claude Code's auto-mode classifier and needed one-off `/permissions` approvals; the Chrome `file_upload` tool was blocked too and is capped at 10 MB per call. Five stale multipart uploads left by the Phase 1 simulator attempts were aborted.
+
+## Purchase scene (2026-10-09)
+
+**Decision.** On 2026-10-09 the Owner reversed the credits-only decision (above, and D10 in the plan): build Jordan's purchase scene, script lines 9–15. It is staged like the rest of the flow: fixed lines, no in-skill product, store, payment or entitlement, and nothing is charged. The next run starts with no credits again, so every rehearsal hears the same lines.
+
+**Built** (branch `feat/purchase-scene`):
+- `fixtures/demo-create.json`: `credits` 0 and `purchase` (currency "euros"; Small story pack 2 credits 2.99, Family story pack 10 credits 11.99, Founding family pack 20 credits 19.99, each with spoken synonyms). `credits` above 0 skips the scene and says the balance: Jordan's fallback, one number away if the scene fails on the Echo or runs long.
+- `packages/shared/src/demo-create.ts`: the pack schema (positive credits, a money-shaped price, unique ids and heard names), `findPack` (folded words, longest name first, so "the Founding family pack" never matches "Family story pack"), the stages `credits`, `pack` and `purchase` ahead of `listener`, and `packId` on the record.
+- `packages/skill/src/create-flow.ts` and `create-messages.ts`: lines 9, 11, 13 and 15 verbatim; line 15 runs into line 16 ("Who is the story for?"), or into the wish offer when the entry named the listener. A pack named with the yes ("yes, the founding family pack") goes straight to line 13; naming another pack at line 13 switches to it. No to line 9 ends the flow and stores `stopped`; no to line 13 lists the packs again. A pack heard through another intent still counts. None of the three stages is resumed.
+- Model: the en-US-only `ChoosePackIntent` with the `PackName` slot type from the fixture. No sample contains a denied fragment ("credit", "purchase", "pay"); the pack names are slot values only. es-ES is byte-identical.
+- Disclosure: the README "Credits" row, `testingInstructions`, the friction log (no in-skill purchasing; a certified skill would need it), the fixtures README and device check 6.2.
+
+**Oracles.** J1 runs lines 1–42 with the purchase through the real handler, client, routes and catalog; J2 covers the pack said without a resolution. `create-flow.test.ts` covers every purchase branch; `demo-create.test.ts` the schema and `findPack`; `generate.test.ts` the intent and slot type; `disclosure.test.ts` the README row.
+
+**Behaviour change.** An unknown listener name said at entry ("create a story for Lily") is now dropped silently, still never repeated (SS7); "Who is the story for?" follows the purchase. Five handler and recovery assertions changed accordingly.
+
+**Independent review:** APPROVE, no blockers or majors. Fixed: the stale D10 text (this entry), a pack named with the yes or at the confirmation, punctuation in pack names, the `startCreate` seam (now `credits` only), help and every purchase stage in the no-resume test. Open: how Alexa reads "2.99 euros", "11.99" and "19.99" (device check 6.2; Jordan's wording speaks the currency once).
+
+**Deploy order.** The agent API validates every saved record against the shared schema (`packages/agent/src/routes.ts:57`), so it must deploy before the skill: a skill-first deploy would have the purchase-stage saves rejected (logged as `create_save_failed`). Order: API, skill, `ask deploy` (the new intent and slot type). The simulator stack does not change.
+

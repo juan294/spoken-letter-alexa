@@ -235,7 +235,7 @@ function textForIntent(event: AlexaRequestEnvelope, match: Matchers): IntentText
   }
 }
 
-const CREATE_ONLY_INTENTS = new Set(["ChooseListenerIntent", "StoryDetailIntent", "PlaybackIntent", "StoryTitleIntent", "SoundChoiceIntent", "SendStoryIntent", "TheEndIntent"]);
+const CREATE_ONLY_INTENTS = new Set(["ChooseListenerIntent", "ChoosePackIntent", "StoryDetailIntent", "PlaybackIntent", "StoryTitleIntent", "SoundChoiceIntent", "SendStoryIntent", "TheEndIntent"]);
 
 /**
  * An en-US request that starts the staged create flow, with the listener it names, if any:

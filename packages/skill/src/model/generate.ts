@@ -170,6 +170,12 @@ const EN_US_ONLY: ModelIntent[] = [
   { name: "RecordStoryIntent", samples: ["record", "record story", "record my story", "start recording", "i'm ready to record", "re record", "rerecord", "record again", "record it again"] },
   { name: "TheEndIntent", samples: ["the end", "that's the end", "stop recording", "i'm done reading"] },
   {
+    // Line 12. The pack names are slot values only; "credit" and "purchase" stay out of every sample.
+    name: "ChoosePackIntent",
+    slots: [{ name: "pack", type: "PackName" }],
+    samples: ["{pack}", "the {pack}", "i'd like the {pack}", "i would like the {pack}", "i'll take the {pack}", "the {pack} please", "{pack} please", "let's get the {pack}"],
+  },
+  {
     name: "ChooseListenerIntent",
     slots: [{ name: "listener", type: "ListenerName" }],
     samples: ["{listener}", "it's for {listener}", "it is for {listener}", "for {listener}", "the story is for {listener}"],
@@ -197,6 +203,7 @@ const EN_US_ONLY: ModelIntent[] = [
 /** The create flow's slot types, from the fixture; en-US only like the intents that use them. */
 export function createSlotTypes(demo: DemoCreate): ModelSlotType[] {
   return [
+    { name: "PackName", values: (demo.purchase?.packs ?? []).map((pack) => ({ name: { value: pack.name, ...(pack.synonyms.length > 0 && { synonyms: [...pack.synonyms] }) } })) },
     { name: "ListenerName", values: demo.listeners.map((listener) => ({ name: { value: listener.name, ...(listener.synonyms.length > 0 && { synonyms: [...listener.synonyms] }) } })) },
     { name: "StoryTitle", values: [{ name: { value: demo.story.title } }] },
     { name: "SoundChoice", values: [

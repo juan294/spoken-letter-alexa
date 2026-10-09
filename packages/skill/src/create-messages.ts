@@ -1,16 +1,30 @@
-import type { TakeVariant } from "@spoken-letter-alexa/shared";
+import type { DemoPack, TakeVariant } from "@spoken-letter-alexa/shared";
 
 /**
  * The en-US creation flow's spoken and on-screen lines (staged demo plan D12). English only
  * by decision D1, so this is one record rather than a `Record<SkillLocale, …>`: `MESSAGES`
  * stays a complete two-locale catalog. The handler copy rules apply here too
  * (`handler.test.ts` `ssml`). The lines follow Jordan's demo script (plan revision for her
- * script): names, the wish, the story's own replies and its title come from
+ * script): names, the wish, the packs, the story's own replies and its title come from
  * `fixtures/demo-create.json`, everything else is here.
  */
 export type CreateMessages = {
-  /** Script line 9, with the purchase scene replaced by the credits the account already has (D10). */
+  /** Jordan's fallback for line 9 when the fixture already has credits: the purchase scene is skipped. */
   start: (credits: number) => string;
+  /** Line 9: the purchase scene opens (staged; nothing is charged). */
+  noCredits: string;
+  buyReprompt: string;
+  /** Line 11: the packs, the currency spoken once, after the first price. */
+  packList: (packs: readonly DemoPack[], currency: string) => string;
+  packReprompt: string;
+  /** Line 13. */
+  confirmPurchase: (pack: DemoPack, currency: string) => string;
+  /** Line 15. */
+  purchased: (credits: number) => string;
+  /** No to line 9: a story needs a credit, so the flow ends. */
+  noPurchase: string;
+  /** No to line 13: back to the packs. */
+  notPurchased: string;
   /** Line 16. */
   whoFor: string;
   /** SS7. The spoken name is never repeated back. */
@@ -78,6 +92,17 @@ export type CreateMessages = {
 
 export const CREATE_MESSAGES: CreateMessages = {
   start: (credits) => `Okay, create a story. You have ${credits} story ${credits === 1 ? "credit" : "credits"}, and this story uses one.`,
+  noCredits: "Okay, create a story. There are no story credits on your account. Would you like to buy some?",
+  buyReprompt: "Would you like to buy some story credits?",
+  packList: (packs, currency) => `${packs.map((pack, index) => {
+    const line = `${pack.name}, ${pack.credits} ${pack.credits === 1 ? "credit" : "credits"}, for ${pack.price}${index === 0 ? ` ${currency}` : ""}.`;
+    return index > 0 && index === packs.length - 1 ? `Or ${line}` : line;
+  }).join(" ")} Which would you like?`,
+  packReprompt: "Which pack would you like?",
+  confirmPurchase: (pack, currency) => `${pack.name}, ${pack.credits} ${pack.credits === 1 ? "credit" : "credits"}, for ${pack.price} ${currency}. Shall I complete the purchase?`,
+  purchased: (credits) => `Thank you. ${credits} story ${credits === 1 ? "credit" : "credits"} added.`,
+  noPurchase: "Okay. A story uses one story credit, so we'll stop here for now.",
+  notPurchased: "Okay, nothing was bought.",
   whoFor: "Who is the story for?",
   unknownListener: (names) => `I don't see that name on your list. You can choose ${names}.`,
   wishOffer: (name, phrase, topic) => `There's a saved wish for ${name}: ${phrase}. Would you like to create a story about ${topic}?`,

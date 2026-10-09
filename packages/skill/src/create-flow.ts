@@ -1,7 +1,9 @@
 import {
   type CreateStage,
   type CreationRecord,
+  type DemoPack,
   findListener,
+  findPack,
   findTake,
   isCreateStage,
   parseDemoCreate,
@@ -21,7 +23,8 @@ import takesManifest from "../../../fixtures/takes/manifest.json" with { type: "
 
 /**
  * The staged create flow (staged demo plan, revised for Jordan's script): en-US only, every
- * line fixed. A skill never receives raw audio, so nothing is captured: the teleprompter shows
+ * line fixed. The purchase is staged too: no store, payment or entitlement is touched, and the
+ * next run starts with no credits again. A skill never receives raw audio, so nothing is captured: the teleprompter shows
  * the script, the adult reads it, and playback is a take an adult recorded beforehand of the
  * same script in the real app. The session carries the flow; the agent keeps a copy of the
  * record so a dropped session resumes at take review (SS2).
@@ -37,7 +40,7 @@ export const RESUME_SECONDS = 15 * 60;
 export type CreateState = CreationRecord;
 
 export type CreateKey =
-  | "create_start" | "create_listener" | "create_wish" | "create_question" | "create_script" | "record_start" | "record_help"
+  | "create_start" | "create_packs" | "create_confirm" | "create_listener" | "create_wish" | "create_question" | "create_script" | "record_start" | "record_help"
   | "take_saved" | "take_resume" | "take_review" | "take_missing" | "create_title" | "create_sound" | "create_finish" | "create_sent"
   | "create_canceled";
 
@@ -52,6 +55,9 @@ export type CreateTurn = {
 type Context = { event: AlexaRequestEnvelope; publicBaseUrl: string | undefined };
 
 const listenerById = (id: string | undefined) => DEMO.listeners.find((listener) => listener.id === id);
+const packById = (id: string | undefined) => DEMO.purchase?.packs.find((pack) => pack.id === id);
+const CURRENCY = DEMO.purchase?.currency ?? "";
+const PACKS = DEMO.purchase?.packs ?? [];
 const isVariant = (value: unknown): value is TakeVariant => (TAKE_VARIANTS as readonly unknown[]).includes(value);
 const withListener = (stage: CreateStage, state: CreateState): CreateState => ({ stage, ...(state.listenerId && { listenerId: state.listenerId }) });
 
@@ -66,6 +72,8 @@ export function createStateFrom(attributes: Record<string, string> | undefined):
   if (title && title.length <= 60) state.title = title;
   if (isVariant(attributes.createSound)) state.sound = attributes.createSound;
   if (attributes.createReading === "1" && state.stage === "recording") state.reading = true;
+  const pack = packById(attributes.createPack);
+  if (pack && state.stage === "purchase") state.packId = pack.id;
   return state;
 }
 
@@ -78,6 +86,7 @@ export function createAttributes(state: CreateState): Record<string, string> {
     ...(state.title && { createTitle: state.title }),
     ...(state.sound && { createSound: state.sound }),
     ...(state.reading && { createReading: "1" }),
+    ...(state.packId && { createPack: state.packId }),
   };
 }
 
@@ -148,9 +157,27 @@ function chooseListener(spoken: string | undefined, prefix?: string): CreateTurn
   return ask("create_question", { stage: "conversation", listenerId: listener.id }, `${lead}${c.firstQuestion}`, c.firstQuestion);
 }
 
-/** "create a story" (optionally naming the listener): the credit line, then who it's for. */
-export function startCreate(spoken: string | undefined): CreateTurn {
-  return chooseListener(spoken, c.start(DEMO.credits));
+/**
+ * "create a story" (optionally naming the listener). With no credits, the purchase scene first
+ * (lines 9-15), keeping a named listener for after it; with credits, the credit line and then who
+ * it's for (Jordan's fallback). `credits` is the fixture's balance unless a test switches the path.
+ */
+export function startCreate(spoken: string | undefined, credits = DEMO.credits): CreateTurn {
+  if (credits > 0) return chooseListener(spoken, c.start(credits));
+  const listener = spoken ? findListener(DEMO, spoken) : undefined;
+  return ask("create_start", { stage: "credits", ...(listener && { listenerId: listener.id }) }, c.noCredits, c.buyReprompt);
+}
+
+/** Line 13 for a pack; the listener named at entry, if any, is kept for after the purchase. */
+function confirmPack(state: CreateState, pack: DemoPack): CreateTurn {
+  const confirm = c.confirmPurchase(pack, CURRENCY);
+  return ask("create_confirm", { ...withListener("purchase", state), packId: pack.id }, confirm, confirm);
+}
+
+/** A pack named in speech: the resolved slot, or any slot's words, since a pack name can reach other intents. */
+function spokenPack(event: AlexaRequestEnvelope) {
+  const words = resolvedValue(event, "pack") ?? anySlotText(event);
+  return words ? findPack(DEMO, words) : undefined;
 }
 
 /** The take was read: review, from the end cue, the Done button or a resume. */
@@ -212,6 +239,12 @@ function prompt(state: CreateState): CreateTurn {
   const listener = listenerById(state.listenerId);
   const again = (key: CreateKey, speech: string, reprompt = speech) => ask(key, state, speech, reprompt, undefined, false);
   switch (state.stage) {
+    case "credits": return again("create_start", c.buyReprompt);
+    case "pack": return again("create_packs", c.packList(PACKS, CURRENCY), c.packReprompt);
+    case "purchase": {
+      const pack = packById(state.packId);
+      return pack ? again("create_confirm", c.confirmPurchase(pack, CURRENCY), c.confirmPurchase(pack, CURRENCY)) : again("create_packs", c.packList(PACKS, CURRENCY), c.packReprompt);
+    }
     case "listener": return again("create_listener", c.whoFor);
     case "wish": return again("create_wish", listener?.wish ? c.wishOffer(listener.name, listener.wish.phrase, listener.wish.topic) : c.firstQuestion);
     case "conversation": return again("create_question", (state.answers ? DEMO.story.replies[state.answers - 1] : undefined) ?? c.firstQuestion);
@@ -247,6 +280,28 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
   if (intent === "AMAZON.HelpIntent" || (!intent && !done)) return prompt(state);
 
   switch (state.stage) {
+    case "credits": {
+      // "Yes, the Founding family pack" answers lines 10 and 12 at once.
+      const named = intent === "AMAZON.FallbackIntent" ? undefined : spokenPack(event);
+      if (named) return confirmPack(state, named);
+      if (intent === "AMAZON.YesIntent") return ask("create_packs", withListener("pack", state), c.packList(PACKS, CURRENCY), c.packReprompt);
+      // Stored as stopped, like a stop: without a credit there is no story to make.
+      if (intent === "AMAZON.NoIntent") return { key: "create_canceled", result: "canceled", response: closing(c.noPurchase), record: { stage: "stopped" } };
+      return prompt(state);
+    }
+    case "pack": {
+      const pack = intent === "AMAZON.FallbackIntent" ? undefined : spokenPack(event);
+      return pack ? confirmPack(state, pack) : prompt(state);
+    }
+    case "purchase": {
+      const pack = packById(state.packId);
+      if (!pack) return ask("create_packs", withListener("pack", state), c.packList(PACKS, CURRENCY), c.packReprompt);
+      const other = intent === "AMAZON.FallbackIntent" || intent === "AMAZON.YesIntent" ? undefined : spokenPack(event);
+      if (other && other.id !== pack.id) return confirmPack(state, other);
+      if (intent === "AMAZON.YesIntent") return chooseListener(listener?.name, c.purchased(pack.credits));
+      if (intent === "AMAZON.NoIntent") return ask("create_packs", withListener("pack", state), `${c.notPurchased} ${c.packList(PACKS, CURRENCY)}`, c.packReprompt);
+      return prompt(state);
+    }
     case "listener":
       return intent === "AMAZON.FallbackIntent" ? prompt(state) : chooseListener(spokenListener(event));
     case "wish": {

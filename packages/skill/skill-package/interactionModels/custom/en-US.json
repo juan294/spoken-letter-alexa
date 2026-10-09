@@ -330,6 +330,25 @@
           ]
         },
         {
+          "name": "ChoosePackIntent",
+          "slots": [
+            {
+              "name": "pack",
+              "type": "PackName"
+            }
+          ],
+          "samples": [
+            "{pack}",
+            "the {pack}",
+            "i'd like the {pack}",
+            "i would like the {pack}",
+            "i'll take the {pack}",
+            "the {pack} please",
+            "{pack} please",
+            "let's get the {pack}"
+          ]
+        },
+        {
           "name": "ChooseListenerIntent",
           "slots": [
             {
@@ -605,6 +624,38 @@
                 "value": "love",
                 "synonyms": [
                   "loved"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PackName",
+          "values": [
+            {
+              "name": {
+                "value": "Small story pack",
+                "synonyms": [
+                  "small pack",
+                  "the small one"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "Family story pack",
+                "synonyms": [
+                  "family pack"
+                ]
+              }
+            },
+            {
+              "name": {
+                "value": "Founding family pack",
+                "synonyms": [
+                  "founding family",
+                  "founding pack",
+                  "founders pack"
                 ]
               }
             }

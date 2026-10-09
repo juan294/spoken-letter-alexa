@@ -51,6 +51,7 @@ describe("generateInteractionModel", () => {
         "StartPlaylistOverIntent",
         "RecordStoryIntent",
         "TheEndIntent",
+        "ChoosePackIntent",
         "ChooseListenerIntent",
         "StoryDetailIntent",
         "PlaybackIntent",
@@ -191,7 +192,10 @@ describe("generateInteractionModel", () => {
   });
 
   test("R5 the English-only create intents carry the script's own phrases", () => {
-    expect(EN_US_ONLY_INTENTS).toEqual(["RecordStoryIntent", "TheEndIntent", "ChooseListenerIntent", "StoryDetailIntent", "PlaybackIntent", "StoryTitleIntent", "SoundChoiceIntent", "SendStoryIntent"]);
+    expect(EN_US_ONLY_INTENTS).toEqual(["RecordStoryIntent", "TheEndIntent", "ChoosePackIntent", "ChooseListenerIntent", "StoryDetailIntent", "PlaybackIntent", "StoryTitleIntent", "SoundChoiceIntent", "SendStoryIntent"]);
+    // Line 12: the pack's own name, alone or after "the"; pack names live in the slot values, never in a sample.
+    expect(byName.ChoosePackIntent?.samples).toEqual(expect.arrayContaining(["{pack}", "the {pack}", "i'd like the {pack}"]));
+    expect(byName.ChoosePackIntent?.slots).toEqual([{ name: "pack", type: "PackName" }]);
     expect(byName.RecordStoryIntent?.samples).toEqual(expect.arrayContaining(["record", "re record", "record story", "record my story", "start recording", "i'm ready to record", "record again"]));
     expect(byName.PlaybackIntent?.samples).toContain("playback");
     expect(byName.SendStoryIntent?.samples).toContain("send story");
@@ -202,12 +206,17 @@ describe("generateInteractionModel", () => {
     expect(byName.TheEndIntent?.slots).toBeUndefined();
   });
 
-  test("the create slot types come from the fixture: the listener, the story's title and the four mixes", () => {
+  test("the create slot types come from the fixture: the packs, the listener, the story's title and the four mixes", () => {
     const types = Object.fromEntries(model.interactionModel.languageModel.types.map((type) => [type.name, type.values]));
     expect(types.ListenerName).toEqual([{ name: { value: "Samuel", synonyms: ["Sam"] } }]);
     expect(types.StoryTitle).toEqual([{ name: { value: "Sam on the Moon" } }]);
     expect(types.SoundChoice?.map((value) => value.name.value)).toEqual(["both", "music", "effects", "plain"]);
     expect(types.SoundChoice?.[0]?.name.synonyms).toContain("add both");
+    expect(types.PackName).toEqual([
+      { name: { value: "Small story pack", synonyms: ["small pack", "the small one"] } },
+      { name: { value: "Family story pack", synonyms: ["family pack"] } },
+      { name: { value: "Founding family pack", synonyms: ["founding family", "founding pack", "founders pack"] } },
+    ]);
   });
 
   test("story-answer carriers never prefix a play request", () => {
