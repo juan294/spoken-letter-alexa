@@ -390,7 +390,8 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           return null;
         }
       };
-      if (type === "LaunchRequest") return await resumeFromRecord(false) ?? nextDemoUpdate();
+      // The English launch is Jordan's script line 1, so pending reactions and updates are left to "what's new".
+      if (type === "LaunchRequest") return await resumeFromRecord(false) ?? (english ? ask(m.launch, m.reprompt, "welcome") : nextDemoUpdate());
       const playlist = options.agent.playlist;
       const playlistResult = (reply: PlaylistReply): AlexaResponseEnvelope => {
         if (reply.action === "play" && reply.play && reply.token) {

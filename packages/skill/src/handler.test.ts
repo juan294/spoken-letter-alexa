@@ -47,13 +47,20 @@ afterEach(() => {
 });
 
 describe("skill handler", () => {
-  test("a completed story asks for a reaction on the next launch, then saves one demo reaction", async () => {
-    const demoNext = vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_martina_the_mermaid", title: "Martina the music loving mermaid", storyteller: "Aunt Whitney" } });
+  test("an English launch always opens with the demo script's first line, never a pending reaction or update", async () => {
+    // Jordan's script line 1 (staged demo plan, revision for her script). Spanish launches keep reactions and updates.
+    const demoNext = vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_martina_the_mermaid", title: "Martina the music loving mermaid", storyteller: "Aunt Whitney" }, event: { eventId: "evt-1", type: "family-occasion", detail: "A family birthday is coming up.", occurredAt: "2026-09-28T10:00:00Z" } });
+    const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
+    const launch = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoEvent }) })(envelope({ type: "LaunchRequest" }));
+    expect(ssml(launch)).toBe("<speak>Here's Spoken Letter. Which story would you like to hear?</speak>");
+    expect(launch.response.shouldEndSession).not.toBe(true);
+    expect(demoNext).not.toHaveBeenCalled();
+    expect(demoEvent).not.toHaveBeenCalled();
+  });
+
+  test("a reaction reply in the reaction flow saves one demo reaction", async () => {
     const demoReact = vi.fn().mockResolvedValue({ status: "saved", reactionId: "reaction-1", storyId: "st_martina_the_mermaid", choice: "love" });
-    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoReact }) });
-    const launch = await handler(envelope({ type: "LaunchRequest" }));
-    expect(ssml(launch)).toMatch(/did you like or love/i);
-    expect(launch.sessionAttributes).toEqual({ demoFlow: "reaction" });
+    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoReact }) });
     const reply = intent("ReactToStoryIntent", { choice: "love" });
     reply.session = { ...reply.session!, attributes: { demoFlow: "reaction" } };
     const saved = await handler(reply);
@@ -163,15 +170,6 @@ describe("skill handler", () => {
     expect(ssml(response)).toMatch(/no wish was saved/i);
   });
 
-  test("an unread fixture update is spoken and marked read; no update stays truthful", async () => {
-    const demoNext = vi.fn().mockResolvedValue({ event: { eventId: "evt-1", type: "family-occasion", detail: "A family birthday is coming up.", occurredAt: "2026-09-28T10:00:00Z" } });
-    const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
-    const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext, demoEvent }) });
-    const launch = await handler(envelope({ type: "LaunchRequest" }));
-    expect(ssml(launch)).toContain("A family birthday is coming up.");
-    expect(demoEvent).toHaveBeenCalledWith({ deviceUserId: "amzn1.ask.account.OWNER", eventId: "evt-1", action: "read" });
-    expect(ssml(launch)).not.toMatch(/child|birthday of/i);
-  });
   test("updates read the validated fixture story title and mark only that event", async () => {
     const demoInbox = vi.fn().mockResolvedValue({ events: [{ eventId: "evt-story", type: "new_story", occurredAt: "2026-08-03T00:03:24Z", storyId: "st_martina_the_mermaid", detail: "A new story is ready. Martina the music loving mermaid by Aunt Whitney." }] });
     const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
@@ -897,12 +895,11 @@ describe("safe session diagnostics", () => {
     ["WishStoryIntent", "demoWish", {}],
     ["ReactToStoryIntent", "demoReact", { choice: "love" }],
     ["UpdatesIntent", "demoInbox", {}],
-    ["LaunchRequest", "demoNext", {}],
   ] as const)("T4 %s catches dependency errors accurately", async (name, method, slots) => {
     const info = vi.spyOn(log, "info");
     const agent = fakeAgent({ [method]: vi.fn().mockRejectedValue(new AgentHttpError(503, "update_unavailable", "Lily token=private")) });
     const handler = createHandler({ skillId: SKILL_ID, agent });
-    const event = name === "LaunchRequest" ? envelope({ type: name }) : intent(name === "WishStoryIntent" ? "AMAZON.YesIntent" : name, slots);
+    const event = intent(name === "WishStoryIntent" ? "AMAZON.YesIntent" : name, slots);
     if (name === "WishStoryIntent") event.session = { ...event.session!, attributes: { demoFlow: "wish", demoTopic: "space" } };
     if (name === "ThemeIntent") event.session = { ...event.session!, attributes: { demoFlow: "draft" } };
     await handler(event);

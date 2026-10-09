@@ -72,8 +72,9 @@ const JOURNEYS: [string, Step[], Partial<AgentClient>?, Record<string, string>?]
   // English creation is the staged create flow (staged demo plan D1), so the draft starts from its session state.
   ["draft fallbacks then cancel", [{ name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }], {}, { demoFlow: "draft" }],
   ["wish fallbacks then cancel", [{ name: "WishStoryIntent", slots: { wishtopic: { value: "space", resolved: "space" } } }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }]],
-  ["reaction fallbacks then cancel", [{ name: "", launch: true }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }],
-    { demoNext: vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_owl", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan" } }), demoReact: vi.fn().mockResolvedValue({ status: "dismissed" }) }],
+  // The English launch never asks for a reaction (staged demo plan), so the reaction flow starts from its session state.
+  ["reaction fallbacks then cancel", [{ name: "AMAZON.FallbackIntent" }, { name: "AMAZON.FallbackIntent" }, { name: "AMAZON.CancelIntent" }],
+    { demoReact: vi.fn().mockResolvedValue({ status: "dismissed" }) }, { demoFlow: "reaction" }],
   ["reading updates with none unread", [{ name: "UpdatesIntent" }], { demoInbox: vi.fn().mockResolvedValue({ events: [] }) }],
   ["reading a missing draft", [{ name: "ReadDemoDraftIntent" }], { latestDraft: vi.fn().mockResolvedValue({ status: "missing" }) }],
 ];
@@ -348,8 +349,19 @@ describe("es-ES requests carry the locale to the agent (Phase 3)", () => {
     const handler = createHandler({ skillId: SKILL_ID, agent });
     await handler(request("en-US", { type: "LaunchRequest" }));
     await handler(intent("en-US", "WhatIsNewIntent"));
-    expect(agent.demoNext).toHaveBeenCalledWith({ deviceUserId: USER });
+    // The English launch is the demo script's first line and asks the agent nothing (staged demo plan).
+    expect(agent.demoNext).not.toHaveBeenCalled();
     expect(agent.turn).toHaveBeenCalledWith({ deviceUserId: USER, text: "what family stories are new?" });
+  });
+
+  test("a Spanish launch still asks for a pending reaction and still reads an unread update", async () => {
+    const reaction = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext: vi.fn().mockResolvedValue({ pendingReaction: { storyId: "st_owl", title: "The owl who forgot how to hoot", storyteller: "Grandpa Juan" } }) }) })(request("es-ES", { type: "LaunchRequest" }));
+    expect(reaction.sessionAttributes).toEqual({ demoFlow: "reaction" });
+    expect(speech(reaction)).toContain("The owl who forgot how to hoot");
+    const demoEvent = vi.fn().mockResolvedValue({ status: "read" });
+    const update = await createHandler({ skillId: SKILL_ID, agent: fakeAgent({ demoNext: vi.fn().mockResolvedValue({ event: { eventId: "evt-1", type: "family-occasion", detail: "Se acerca un cumpleaños familiar.", occurredAt: "2026-09-28T10:00:00Z" } }), demoEvent }) })(request("es-ES", { type: "LaunchRequest" }));
+    expect(speech(update)).toContain("Se acerca un cumpleaños familiar.");
+    expect(demoEvent).toHaveBeenCalledWith({ deviceUserId: USER, eventId: "evt-1", action: "read" });
   });
 });
 

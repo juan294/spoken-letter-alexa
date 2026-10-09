@@ -151,7 +151,8 @@ afterEach(() => vi.restoreAllMocks());
 /** Lines the R1 and R3 journeys speak, per locale. Titles come from the playlist state, which is shuffled. */
 const LINES = {
   "en-US": {
-    launch: 'A new story is ready. "A lighthouse for Mateo" by Grandpa Juan. You can say let\'s create a story.',
+    // The English launch is Jordan's script line 1 (staged demo plan); updates and reactions wait for the parent to ask.
+    launch: "Here's Spoken Letter. Which story would you like to hear?",
     whatIsNew: 'You have 2 delivered stories. The newest is "A lighthouse for Mateo" by Grandpa Juan.',
     play: (title: string) => `Playing ${title} by Grandpa Juan.`,
     next: (title: string) => `Playing ${title}.`,
@@ -220,12 +221,22 @@ describe.each(["es-ES", "en-US"] as const)("R1 and R3 journeys in %s (R5 for en-
     await h.say(words.playAll);
     const finishedTitle = titleOf((await h.playlistState())?.ids[0]) ?? "";
     await h.finished();
+    if (locale === "en-US") {
+      // The English launch is Jordan's script line 1 and never asks for a reaction, and the agent saves a
+      // reaction only after that prompt, so English reactions are not reachable by voice (staged demo plan).
+      expect(speechOf(await h.launch())).toBe(lines.launch);
+      expect(speechOf(await h.say(words.love))).toBe("There is no completed story waiting for a reaction.");
+      const state = await h.updates.get(deviceSessionId(DEVICE_ID));
+      expect(state?.wishes.map((wish) => wish.topic)).toEqual(["space"]);
+      expect(state?.reactions).toEqual([]);
+      return;
+    }
     expect(speechOf(await h.launch())).toBe(lines.reactionPrompt(finishedTitle));
     expect(speechOf(await h.say(words.love))).toBe(lines.reactionSaved);
     const state = await h.updates.get(deviceSessionId(DEVICE_ID));
     expect(state?.wishes.map((wish) => wish.topic)).toEqual(["space"]);
     expect(state?.reactions.map((reaction) => reaction.choice)).toEqual(["love"]);
-    if (locale === "es-ES") for (const response of h.responses) expectSpanish(response);
+    for (const response of h.responses) expectSpanish(response);
   });
 });
 
