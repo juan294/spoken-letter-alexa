@@ -803,3 +803,24 @@ plan's goal list, phase table, schedule, AWS table, risks and file list were ame
 - Verified: the public draft API saved a synthetic forest draft, and the ASK
   development dialog completed `open spoken letter` → `let's create a story` →
   `about forest` with a saved demo draft response. Echo hardware remains unmeasured.
+
+### D26. Dependabot production bump: `hono/aws-lambda` deprecated (2026-10-09)
+
+- Objective: repair the failed `verify` run 37624244040 (PR #20, head `435971a`, Dependabot
+  production-dependencies, 19 updates). `develop` and `main` had no failing run.
+- Found (log read with `gh run view --log-failed`): `pnpm lint` failed at
+  `packages/app/src/lambda.ts:29`, `@typescript-eslint/no-deprecated`: hono 4.13.13
+  deprecates `hono/aws-lambda` (removed in v5). Typecheck passed; later steps never ran in
+  CI. Reproduced locally before the fix. Run 37427708727 (head `42467b1`, same branch)
+  failed earlier; its log was not read.
+- Chose: add `@hono/aws-lambda` 1.0.0 (exact pin) and import `streamHandle` from it.
+  1.0.0, not 1.0.1, so `minimumReleaseAgeExclude` stays untouched. ADR 0001 updated.
+  Independent review found the two packages' `streamHandle` sources equivalent (only
+  deprecation tags and import paths differ) and the lockfile diff to be one addition.
+- Verified (local, worktree `../spoken-letter-alexa-fix-ci`, branch `fix/ci-hono-aws-lambda`
+  off `435971a`): `rpi-verify.py` typecheck, lint, test, cdk-synth, e2e all exit 0 on the
+  second full run. The first run failed e2e with 30s Playwright click timeouts (3 tests);
+  an isolated rerun passed 8/8 and the second full run passed. Treated as the documented
+  fresh-worktree timing flake; no interleaved baseline run was done, so this is INFERRED.
+- Not done: no push, no merge into `develop`, no hosted rerun. The fix must land on PR #20's
+  branch (or the bump be merged locally with it), which is an Owner gate.
