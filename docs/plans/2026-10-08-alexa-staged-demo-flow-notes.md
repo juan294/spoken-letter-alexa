@@ -195,7 +195,7 @@ The Owner accepted Phase 1 and authorized steps 1–4: the local merge, `pnpm bu
 2. **Build.** `pnpm build` passed. The skill bundle contains the takes manifest and the teleprompter document.
 3. **CDK.**
    - **Diff.** Read-only `cdk diff SpokenLetterAlexaSkill SpokenLetterAlexaSimulator --exclusively`: code-asset changes only, with no IAM or resource changes. They were the skill Lambda, the two notification Lambdas (their bundle picks up `develop`'s shared code, including the undeployed es-ES work the Owner authorized for AWS on 2026-10-07) and the fixtures `BucketDeployment` source.
-   - **`SpokenLetterAlexaSkill`:** deployed (✅, 30.5 s).
+   - **`SpokenLetterAlexaSkill`:** deployed (PASS, 30.5 s).
    - **`SpokenLetterAlexaSimulator`:** not deployed. Asset publishing of `Fixtures/Asset1` hung twice: about 16 minutes, then about 17 minutes, with near-zero CPU and S3 connections open. The zip never reached the CDK staging bucket, and both runs were stopped before CloudFormation. The stack stayed `UPDATE_COMPLETE` from 2026-09-29.
    - **Consequence:** `fixtures/takes/` is not on S3 yet, so take playback (D3) has nothing to play until this stack deploys.
    - **API.** The API stack was not part of this authorization. Per es-ES SS4, Spanish sessions keep English backend lines until it deploys; nothing fails.
@@ -339,3 +339,20 @@ The Owner's "acceptable" answer is a recorded exception to Entry (b), alongside 
 | 10 | README resume condition, testing instructions screen claim, "1 story credits" | Fixed |
 
 **Device checks to add to A1–A5:** whether "Alexa, next" barges into the take playback and reaches the skill; whether El Trasgu resumes during the teleprompter; how each scripted answer routes; the countdown and scroll timing (D1); APL `display` binding in preview.
+
+## Deploy run (2026-10-09)
+
+**Authorization.** The Owner said "deploy" on 2026-10-09, covering the API, simulator and skill stacks and `ask deploy`. Nothing was pushed; `main` is unchanged.
+
+**Build.** `pnpm build` on `develop` `b0c31cc`. Read-only `cdk diff` of the API and skill stacks: code-asset changes only (the API Lambda, the skill Lambda and the two notification Lambdas), no IAM or resource changes.
+
+**Blocker: the Owner's upload line.** Every TCP upload from the Owner's Mac ran at 10–50 KB/s with 30–40 % retransmits, to any destination (S3, Cloudflare, Apple). CDK's asset publish failed after 75 minutes with S3 `RequestTimeout`; `aws s3 cp` failed after 19 minutes. Cloudflare's speed test in the Owner's Chrome, with no upload of ours running: download 43 Mbps, upload 330 kbps, latency 341 ms, jitter 267 ms (VERIFIED, screenshot). Downloads are unaffected, so the cause is outside this repository. A path-MTU 1492 diagnosis was wrong (the test at MTU 1492 was as slow), was retracted, and the Owner's setting went back to 1500. A browser route through Google Drive was dropped: the browser uploads over the same line. The lesson for later sessions: do not ask the Owner to change network settings on an unverified theory.
+
+**Done (VERIFIED):**
+
+1. **`SpokenLetterAlexaSkill`** deployed: `UPDATE_COMPLETE` 2026-10-09T06:34:24Z; `sla-alexa-skill` `CodeSha256` `c1SwVsLVDsqj3lMQd9+3/G1jwaOqL3PIpjodUnr+NZo=` equals the SHA-256 of the local bundle zip (809,588 bytes). The two skill bundles reached S3 through a resumable multipart uploader (`par_upload.py` in the session scratchpad: one 5 MB part per connection, MSS 1400, per-chunk timeouts, resume from `list-parts`), after which `cdk deploy` uploaded only the template.
+2. **`ask deploy`** (ask-cli 2.30.7, v1 command shape: `ask api …`, no `ask smapi`): the first run failed with `ECONNRESET` on the 56 KB package upload; the retry succeeded at 06:36Z. Read-back with `ask api get-model -g development`: en-US has 44 intents, including `ChooseListenerIntent`, `StoryDetailIntent`, `PlaybackIntent`, `StoryTitleIntent`, `SoundChoiceIntent`, `SendStoryIntent`, `RecordStoryIntent` and `TheEndIntent`, and the slot types `ListenerName`, `StoryTitle` and `SoundChoice`; es-ES has 36 intents and three slot types, unchanged. Both equal the generated models in `skill-package/`. `get-skill-status`: en-US and manifest `SUCCEEDED`. ask-cli's rewrite of `skill.json` was semantically equal and was discarded.
+
+**Not done:** `SpokenLetterAlexaApi` (asset `18aad64d…`, 29.4 MB zipped) and `SpokenLetterAlexaSimulator` (SPA `6331617471…`, 36.4 MB; fixtures `1d28f267…`, 37.6 MB). The uploader keeps running in the background and resumes landed parts. Once the three keys exist in `cdk-hnb659fds-assets-106403001709-us-east-1`, each `cdk deploy <stack> --exclusively` uploads only its template. Until the API deploys, the live skill runs against the old catalog: lines 5–7 (El Trasgu by Tío Manuel) and the Sam take playback have nothing to play; the create flow itself works. Smaller alternatives for the Owner: assemble the zips in CloudShell from the deployed ones (the API delta is three files, 13.5 MB unpacked, 8.1 MB of it `index.mjs.map`), which needs a console sign-in; or deploy from a machine with a working uplink.
+
+**Tooling notes:** `cdk deploy` and `ask deploy` were blocked by Claude Code's auto-mode classifier and needed one-off `/permissions` approvals; the Chrome `file_upload` tool was blocked too and is capped at 10 MB per call. Five stale multipart uploads left by the Phase 1 simulator attempts were aborted.
