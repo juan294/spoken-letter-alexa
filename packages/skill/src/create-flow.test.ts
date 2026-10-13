@@ -5,7 +5,7 @@ import { type AgentClient } from "./agent-client.ts";
 import { RESUME_SECONDS, startCreate } from "./create-flow.ts";
 import { CREATE_MESSAGES as c } from "./create-messages.ts";
 import { createHandler, type AlexaRequestEnvelope, type AlexaResponseEnvelope } from "./handler.ts";
-import { escapeSsml } from "./responses.ts";
+import { speechText } from "./responses.ts";
 import status from "./apl/status.json" with { type: "json" };
 import teleprompter from "./apl/teleprompter.json" with { type: "json" };
 import skillManifest from "../skill-package/skill.json" with { type: "json" };
@@ -84,7 +84,8 @@ function speech(response: AlexaResponseEnvelope): string {
   }
   return text;
 }
-const spoken = (text: string) => `<speak>${escapeSsml(text)}</speak>`;
+const spoken = (text: string) => `<speak>${speechText(text)}</speak>`;
+const RE_RECORD = "<phoneme alphabet=\"ipa\" ph=\"ˌɹiɹɪˈkɔɹd\">re-record</phoneme>";
 const audioOf = (file: string | undefined) => `<audio src="${BASE_URL}/fixtures/takes/${file ?? "missing"}"/>`;
 type Render = { token: string; document: unknown; datasources: Record<string, Record<string, unknown>> };
 const renders = (response: AlexaResponseEnvelope) => (response.response.directives ?? []).filter((directive) => directive.type === "Alexa.Presentation.APL.RenderDocument") as Render[];
@@ -108,12 +109,14 @@ describe("Jordan's script, lines 8 to 42", () => {
     const start = await turn("StartStoryIntent", {}, { newSession: true }); // 8
     expect(speech(start)).toBe(spoken("Okay, create a story. There are no story credits on your account. Would you like to buy some?")); // 9
     expect(start.response.shouldEndSession).toBe(false);
+    // Line 8 can be said over a playing story; the story stops for the create flow (issue 21).
+    expect(start.response.directives).toContainEqual({ type: "AudioPlayer.Stop" });
     expect(start.sessionAttributes).toEqual({ demoFlow: "create", createStage: "credits" });
 
     expect(speech(await turn("AMAZON.YesIntent"))).toBe(spoken( // 10-11
-      "Small story pack, 2 credits, for 2.99 euros. Family story pack, 10 credits, for 11.99. Or Founding family pack, 20 credits, for 19.99. Which would you like?"));
+      "Small story pack, 2 credits, for two ninety-nine euros. Family story pack, 10 credits, for eleven ninety-nine. Or Founding family pack, 20 credits, for nineteen ninety-nine. Which would you like?"));
     const confirm = await turn("ChoosePackIntent", { pack: { value: "the founding family pack", canonical: "Founding family pack" } }); // 12
-    expect(speech(confirm)).toBe(spoken("Founding family pack, 20 credits, for 19.99 euros. Shall I complete the purchase?")); // 13
+    expect(speech(confirm)).toBe(spoken("Founding family pack, 20 credits, for nineteen ninety-nine euros. Shall I complete the purchase?")); // 13
     expect(confirm.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
 
     const bought = await turn("AMAZON.YesIntent"); // 14
@@ -134,7 +137,7 @@ describe("Jordan's script, lines 8 to 42", () => {
 
     // Line 25 has no carrier phrase, so it may arrive as a fallback; it still counts as the answer.
     const handOver = await turn("AMAZON.FallbackIntent");
-    expect(speech(handOver)).toBe(spoken("A lovely ending. Your script is on the screen. Say \"record\" when you're ready, and \"the end\" when you finish."));
+    expect(speech(handOver)).toBe("<speak>A lovely ending. Your script is on the screen. Say &quot;<w role=\"amazon:VB\">record</w>&quot; when you're ready, and &quot;the end&quot; when you finish.</speak>");
     expect(handOver.response.reprompt?.outputSpeech.ssml).toBe(spoken(c.recordReprompt));
     const [preview] = renders(handOver);
     expect(preview).toMatchObject({ token: "teleprompter", document: teleprompter, datasources: { teleprompter: { preview: true, title: c.scriptTitle } } });
@@ -143,7 +146,8 @@ describe("Jordan's script, lines 8 to 42", () => {
     expect(handOver.sessionAttributes).toEqual({ demoFlow: "create", createStage: "recording", createListener: "samuel" });
 
     const record = await turn("RecordStoryIntent");
-    expect(speech(record)).toBe(spoken(c.recordCue));
+    // The countdown is on screen only (issue 21).
+    expect(speech(record)).toBe("<speak>Get ready.</speak>");
     expect("shouldEndSession" in record.response).toBe(false);
     const execute = record.response.directives?.find((directive) => directive.type === "Alexa.Presentation.APL.ExecuteCommands") as { commands: Command[] } | undefined;
     expect(flatten(execute?.commands ?? []).filter((step) => step.componentId === "countdown").map((step) => step.value)).toEqual(["3", "2", "1"]);
@@ -151,12 +155,12 @@ describe("Jordan's script, lines 8 to 42", () => {
     expect(record.sessionAttributes).toEqual({ demoFlow: "create", createStage: "recording", createListener: "samuel", createReading: "1" });
 
     const end = await turn("TheEndIntent");
-    expect(speech(end)).toBe(spoken("Your recording is saved. Say \"playback\" to listen, \"re-record\" to try again, or \"next\" to continue."));
+    expect(speech(end)).toBe(`<speak>Your recording is saved. Say &quot;playback&quot; to listen, &quot;${RE_RECORD}&quot; to try again, or &quot;next&quot; to continue.</speak>`);
     expect(renders(end)[0]).toMatchObject({ token: "status", document: status, datasources: { status: { eyebrow: "For Samuel", heading: c.yourStory, detail: c.status.saved } } });
     expect(agent.stored()?.record).toEqual({ stage: "review", listenerId: "samuel" });
 
     const playback = await turn("PlaybackIntent");
-    expect(speech(playback)).toBe(`<speak>${audioOf(TAKE?.files.plain)} ${escapeSsml(c.afterPlayback)}</speak>`);
+    expect(speech(playback)).toBe(`<speak>${audioOf(TAKE?.files.plain)} ${speechText(c.afterPlayback)}</speak>`);
     expect(playback.response.shouldEndSession).toBe(false);
 
     expect(speech(await turn("AMAZON.NextIntent"))).toBe(spoken("Time for the finishing touches. What would you like to call your story?"));
@@ -170,7 +174,7 @@ describe("Jordan's script, lines 8 to 42", () => {
     expect(added.sessionAttributes).toMatchObject({ createStage: "finish", createTitle: "Sam on the Moon", createSound: "both" });
 
     const sent = await turn("SendStoryIntent");
-    expect(speech(sent)).toBe(`<speak>${escapeSsml("Sam on the Moon has been sent to Samuel's family. Here it is.")} ${audioOf(TAKE?.files.both)}</speak>`);
+    expect(speech(sent)).toBe(`<speak>${speechText("Sam on the Moon has been sent to Samuel's family. Here it is.")} ${audioOf(TAKE?.files.both)}</speak>`);
     expect(sent.response.shouldEndSession).toBe(true);
     expect(sent.response.directives?.[0]).toEqual({ type: "AudioPlayer.Stop" });
     expect(renders(sent)[0]?.datasources.status).toEqual({ eyebrow: "For Samuel", heading: "Sam on the Moon", detail: "Sent to Samuel's family" });
@@ -230,7 +234,7 @@ describe("entries", () => {
   });
 
   test("how-to questions keep their app guidance", async () => {
-    expect(speech(await device()("CatchAllIntent", { text: "how do I create a story" }))).not.toContain(escapeSsml(c.whoFor));
+    expect(speech(await device()("CatchAllIntent", { text: "how do I create a story" }))).not.toContain(speechText(c.whoFor));
   });
 
   test("Spanish keeps its theme prompt and never enters the English-only flow (D1, C11)", async () => {
@@ -279,7 +283,7 @@ describe("the purchase scene (lines 9-15)", () => {
   });
 
   test.each(["AMAZON.HelpIntent", "AMAZON.FallbackIntent"])("%s repeats each stage's question without saving", async (name) => {
-    for (const [attributes, expected] of [[atCredits, c.buyReprompt], [atPacks, c.packList(DEMO.purchase?.packs ?? [], "euros")], [atConfirm, "Family story pack, 10 credits, for 11.99 euros. Shall I complete the purchase?"]] as const) {
+    for (const [attributes, expected] of [[atCredits, c.buyReprompt], [atPacks, c.packList(DEMO.purchase?.packs ?? [], "euros")], [atConfirm, "Family story pack, 10 credits, for eleven ninety-nine euros. Shall I complete the purchase?"]] as const) {
       const agent = creations();
       const response = await device(agent)(name, {}, { attributes });
       expect(speech(response)).toBe(spoken(expected));
@@ -290,13 +294,13 @@ describe("the purchase scene (lines 9-15)", () => {
 
   test("a pack named with the yes goes straight to its confirmation", async () => {
     const response = await at(atCredits)("CatchAllIntent", { text: "yes the founding family pack" });
-    expect(speech(response)).toBe(spoken("Founding family pack, 20 credits, for 19.99 euros. Shall I complete the purchase?"));
+    expect(speech(response)).toBe(spoken("Founding family pack, 20 credits, for nineteen ninety-nine euros. Shall I complete the purchase?"));
     expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
   });
 
   test("naming another pack at the confirmation switches to it", async () => {
     const response = await at(atConfirm)("ChoosePackIntent", { pack: { value: "small pack", canonical: "Small story pack" } });
-    expect(speech(response)).toBe(spoken("Small story pack, 2 credits, for 2.99 euros. Shall I complete the purchase?"));
+    expect(speech(response)).toBe(spoken("Small story pack, 2 credits, for two ninety-nine euros. Shall I complete the purchase?"));
     expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "small" });
   });
 

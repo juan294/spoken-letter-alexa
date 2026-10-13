@@ -41,7 +41,7 @@ export type CreateMessages = {
   /** Line 26 on a device without a screen (SS1). */
   handOverNoScreen: string;
   recordReprompt: string;
-  /** Spoken as the on-screen countdown runs. */
+  /** Spoken as the on-screen countdown runs; the numbers stay on screen only (issue 21). */
   recordCue: string;
   /** No screen (SS1): spoken before the script. */
   scriptIntro: string;
@@ -90,16 +90,31 @@ export type CreateMessages = {
   };
 };
 
+const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+  "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const underHundred = (n: number): string => n < 20 ? ONES[n] ?? String(n) : `${TENS[Math.floor(n / 10)] ?? ""}${n % 10 ? `-${ONES[n % 10] ?? ""}` : ""}`;
+
+/** "19.99" as "nineteen ninety-nine": Alexa+ reads the digits as "nineteen point ninety-nine" (issue 21). */
+export function spokenPrice(price: string): string {
+  const [whole = "", cents] = price.split(".");
+  const units = Number(whole);
+  if (!Number.isInteger(units) || units >= 100) return price;
+  const amount = Number(cents ?? 0);
+  if (!amount) return underHundred(units);
+  return `${underHundred(units)} ${amount < 10 ? `oh ${ONES[amount] ?? ""}` : underHundred(amount)}`;
+}
+
 export const CREATE_MESSAGES: CreateMessages = {
   start: (credits) => `Okay, create a story. You have ${credits} story ${credits === 1 ? "credit" : "credits"}, and this story uses one.`,
   noCredits: "Okay, create a story. There are no story credits on your account. Would you like to buy some?",
   buyReprompt: "Would you like to buy some story credits?",
   packList: (packs, currency) => `${packs.map((pack, index) => {
-    const line = `${pack.name}, ${pack.credits} ${pack.credits === 1 ? "credit" : "credits"}, for ${pack.price}${index === 0 ? ` ${currency}` : ""}.`;
+    const line = `${pack.name}, ${pack.credits} ${pack.credits === 1 ? "credit" : "credits"}, for ${spokenPrice(pack.price)}${index === 0 ? ` ${currency}` : ""}.`;
     return index > 0 && index === packs.length - 1 ? `Or ${line}` : line;
   }).join(" ")} Which would you like?`,
   packReprompt: "Which pack would you like?",
-  confirmPurchase: (pack, currency) => `${pack.name}, ${pack.credits} ${pack.credits === 1 ? "credit" : "credits"}, for ${pack.price} ${currency}. Shall I complete the purchase?`,
+  confirmPurchase: (pack, currency) => `${pack.name}, ${pack.credits} ${pack.credits === 1 ? "credit" : "credits"}, for ${spokenPrice(pack.price)} ${currency}. Shall I complete the purchase?`,
   purchased: (credits) => `Thank you. ${credits} story ${credits === 1 ? "credit" : "credits"} added.`,
   noPurchase: "Okay. A story uses one story credit, so we'll stop here for now.",
   notPurchased: "Okay, nothing was bought.",
@@ -112,7 +127,7 @@ export const CREATE_MESSAGES: CreateMessages = {
   handOver: "A lovely ending. Your script is on the screen. Say \"record\" when you're ready, and \"the end\" when you finish.",
   handOverNoScreen: "A lovely ending. Your script is ready. Say \"record\" when you're ready, and \"the end\" when you finish.",
   recordReprompt: "Say \"record\" when you're ready.",
-  recordCue: "Get ready. Three, two, one.",
+  recordCue: "Get ready.",
   scriptIntro: "Here's your script.",
   readAloudCue: "Read it aloud, then say: Alexa, the end.",
   recordingHelp: "When you finish reading, say: Alexa, the end.",

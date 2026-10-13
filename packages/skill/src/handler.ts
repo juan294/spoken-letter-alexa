@@ -93,15 +93,37 @@ const STORYTELLER_ALIASES = new Map(storytellerValues.flatMap((entry) =>
  */
 function titleByStoryteller(spoken: string): { title: string; storyteller: string } | null {
   const split = /^(.+?)\s+(?:by|from)\s+(.+)$/i.exec(spoken);
-  const storyteller = split?.[2] ? STORYTELLER_ALIASES.get(foldName(split[2])) : undefined;
+  const storyteller = split?.[2] ? storytellerNamed(split[2], 3) : undefined;
   return split?.[1] && storyteller ? { title: split[1], storyteller } : null;
+}
+
+/** Each storyteller's given name ("whitney"), kept only when no two storytellers share it. */
+const GIVEN_NAMES = (() => {
+  const counts = new Map<string, string[]>();
+  for (const canonical of SAFE_STORYTELLERS) {
+    const given = foldName(canonical).split(/\s+/).at(-1);
+    if (given) counts.set(given, [...(counts.get(given) ?? []), canonical]);
+  }
+  return new Map([...counts].flatMap(([given, names]) => (names.length === 1 && names[0] ? [[given, names[0]] as const] : [])));
+})();
+
+/**
+ * A known storyteller in at most `maxWords` heard words: an alias, the possessive ("aunt whitney's",
+ * "aunt whitneys"), or one given name with a misheard kinship word ("ant whitney", issue 21).
+ */
+function storytellerNamed(spoken: string, maxWords: number): string | undefined {
+  const bare = spoken.replace(/['’]s\b/gi, "").trim();
+  const exact = STORYTELLER_ALIASES.get(foldName(bare)) ?? (/s$/i.test(bare) ? STORYTELLER_ALIASES.get(foldName(bare.slice(0, -1))) : undefined);
+  if (exact) return exact;
+  // The given name must end what was heard, so "the jordan river" stays a title.
+  const words = foldName(bare).split(/\s+/);
+  const last = words.at(-1);
+  return words.length <= maxWords && last ? GIVEN_NAMES.get(last) : undefined;
 }
 
 /** Alexa+ also fills `{title}` with just a storyteller ("aunt whitney", "an aunt whitney story"). */
 function storytellerAsTitle(spoken: string): string | undefined {
-  const bare = spoken.replace(/^(?:an?|the)\s+/i, "").replace(/\s+(?:story|stories)$/i, "").replace(/['’]s$/i, "");
-  // "aunt whitneys story": the possessive heard without its apostrophe.
-  return STORYTELLER_ALIASES.get(foldName(bare)) ?? (/s$/i.test(bare) ? STORYTELLER_ALIASES.get(foldName(bare.slice(0, -1))) : undefined);
+  return storytellerNamed(spoken.replace(/^(?:an?|the)\s+/i, "").replace(/\s+(?:story|stories)$/i, ""), 2);
 }
 
 
@@ -649,7 +671,11 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         }
         if (intent === "StartPlaylistOverIntent") return command({ command: "reset", ...tokenInput });
         if (intent === "PlayStoryIntent") {
-          const spokenTitle = slotValue(event, "title");
+          // Alexa+ can leave the verb in the slot ("play a story by aunt whitney", issue 21).
+          const playCarrier = match.titleCarriers[0];
+          const heardTitle = slotValue(event, "title");
+          const strippedTitle = heardTitle && playCarrier ? heardTitle.replace(playCarrier, "") : heardTitle;
+          const spokenTitle = strippedTitle === "" ? undefined : strippedTitle;
           const resolvedStoryteller = resolvedValue(event, "storyteller");
           const split = spokenTitle && !resolvedStoryteller ? titleByStoryteller(spokenTitle) : null;
           const title = split?.title ?? spokenTitle;

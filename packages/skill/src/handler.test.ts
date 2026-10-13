@@ -995,7 +995,8 @@ test("a title that only names a storyteller, or only says 'a story', starts that
   for (const [title, storyteller] of [["a story by aunt whitney", "Aunt Whitney"], ["Aunt Whitney", "Aunt Whitney"], ["an aunt whitney story", "Aunt Whitney"],
     ["aunt whitney's story", "Aunt Whitney"], ["aunt whitney’s story", "Aunt Whitney"], ["aunt whitneys story", "Aunt Whitney"],
     ["the story by aunt whitney", "Aunt Whitney"], ["a short story by aunt whitney", "Aunt Whitney"], ["a new story from aunt whitney", "Aunt Whitney"],
-    ["a story from tio manuel", "Tío Manuel"]] as const) {
+    ["a story from tio manuel", "Tío Manuel"], ["play a story by aunt whitney", "Aunt Whitney"], ["a story by ant whitney", "Aunt Whitney"],
+    ["ant whitney", "Aunt Whitney"], ["a story from manuel's", "Tío Manuel"]] as const) {
     await handler(intent("PlayStoryIntent", { title }));
     expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "start", order: "shuffle", storyteller });
   }
@@ -1004,6 +1005,16 @@ test("a title that only names a storyteller, or only says 'a story', starts that
   expect(playlist.mock.lastCall?.[0]).not.toHaveProperty("storyteller");
   await handler(intent("PlayStoryIntent", { title: "a story", storyteller: "Aunt Whitney" }));
   expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "start", order: "shuffle", storyteller: "Aunt Whitney" });
+  await handler(intent("PlayStoryIntent", { title: "play el trasgu by tio manuel" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "title", title: "el trasgu", storyteller: "Tío Manuel" });
+  await handler(intent("PlayStoryIntent", { title: "play Andrea and the Crocodile" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "title", title: "Andrea and the Crocodile" });
+  expect(playlist.mock.lastCall?.[0]).not.toHaveProperty("storyteller");
+  // A given name inside a title is not a storyteller unless it ends what was heard.
+  await handler(intent("PlayStoryIntent", { title: "the jordan river" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "title", title: "the jordan river" });
+  await handler(intent("PlayStoryIntent", { title: "the gift from manuel's farm" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "title", title: "the gift from manuel's farm" });
   // A real title is still a title search, including one that starts with "a".
   await handler(intent("PlayStoryIntent", { title: "A Kitten Book Club" }));
   expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "title", title: "A Kitten Book Club" });

@@ -9,9 +9,23 @@ export function escapeSsml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/**
+ * Alexa+ reads the command "record" as the noun (issue 21). Only the skill's own command forms are
+ * marked (a quoted "record" or "re-record", "record a story"); titles and replies keep Alexa's reading.
+ */
+const PRONUNCIATIONS: readonly [RegExp, string][] = [
+  [/(?<=&quot;)re-record(?=&quot;)/gi, "<phoneme alphabet=\"ipa\" ph=\"ˌɹiɹɪˈkɔɹd\">$&</phoneme>"],
+  [/(?<=&quot;)record(?=&quot;)|\brecord(?= (?:a |your )?story\b)/gi, "<w role=\"amazon:VB\">$&</w>"],
+];
+
+/** Escaped text with the skill's pronunciation fixes applied. */
+export function speechText(text: string): string {
+  return PRONUNCIATIONS.reduce((speech, [pattern, replacement]) => speech.replace(pattern, replacement), escapeSsml(text));
+}
+
 /** Text is escaped; an `{ audio }` part becomes an `<audio>` element between the spoken parts. */
 export function ssml(...parts: (string | { audio: string })[]): OutputSpeech {
-  const body = parts.map((part) => (typeof part === "string" ? escapeSsml(part) : `<audio src="${escapeSsml(part.audio)}"/>`)).join(" ");
+  const body = parts.map((part) => (typeof part === "string" ? speechText(part) : `<audio src="${escapeSsml(part.audio)}"/>`)).join(" ");
   return { type: "SSML", ssml: `<speak>${body}</speak>` };
 }
 

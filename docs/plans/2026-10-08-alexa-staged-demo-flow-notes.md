@@ -390,3 +390,15 @@ The Owner's "acceptable" answer is a recorded exception to Entry (b), alongside 
 **Deploy.** Skill stack only; the model and the API do not change. Owner gate.
 
 **Deployed (2026-10-13, VERIFIED).** `develop` `9b6366b`, gate PASS (877 tests, 8 E2E). Read-only `cdk diff SpokenLetterAlexaSkill --exclusively`: only the skill Lambda's code asset changed. `SpokenLetterAlexaSkill` deployed (20 s); `sla-alexa-skill` `LastModified` 2026-10-13T10:32:53Z, `CodeSha256` `QpbgoQZSgVRGtNhOFGL4Zp0WoNx+SlDq8ZiuG0KiK5Q=`. A live invoke with a test user played an Aunt Whitney story for "a story by aunt whitney", "aunt whitney", "the story by aunt whitney" and "an aunt whitney story"; "el trasgu by tio manuel" and "a kitten book club" still play by title. Not yet re-run on Jordan's Echo.
+
+## Device run feedback, issue #21 (2026-10-13)
+
+Jordan's Echo Show 5 run under Alexa+ against `9b6366b` reported five deviations (GitHub issue #21). Fixes, all in the skill:
+
+1. **Line 3 still missed.** Reply "I couldn't find that delivered story" (VERIFIED as `titleNotFound`). INFERRED cause: the title slot kept the verb ("play a story by aunt whitney") or a misheard kinship word ("ant whitney"). The skill now strips the leading play carrier from the title slot, and a heard storyteller ends on a unique given name (Whitney, Jordan, Manuel) when no alias matches. "the jordan river" and "the gift from manuel's farm" stay title searches.
+2. **Line 8 during playback.** "Sorry, I can't answer that question right now" is Alexa+'s own reply: no skill events while Martina played 10:44:06–10:44:53Z or Ignacio 10:50:36–10:51:13Z (VERIFIED). At 10:47:28Z the same request did reach the skill and the story played on until "pause" at 10:47:51Z (VERIFIED). `startCreate` now sends `AudioPlayer.Stop` with line 9. Alexa+ routing during playback is outside the skill; the script should stop playback before line 8 (and line 5).
+3. **Prices read as decimals.** Spoken as words ("two ninety-nine euros"); the fixture keeps "2.99".
+4. **"Record" read as the noun.** The quoted commands get `<w role="amazon:VB">` ("record", "record a story") and an IPA phoneme ("re-record", `ˌɹiɹɪˈkɔɹd`, en-US symbol set). Titles and agent replies are not marked.
+5. **Spoken countdown.** `recordCue` is "Get ready."; 3-2-1 stays on screen.
+
+**Independent review:** one plausible defect (the IPA length mark `ː` is outside Alexa's en-US symbol list) fixed; the word "record" in titles and given names inside titles narrowed and tested. Left as is (hypothetical with the fixtures): a title starting with "hear", "listen to" or "put on" loses those words; "0.99" would read "zero ninety-nine". Prices and pronunciation need one listen on the device: tests check the markup, not the sound.

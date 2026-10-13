@@ -98,9 +98,9 @@ describe("Jordan's demo script (J1, J2)", () => {
     // Credits: the staged purchase (nothing is charged).
     expect(said(await h.say("StartStoryIntent", {}, true))).toBe("Okay, create a story. There are no story credits on your account. Would you like to buy some?"); // 8-9
     expect(said(await h.say("AMAZON.YesIntent"))) // 10
-      .toBe("Small story pack, 2 credits, for 2.99 euros. Family story pack, 10 credits, for 11.99. Or Founding family pack, 20 credits, for 19.99. Which would you like?"); // 11
+      .toBe("Small story pack, 2 credits, for two ninety-nine euros. Family story pack, 10 credits, for eleven ninety-nine. Or Founding family pack, 20 credits, for nineteen ninety-nine. Which would you like?"); // 11
     expect(said(await h.say("ChoosePackIntent", { pack: { heard: "the founding family pack", canonical: "Founding family pack" } }))) // 12
-      .toBe("Founding family pack, 20 credits, for 19.99 euros. Shall I complete the purchase?"); // 13
+      .toBe("Founding family pack, 20 credits, for nineteen ninety-nine euros. Shall I complete the purchase?"); // 13
     expect(said(await h.say("AMAZON.YesIntent"))).toBe("Thank you. 20 story credits added. Who is the story for?"); // 14-16
 
     // Shaping the story.
@@ -111,14 +111,14 @@ describe("Jordan's demo script (J1, J2)", () => {
       .toBe("Sam the astronaut meeting Monica the alien is a great start. What do Sam and Monica do together?"); // 22
     expect(said(await h.say("StoryDetailIntent", { detail: "play hide and seek" }))).toBe("Hide and seek in low gravity sounds fun. How does the adventure end?"); // 23–24
     const handOver = await h.say("AMAZON.FallbackIntent"); // 25: no carrier phrase
-    expect(said(handOver)).toBe("A lovely ending. Your script is on the screen. Say \"record\" when you're ready, and \"the end\" when you finish."); // 26
+    expect(said(handOver)).toBe("A lovely ending. Your script is on the screen. Say \"<w role=\"amazon:VB\">record</w>\" when you're ready, and \"the end\" when you finish."); // 26
     expect(handOver.response.directives?.[0]).toMatchObject({ type: "Alexa.Presentation.APL.RenderDocument", token: "teleprompter" }); // 27
 
     // Recording.
     const record = await h.say("RecordStoryIntent"); // 28
     expect(record.response.directives?.map((directive) => directive.type)).toEqual(["Alexa.Presentation.APL.RenderDocument", "Alexa.Presentation.APL.ExecuteCommands"]); // 29
-    expect(said(await h.say("TheEndIntent"))).toBe("Your recording is saved. Say \"playback\" to listen, \"re-record\" to try again, or \"next\" to continue."); // 30–31
-    expect(said(await h.say("PlaybackIntent"))).toBe(`${audio("sam_on_the_moon_plain.mp3")} Say "re-record" to try again, or "next" to continue.`); // 32–33
+    expect(said(await h.say("TheEndIntent"))).toBe("Your recording is saved. Say \"playback\" to listen, \"<phoneme alphabet=\"ipa\" ph=\"ˌɹiɹɪˈkɔɹd\">re-record</phoneme>\" to try again, or \"next\" to continue."); // 30–31
+    expect(said(await h.say("PlaybackIntent"))).toBe(`${audio("sam_on_the_moon_plain.mp3")} Say "<phoneme alphabet="ipa" ph="ˌɹiɹɪˈkɔɹd">re-record</phoneme>" to try again, or "next" to continue.`); // 32–33
 
     // Finishing.
     expect(said(await h.say("AMAZON.NextIntent"))).toBe("Time for the finishing touches. What would you like to call your story?"); // 34–35
@@ -157,7 +157,9 @@ describe("Jordan's demo script (J1, J2)", () => {
   });
 
   // Alexa+ on Jordan's Echo (2026-10-13) filled only {title} for line 3, and nothing played.
-  test.each(["a story by aunt whitney", "a story from aunt whitney", "aunt whitney", "an aunt whitney story", "aunt whitney's story", "the story by aunt whitney"])(
+  test.each(["a story by aunt whitney", "a story from aunt whitney", "aunt whitney", "an aunt whitney story", "aunt whitney's story", "the story by aunt whitney",
+    // Issue 21: the reply was "I couldn't find that delivered story", so "play" or a misheard name stayed in the title.
+    "play a story by aunt whitney", "a story by ant whitney", "ant whitney"])(
     "J3 line 3 heard as the title %j still plays an Aunt Whitney story", async (title) => {
       const h = await rehearsal();
       await h.open();

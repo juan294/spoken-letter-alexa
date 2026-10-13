@@ -163,9 +163,12 @@ function chooseListener(spoken: string | undefined, prefix?: string): CreateTurn
  * it's for (Jordan's fallback). `credits` is the fixture's balance unless a test switches the path.
  */
 export function startCreate(spoken: string | undefined, credits = DEMO.credits): CreateTurn {
-  if (credits > 0) return chooseListener(spoken, c.start(credits));
   const listener = spoken ? findListener(DEMO, spoken) : undefined;
-  return ask("create_start", { stage: "credits", ...(listener && { listenerId: listener.id }) }, c.noCredits, c.buyReprompt);
+  const turn = credits > 0 ? chooseListener(spoken, c.start(credits))
+    : ask("create_start", { stage: "credits", ...(listener && { listenerId: listener.id }) }, c.noCredits, c.buyReprompt);
+  // Line 8 can be said over a playing story, which would otherwise play on under the flow (issue 21).
+  turn.response.response.directives = [STOP_DIRECTIVE, ...(turn.response.response.directives ?? [])];
+  return turn;
 }
 
 /** Line 13 for a pack; the listener named at entry, if any, is kept for after the purchase. */
