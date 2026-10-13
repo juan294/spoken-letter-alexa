@@ -197,6 +197,8 @@ export type Matchers = {
   titleCarriers: readonly RegExp[];
   /** Group 1 is the title inside a spoken "the X story" wrapper. */
   shortTitle: RegExp;
+  /** A spoken title that names no story ("a story"), so any story plays. */
+  anyStory: RegExp;
   like: RegExp;
   love: RegExp;
 };
@@ -223,6 +225,7 @@ export const MATCHERS: Record<SkillLocale, Matchers> = {
     notPlay: /\b(what|which|list|new|available)\b/i,
     titleCarriers: [/^(?:please\s+)?(?:play|put on|listen to|hear)\s+/i, /^(?:(?:the|a)\s+)?(?:story\s+)?(?:called\s+)?/i, /\s+one$/i],
     shortTitle: /^(?:the\s+)?(.+?)\s+story$/i,
+    anyStory: /^(?:(?:a|an|the|any|one|some|another)\s+)?(?:(?:short|new|family|bedtime)\s+)?(?:story|stories|one)$/i,
     like: /^(?:like|liked)$/,
     love: /^(?:love|loved)$/,
   },
@@ -253,6 +256,7 @@ export const MATCHERS: Record<SkillLocale, Matchers> = {
       spanishPattern(String.raw`^(?:(?:la|una|el|un)\s+)?(?:(?:historia|cuento)\s+)?(?:(?:que\s+se\s+llama|llamad[ao]|del?)\s+)?`),
     ],
     shortTitle: spanishPattern(String.raw`^(?:la\s+)?historia\s+(?:del?\s+)?(.+)$`),
+    anyStory: spanishPattern(String.raw`^(?:(?:una|un|alguna|algún|otra|otro)\s+)?(?:historias?|cuentos?)$`),
     like: spanishPattern(String.raw`^(?:me\s+)?(?:gusta|gustó|ha\s+gustado|gustado)$`),
     love: spanishPattern(String.raw`^(?:me\s+)?(?:encanta|encantó|ha\s+encantado|encantado)$`),
   },

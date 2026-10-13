@@ -155,4 +155,14 @@ describe("Jordan's demo script (J1, J2)", () => {
     expect(said(await h.say("SoundChoiceIntent", { sound: "yes add both" }))).toMatch(/^Soft background music and gentle sound effects added\./);
     expect(said(await h.say("AMAZON.YesIntent"))).toMatch(/^Sam on the Moon has been sent to Samuel's family\./);
   });
+
+  // Alexa+ on Jordan's Echo (2026-10-13) filled only {title} for line 3, and nothing played.
+  test.each(["a story by aunt whitney", "a story from aunt whitney", "aunt whitney", "an aunt whitney story", "aunt whitney's story", "the story by aunt whitney"])(
+    "J3 line 3 heard as the title %j still plays an Aunt Whitney story", async (title) => {
+      const h = await rehearsal();
+      await h.open();
+      const response = await h.say("PlayStoryIntent", { title });
+      expect(said(response)).toMatch(/^Playing .+ by Aunt Whitney\.$/);
+      expect(played(response)?.audioItem.metadata.subtitle).toContain("Aunt Whitney");
+    });
 });

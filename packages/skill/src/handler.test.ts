@@ -989,6 +989,26 @@ test("a title ending in a known storyteller is split into the title and the stor
   expect(playlist.mock.lastCall?.[0]).not.toHaveProperty("storyteller");
 });
 
+test("a title that only names a storyteller, or only says 'a story', starts that storyteller's stories", async () => {
+  const playlist = vi.fn().mockResolvedValue({ action: "none", say: "Which story?" });
+  const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) });
+  for (const [title, storyteller] of [["a story by aunt whitney", "Aunt Whitney"], ["Aunt Whitney", "Aunt Whitney"], ["an aunt whitney story", "Aunt Whitney"],
+    ["aunt whitney's story", "Aunt Whitney"], ["aunt whitney’s story", "Aunt Whitney"], ["aunt whitneys story", "Aunt Whitney"],
+    ["the story by aunt whitney", "Aunt Whitney"], ["a short story by aunt whitney", "Aunt Whitney"], ["a new story from aunt whitney", "Aunt Whitney"],
+    ["a story from tio manuel", "Tío Manuel"]] as const) {
+    await handler(intent("PlayStoryIntent", { title }));
+    expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "start", order: "shuffle", storyteller });
+  }
+  await handler(intent("PlayStoryIntent", { title: "a story" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "start", order: "shuffle" });
+  expect(playlist.mock.lastCall?.[0]).not.toHaveProperty("storyteller");
+  await handler(intent("PlayStoryIntent", { title: "a story", storyteller: "Aunt Whitney" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "start", order: "shuffle", storyteller: "Aunt Whitney" });
+  // A real title is still a title search, including one that starts with "a".
+  await handler(intent("PlayStoryIntent", { title: "A Kitten Book Club" }));
+  expect(playlist.mock.lastCall?.[0]).toMatchObject({ command: "title", title: "A Kitten Book Club" });
+});
+
 test("title playback removes the spoken short-title story wrapper", async () => {
   const playlist = vi.fn().mockResolvedValue({ action: "none", say: "Which story?" });
   const handler = createHandler({ skillId: SKILL_ID, agent: fakeAgent({ playlist }) });

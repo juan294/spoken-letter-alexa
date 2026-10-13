@@ -97,6 +97,13 @@ function titleByStoryteller(spoken: string): { title: string; storyteller: strin
   return split?.[1] && storyteller ? { title: split[1], storyteller } : null;
 }
 
+/** Alexa+ also fills `{title}` with just a storyteller ("aunt whitney", "an aunt whitney story"). */
+function storytellerAsTitle(spoken: string): string | undefined {
+  const bare = spoken.replace(/^(?:an?|the)\s+/i, "").replace(/\s+(?:story|stories)$/i, "").replace(/['’]s$/i, "");
+  // "aunt whitneys story": the possessive heard without its apostrophe.
+  return STORYTELLER_ALIASES.get(foldName(bare)) ?? (/s$/i.test(bare) ? STORYTELLER_ALIASES.get(foldName(bare.slice(0, -1))) : undefined);
+}
+
 
 /** Only fixture-safe topics cross the skill session boundary. A resolved slot is already canonical. */
 function safeDemoTopic(speech: string | undefined, locale: SkillLocale): DemoTopic | null {
@@ -646,8 +653,10 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           const resolvedStoryteller = resolvedValue(event, "storyteller");
           const split = spokenTitle && !resolvedStoryteller ? titleByStoryteller(spokenTitle) : null;
           const title = split?.title ?? spokenTitle;
-          const storyteller = split?.storyteller ?? resolvedStoryteller;
-          if (title) {
+          const titleStoryteller = spokenTitle && !resolvedStoryteller && !split ? storytellerAsTitle(spokenTitle) : undefined;
+          const storyteller = split?.storyteller ?? resolvedStoryteller ?? titleStoryteller;
+          // Alexa+ hears "play a story by Aunt Whitney" as a title: no story is named, so play the storyteller's.
+          if (title && !titleStoryteller && !match.anyStory.test(title)) {
             const shortTitle = match.shortTitle.exec(title)?.[1];
             return command({ command: "title", title: shortTitle ?? title, ...(storyteller && { storyteller }) });
           }
