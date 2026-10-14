@@ -1,7 +1,7 @@
 // Lambda entry point (Phase 6 wires the function URL with RESPONSE_STREAM). Secrets and
 // clients come from the environment CDK fills from Secrets Manager; nothing is generated
 // here and the dev routes are never mounted.
-import { streamHandle } from "hono/aws-lambda";
+import { streamHandle } from "@hono/aws-lambda";
 
 import { bootstrap } from "./bootstrap.ts";
 import { readServerEnv } from "./env.ts";
