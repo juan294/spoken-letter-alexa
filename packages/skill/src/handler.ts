@@ -7,7 +7,7 @@ import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE }
 import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import { type CreateKey, type CreateTurn, continueCreate, createAttributes, createStateFrom, isDoneEvent, resumeCreate, startCreate } from "./create-flow.ts";
-import { soundsLike } from "./names.ts";
+import { soundsLike, withoutInvocation } from "./names.ts";
 import { closing, type Directive, type OutputSpeech, question } from "./responses.ts";
 import { resolvedValue, slotValue } from "./slots.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
@@ -126,9 +126,6 @@ function storytellerNamed(spoken: string, maxWords: number): string | undefined 
   const close = [...GIVEN_NAMES].filter(([name]) => soundsLike(last, name));
   return close.length === 1 ? close[0]?.[1] : undefined;
 }
-
-/** Alexa+ can keep the invocation in the slot: "el trasgu by tio manuel on spoken letter". */
-const withoutInvocation = (spoken: string): string => spoken.replace(/\s+(?:on|in|with|from|at)\s+spoken\s+letters?$/i, "").trim();
 
 /** Alexa+ also fills `{title}` with just a storyteller ("aunt whitney", "an aunt whitney story"). */
 function storytellerAsTitle(spoken: string): string | undefined {

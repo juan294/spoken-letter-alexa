@@ -17,7 +17,7 @@ import { scriptPreviewDirectives, statusDirectives, teleprompterDirectives } fro
 import { STOP_DIRECTIVE } from "./audio.ts";
 import { CREATE_MESSAGES as c } from "./create-messages.ts";
 import type { AlexaRequestEnvelope, AlexaResponseEnvelope } from "./handler.ts";
-import { editDistance, soundsLike } from "./names.ts";
+import { editDistance, soundsLike, withoutInvocation } from "./names.ts";
 import { closing, type Directive, type OutputSpeech, question, ssml } from "./responses.ts";
 import { resolvedValue, slotValue } from "./slots.ts";
 import demoCreate from "../../../fixtures/demo-create.json" with { type: "json" };
@@ -238,7 +238,8 @@ const MINOR_WORDS = /^(?:a|an|and|at|by|for|in|of|on|or|the|to)$/;
 
 /** A title as the adult said it: the resolved catalog value, or the words without a carrier, in title case. */
 function spokenTitle(event: AlexaRequestEnvelope): string | undefined {
-  const raw = (resolvedValue(event, "storytitle") ?? anySlotText(event))
+  const heard = resolvedValue(event, "storytitle") ?? anySlotText(event);
+  const raw = (heard && withoutInvocation(heard))
     ?.replace(/^(?:(?:let's |we'll )?call it|it's called|it is called|the title is)\s+/i, "").trim();
   if (!raw) return undefined;
   const words = raw.split(/\s+/).slice(0, 12);
@@ -317,7 +318,8 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
     // Stored as stopped, so the next launch opens plainly instead of resuming this run.
     return { key: "create_canceled", result: "canceled", response: closing(c.canceled), record: { stage: "stopped" } };
   }
-  if (intent === "AMAZON.HelpIntent" || (!intent && !done)) return prompt(state);
+  // A Done tap only ends a reading; one racing "the end" must not move a later stage.
+  if (intent === "AMAZON.HelpIntent" || (!intent && !done) || (done && state.stage !== "recording")) return prompt(state);
   const fallback = intent === "AMAZON.FallbackIntent";
   const yes = intent === "AMAZON.YesIntent";
   const no = intent === "AMAZON.NoIntent";
@@ -336,7 +338,7 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
     case "pack": {
       const named = fallback ? undefined : spokenPack(event);
       if (named) return confirmPack(state, named);
-      return SCRIPT_PACK ? scripted(confirmPack(state, SCRIPT_PACK)) : prompt(state);
+      return SCRIPT_PACK && !no ? scripted(confirmPack(state, SCRIPT_PACK)) : prompt(state);
     }
     case "purchase": {
       const pack = packById(state.packId);
@@ -349,8 +351,9 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
     case "listener": {
       const spoken = fallback ? undefined : spokenListener(event);
       const only = DEMO.listeners.length === 1 ? DEMO.listeners[0] : undefined;
-      // A name the flow can't place keeps SS7; no name at all is the script's answer when there is one listener.
-      if (spoken || !only) return chooseListener(spoken);
+      const named = spoken ? listenerIn(spoken) : undefined;
+      // With one listener every answer is line 17, so a misheard name never loops; SS7 needs several.
+      if (named || !only) return chooseListener(spoken);
       return scripted(chooseListener(only.name));
     }
     case "wish": {

@@ -207,13 +207,15 @@ describe("entries", () => {
     expect(speech(await turn("AMAZON.YesIntent"))).toBe(spoken("Thank you. 20 story credits added. There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?"));
   });
 
-  test("SS7 an unknown listener lists the names without repeating what was said, and keeps the stage", async () => {
+  // With one listener, any answer to line 16 is line 17: a misheard "Samuel" ("samwell") must not loop.
+  test("SS7 with one listener, a name the flow can't place is the script's listener and is never repeated", async () => {
     const turn = device();
     await buy(turn);
-    const response = await turn("ChooseListenerIntent", { listener: "Mia" });
-    expect(speech(response)).toBe(spoken(`${c.unknownListener("Samuel")} ${c.whoFor}`));
-    expect(speech(response)).not.toContain("Mia");
-    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "listener" });
+    for (const listener of ["Mia", "samwell"]) {
+      const response = await at({ demoFlow: "create", createStage: "listener" })("ChooseListenerIntent", { listener });
+      expect(speech(response)).toBe(spoken("There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?"));
+      expect(speech(response)).not.toContain(listener);
+    }
   });
 
   test("record story outside the flow starts it (phase-5.md F9)", async () => {
@@ -254,6 +256,12 @@ describe("the purchase scene (lines 9-15)", () => {
       const response = await at(atPacks)(name, slots);
       expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
     }
+  });
+
+  test("no at the pack list lists the packs again", async () => {
+    const response = await at(atPacks)("AMAZON.NoIntent");
+    expect(speech(response)).toBe(spoken(c.packList(DEMO.purchase?.packs ?? [], "euros")));
+    expect(response.sessionAttributes).toEqual(atPacks);
   });
 
   test("a pack the flow can't name is the script's pack (line 12)", async () => {
@@ -423,6 +431,17 @@ describe("stages", () => {
 
   test("help in title asks again", async () => {
     expect(speech(await at({ demoFlow: "create", createStage: "title" })("AMAZON.HelpIntent"))).toBe(spoken(c.titleReprompt));
+  });
+
+  test("a title heard with the invocation keeps only the title", async () => {
+    expect(speech(await at({ demoFlow: "create", createStage: "title" })("PlayStoryIntent", { title: "sam on the moon on spoken letter" }))).toBe(spoken(c.soundQuestion("Sam on the Moon")));
+  });
+
+  // Review 2026-10-17: a Done tap racing "the end" must not move a later stage, or send the story.
+  test.each([["review", "take_review"], ["title", "create_title"], ["sound", "create_sound"], ["finish", "create_finish"]])("a stale Done tap in %s repeats its question", async (stage) => {
+    const response = await at({ demoFlow: "create", createStage: stage, createListener: "samuel", createTitle: "Sam on the Moon", createSound: "both" })("done");
+    expect(response.response.shouldEndSession).toBe(false);
+    expect(response.sessionAttributes).toMatchObject({ createStage: stage });
   });
 
   test("a fallback in title takes the script's title (line 36)", async () => {

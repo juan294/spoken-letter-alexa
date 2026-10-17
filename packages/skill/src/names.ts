@@ -14,11 +14,14 @@ export function editDistance(a: string, b: string): number {
 /**
  * A heard word close enough to a known name ("witney", "britney" and "whitley" for "whitney";
  * "manual" for "manuel"). Alexa+ misspells names it does not know; short names must match exactly,
- * and two edits need the same ending, so "samuel" never passes for "manuel".
+ * and two edits need the same last four letters, so "samuel" and "miguel" never pass for "manuel".
  */
 export function soundsLike(heard: string, name: string): boolean {
   if (heard === name) return true;
   if (name.length < 5 || heard.length < 4) return false;
   const distance = editDistance(heard, name);
-  return distance <= 1 || (distance === 2 && heard.slice(-3) === name.slice(-3));
+  return distance <= 1 || (distance === 2 && heard.slice(-4) === name.slice(-4));
 }
+
+/** Alexa+ can keep the invocation in a slot: "el trasgu by tio manuel on spoken letter". */
+export const withoutInvocation = (spoken: string): string => spoken.replace(/\s+(?:on|in|with|from|at)\s+spoken\s+letters?$/i, "").trim();
