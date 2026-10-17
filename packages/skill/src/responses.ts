@@ -15,7 +15,8 @@ export function escapeSsml(text: string): string {
  */
 const PRONUNCIATIONS: readonly [RegExp, string][] = [
   [/(?<=&quot;)re-record(?=&quot;)/gi, "<phoneme alphabet=\"ipa\" ph=\"ˌɹiɹɪˈkɔɹd\">$&</phoneme>"],
-  [/(?<=&quot;)record(?=&quot;)|\brecord(?= (?:a |your )?story\b)/gi, "<w role=\"amazon:VB\">$&</w>"],
+  // Alexa+ ignored `<w role="amazon:VB">` (issue 21, 2026-10-17), so the verb is spelled out in IPA.
+  [/(?<=&quot;)record(?=&quot;)|\brecord(?= (?:a |your )?story\b)/gi, "<phoneme alphabet=\"ipa\" ph=\"ɹɪˈkɔɹd\">$&</phoneme>"],
 ];
 
 /** Escaped text with the skill's pronunciation fixes applied. */

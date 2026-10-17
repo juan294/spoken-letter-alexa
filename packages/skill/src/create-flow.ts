@@ -1,5 +1,6 @@
 import {
   type CreateStage,
+  foldName,
   type CreationRecord,
   type DemoPack,
   findListener,
@@ -16,6 +17,7 @@ import { scriptPreviewDirectives, statusDirectives, teleprompterDirectives } fro
 import { STOP_DIRECTIVE } from "./audio.ts";
 import { CREATE_MESSAGES as c } from "./create-messages.ts";
 import type { AlexaRequestEnvelope, AlexaResponseEnvelope } from "./handler.ts";
+import { editDistance, soundsLike } from "./names.ts";
 import { closing, type Directive, type OutputSpeech, question, ssml } from "./responses.ts";
 import { resolvedValue, slotValue } from "./slots.ts";
 import demoCreate from "../../../fixtures/demo-create.json" with { type: "json" };
@@ -36,8 +38,11 @@ const TAKE = findTake(parseTakesManifest(takesManifest), SCRIPT);
 /** A resume is offered only soon after the session dropped, so a rehearsal never changes the next run's lines. */
 export const RESUME_SECONDS = 15 * 60;
 
-/** The flow's state is its record; `reading` means the teleprompter runs and the microphone stays closed. */
-export type CreateState = CreationRecord;
+/**
+ * The flow's state is its record; `reading` means the teleprompter runs and the microphone stays
+ * closed. `heard` (session only, never saved) means the take was played back in review.
+ */
+export type CreateState = CreationRecord & { heard?: true };
 
 export type CreateKey =
   | "create_start" | "create_packs" | "create_confirm" | "create_listener" | "create_wish" | "create_question" | "create_script" | "record_start" | "record_help"
@@ -50,6 +55,8 @@ export type CreateTurn = {
   response: AlexaResponseEnvelope;
   /** The record to save, when the turn moved the flow. */
   record?: CreationRecord;
+  /** Alexa+ sent an intent the stage does not expect, and the turn followed Jordan's script instead. */
+  scriptDefault?: true;
 };
 
 type Context = { event: AlexaRequestEnvelope; publicBaseUrl: string | undefined };
@@ -58,7 +65,11 @@ const listenerById = (id: string | undefined) => DEMO.listeners.find((listener) 
 const packById = (id: string | undefined) => DEMO.purchase?.packs.find((pack) => pack.id === id);
 const CURRENCY = DEMO.purchase?.currency ?? "";
 const PACKS = DEMO.purchase?.packs ?? [];
+const SCRIPT_PACK = packById(DEMO.purchase?.scriptPack) ?? PACKS.at(-1);
 const isVariant = (value: unknown): value is TakeVariant => (TAKE_VARIANTS as readonly unknown[]).includes(value);
+const recordOf = ({ heard: _heard, ...record }: CreateState): CreationRecord => record;
+/** The turn Jordan's script expects next, taken because Alexa+ routed her line elsewhere. */
+const scripted = (turn: CreateTurn): CreateTurn => ({ ...turn, scriptDefault: true });
 const withListener = (stage: CreateStage, state: CreateState): CreateState => ({ stage, ...(state.listenerId && { listenerId: state.listenerId }) });
 
 /** Rebuilds the flow from session attributes; anything outside the closed values is dropped. */
@@ -74,6 +85,7 @@ export function createStateFrom(attributes: Record<string, string> | undefined):
   if (attributes.createReading === "1" && state.stage === "recording") state.reading = true;
   const pack = packById(attributes.createPack);
   if (pack && state.stage === "purchase") state.packId = pack.id;
+  if (attributes.createHeard === "1" && state.stage === "review") state.heard = true;
   return state;
 }
 
@@ -87,6 +99,7 @@ export function createAttributes(state: CreateState): Record<string, string> {
     ...(state.sound && { createSound: state.sound }),
     ...(state.reading && { createReading: "1" }),
     ...(state.packId && { createPack: state.packId }),
+    ...(state.heard && { createHeard: "1" }),
   };
 }
 
@@ -99,7 +112,7 @@ export function supportsApl(event: AlexaRequestEnvelope): boolean {
 function ask(key: CreateKey, state: CreateState, speech: string | OutputSpeech, reprompt: string, directives?: Directive[], save = true): CreateTurn {
   const response = question(speech, reprompt);
   if (directives) response.response.directives = directives;
-  return { key, result: "awaiting_input", response: { ...response, sessionAttributes: createAttributes(state) }, ...(save && { record: state }) };
+  return { key, result: "awaiting_input", response: { ...response, sessionAttributes: createAttributes(state) }, ...(save && { record: recordOf(state) }) };
 }
 
 /**
@@ -108,7 +121,7 @@ function ask(key: CreateKey, state: CreateState, speech: string | OutputSpeech, 
  */
 function open(key: CreateKey, state: CreateState, speech: OutputSpeech, directives?: Directive[], save = true): CreateTurn {
   return { key, result: "awaiting_input", response: { version: "1.0", sessionAttributes: createAttributes(state),
-    response: { outputSpeech: speech, ...(directives && { directives }) } }, ...(save && { record: state }) };
+    response: { outputSpeech: speech, ...(directives && { directives }) } }, ...(save && { record: recordOf(state) }) };
 }
 
 function startReading(ctx: Context, state: CreateState): CreateTurn {
@@ -142,8 +155,18 @@ function spokenListener(event: AlexaRequestEnvelope): string | undefined {
   return spoken?.replace(/^(?:it's |it is |the story is )?for\s+/i, "").trim();
 }
 
+/** The one listener a heard word names or nearly names ("samual"); several or none gives undefined. */
+function listenerIn(spoken: string) {
+  const exact = findListener(DEMO, spoken);
+  if (exact) return exact;
+  const words = foldName(spoken).split(/[^\p{L}]+/u).filter(Boolean);
+  const close = DEMO.listeners.filter((listener) => [listener.name, ...listener.synonyms]
+    .some((form) => words.some((word) => soundsLike(word, foldName(form)))));
+  return close.length === 1 ? close[0] : undefined;
+}
+
 function chooseListener(spoken: string | undefined, prefix?: string): CreateTurn {
-  const listener = spoken ? findListener(DEMO, spoken) : undefined;
+  const listener = spoken ? listenerIn(spoken) : undefined;
   const lead = prefix ? `${prefix} ` : "";
   if (!listener) {
     // SS7: the name is never repeated back; a bare "who is it for?" only repeats the prompt.
@@ -225,6 +248,14 @@ function spokenTitle(event: AlexaRequestEnvelope): string | undefined {
   return titled.join(" ").slice(0, 60).trim();
 }
 
+/** A heard title within a few letters of the script's ("sam on the mon") is the script's title. */
+function titleFor(heard: string | undefined): string | undefined {
+  if (!heard) return undefined;
+  const scriptTitle = DEMO.story.title;
+  const distance = editDistance(foldName(heard), foldName(scriptTitle));
+  return distance <= Math.max(2, Math.floor(scriptTitle.length / 5)) ? scriptTitle : heard;
+}
+
 function soundChoice(event: AlexaRequestEnvelope, intent: string | undefined): TakeVariant | undefined {
   if (intent === "AMAZON.NoIntent") return "plain";
   const resolved = resolvedValue(event, "sound");
@@ -261,61 +292,74 @@ function prompt(state: CreateState): CreateTurn {
   }
 }
 
-/**
- * The next turn of a flow already in progress. In the conversation every reply except stop,
- * cancel and help is the next answer, so speech recognition never derails the fixed lines;
- * elsewhere a reply the stage does not take repeats its question.
- */
 /** The teleprompter's Done button (`apl/teleprompter.json`), as an APL UserEvent. */
 export const isDoneEvent = (event: AlexaRequestEnvelope): boolean =>
   event.request.type === "Alexa.Presentation.APL.UserEvent" && event.request.arguments?.[0] === "done";
 
+const STOP_INTENTS = new Set(["AMAZON.StopIntent", "AMAZON.CancelIntent", "AMAZON.PauseIntent"]);
+
+/**
+ * The next turn of a flow already in progress. Every stage answers its expected reply, an explicit
+ * no, stop or help, and a different choice it can name. Anything else follows Jordan's script:
+ * Alexa+ routes her short replies to whatever intent it likes ("record" as FallbackIntent, "yes" as
+ * WhatIsNewIntent; device run 2026-10-17), so the script's answer is the only safe reading of them.
+ */
 export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
   const { event } = ctx;
   const intent = event.request.type === "IntentRequest" ? event.request.intent?.name : undefined;
   const done = isDoneEvent(event);
   const listener = listenerById(state.listenerId);
+  const reading = state.stage === "recording" && state.reading === true;
 
-  if (intent === "AMAZON.StopIntent" || intent === "AMAZON.CancelIntent" || intent === "AMAZON.PauseIntent") {
+  if (intent && STOP_INTENTS.has(intent)) {
+    // While reading, "Alexa, the end" can be heard as a stop: the reading ends and is kept.
+    if (reading) return scripted(saved(ctx, state));
     // Stored as stopped, so the next launch opens plainly instead of resuming this run.
     return { key: "create_canceled", result: "canceled", response: closing(c.canceled), record: { stage: "stopped" } };
   }
   if (intent === "AMAZON.HelpIntent" || (!intent && !done)) return prompt(state);
+  const fallback = intent === "AMAZON.FallbackIntent";
+  const yes = intent === "AMAZON.YesIntent";
+  const no = intent === "AMAZON.NoIntent";
+  const follow = (turn: CreateTurn, expected: boolean) => (expected ? turn : scripted(turn));
+  const packs = () => ask("create_packs", withListener("pack", state), c.packList(PACKS, CURRENCY), c.packReprompt);
 
   switch (state.stage) {
     case "credits": {
       // "Yes, the Founding family pack" answers lines 10 and 12 at once.
-      const named = intent === "AMAZON.FallbackIntent" ? undefined : spokenPack(event);
+      const named = fallback ? undefined : spokenPack(event);
       if (named) return confirmPack(state, named);
-      if (intent === "AMAZON.YesIntent") return ask("create_packs", withListener("pack", state), c.packList(PACKS, CURRENCY), c.packReprompt);
       // Stored as stopped, like a stop: without a credit there is no story to make.
-      if (intent === "AMAZON.NoIntent") return { key: "create_canceled", result: "canceled", response: closing(c.noPurchase), record: { stage: "stopped" } };
-      return prompt(state);
+      if (no) return { key: "create_canceled", result: "canceled", response: closing(c.noPurchase), record: { stage: "stopped" } };
+      return follow(packs(), yes);
     }
     case "pack": {
-      const pack = intent === "AMAZON.FallbackIntent" ? undefined : spokenPack(event);
-      return pack ? confirmPack(state, pack) : prompt(state);
+      const named = fallback ? undefined : spokenPack(event);
+      if (named) return confirmPack(state, named);
+      return SCRIPT_PACK ? scripted(confirmPack(state, SCRIPT_PACK)) : prompt(state);
     }
     case "purchase": {
       const pack = packById(state.packId);
-      if (!pack) return ask("create_packs", withListener("pack", state), c.packList(PACKS, CURRENCY), c.packReprompt);
-      const other = intent === "AMAZON.FallbackIntent" || intent === "AMAZON.YesIntent" ? undefined : spokenPack(event);
+      if (!pack) return packs();
+      const other = fallback || yes ? undefined : spokenPack(event);
       if (other && other.id !== pack.id) return confirmPack(state, other);
-      if (intent === "AMAZON.YesIntent") return chooseListener(listener?.name, c.purchased(pack.credits));
-      if (intent === "AMAZON.NoIntent") return ask("create_packs", withListener("pack", state), `${c.notPurchased} ${c.packList(PACKS, CURRENCY)}`, c.packReprompt);
-      return prompt(state);
+      if (no) return ask("create_packs", withListener("pack", state), `${c.notPurchased} ${c.packList(PACKS, CURRENCY)}`, c.packReprompt);
+      return follow(chooseListener(listener?.name, c.purchased(pack.credits)), yes || other !== undefined);
     }
-    case "listener":
-      return intent === "AMAZON.FallbackIntent" ? prompt(state) : chooseListener(spokenListener(event));
+    case "listener": {
+      const spoken = fallback ? undefined : spokenListener(event);
+      const only = DEMO.listeners.length === 1 ? DEMO.listeners[0] : undefined;
+      // A name the flow can't place keeps SS7; no name at all is the script's answer when there is one listener.
+      if (spoken || !only) return chooseListener(spoken);
+      return scripted(chooseListener(only.name));
+    }
     case "wish": {
       const topic = listener?.wish?.topic;
       const next = withListener("conversation", state);
-      if (intent === "AMAZON.YesIntent" && topic) return ask("create_question", next, `${c.wishYes(topic)} ${c.firstQuestion}`, c.firstQuestion);
-      if (intent === "AMAZON.NoIntent") return ask("create_question", next, `${c.wishNo} ${c.firstQuestion}`, c.firstQuestion);
-      return prompt(state);
+      if (no || !topic) return ask("create_question", next, `${c.wishNo} ${c.firstQuestion}`, c.firstQuestion);
+      return follow(ask("create_question", next, `${c.wishYes(topic)} ${c.firstQuestion}`, c.firstQuestion), yes);
     }
     case "conversation": {
-      if (!intent) return prompt(state);
       const answers = state.answers ?? 0;
       const reply = DEMO.story.replies[answers];
       if (reply) return ask("create_question", { ...state, answers: answers + 1 }, reply, reply);
@@ -325,35 +369,35 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
         : ask("create_script", next, c.handOverNoScreen, c.recordReprompt);
     }
     case "recording":
-      if (intent === "RecordStoryIntent") return startReading(ctx, state);
       if (intent === "TheEndIntent" || done) return saved(ctx, state);
-      return prompt(state);
+      if (reading && intent !== "RecordStoryIntent") return scripted(saved(ctx, state));
+      return follow(startReading(ctx, state), intent === "RecordStoryIntent");
     case "review": {
       if (intent === "RecordStoryIntent") return startReading(ctx, state);
-      if (isPlayback(event, intent)) {
+      const playback = isPlayback(event, intent);
+      const next = intent !== undefined && NEXT_INTENTS.has(intent);
+      // Line 32 then line 34: the take plays back first, then the flow moves on.
+      if (playback || (!next && !state.heard)) {
         const audio = takeUrl(ctx, "plain");
-        return audio
-          ? ask("take_review", state, ssml({ audio }, c.afterPlayback), c.reviewReprompt, undefined, false)
-          : ask("take_missing", state, c.takeMissing, c.reviewReprompt, undefined, false);
+        const heard: CreateState = { ...state, heard: true };
+        return follow(audio
+          ? ask("take_review", heard, ssml({ audio }, c.afterPlayback), c.reviewReprompt, undefined, false)
+          : ask("take_missing", heard, c.takeMissing, c.reviewReprompt, undefined, false), playback);
       }
-      if (intent && NEXT_INTENTS.has(intent)) {
-        const next = withListener("title", state);
-        return ask("create_title", next, c.titleQuestion, c.titleReprompt, screen(ctx, next, c.status.finishing));
-      }
-      return prompt(state);
+      const titleStage = withListener("title", state);
+      return follow(ask("create_title", titleStage, c.titleQuestion, c.titleReprompt, screen(ctx, titleStage, c.status.finishing)), next);
     }
     case "title": {
-      const title = intent === "AMAZON.FallbackIntent" ? undefined : spokenTitle(event);
-      if (!title) return prompt(state);
+      const heard = fallback ? undefined : spokenTitle(event);
+      const title = titleFor(heard) ?? DEMO.story.title;
       const next: CreateState = { ...withListener("sound", state), title };
-      return ask("create_sound", next, c.soundQuestion(title), c.soundWhich, screen(ctx, next, c.status.sound));
+      return follow(ask("create_sound", next, c.soundQuestion(title), c.soundWhich, screen(ctx, next, c.status.sound)), heard !== undefined);
     }
     case "sound": {
-      if (intent === "AMAZON.YesIntent") return ask("create_sound", state, c.soundWhich, c.soundWhich, undefined, false);
-      const sound = soundChoice(event, intent);
-      if (!sound) return prompt(state);
+      const chosen = yes ? undefined : soundChoice(event, intent);
+      const sound = chosen ?? DEMO.story.sound;
       const next: CreateState = { ...state, stage: "finish", sound };
-      return ask("create_finish", next, `${c.soundAdded[sound]} ${c.finishPrompt}`, c.finishPrompt, screen(ctx, next, c.soundAdded[sound]));
+      return follow(ask("create_finish", next, `${c.soundAdded[sound]} ${c.finishPrompt}`, c.finishPrompt, screen(ctx, next, c.soundAdded[sound])), chosen !== undefined);
     }
     default: {
       const audio = takeUrl(ctx, state.sound ?? "plain");
@@ -362,14 +406,14 @@ export function continueCreate(ctx: Context, state: CreateState): CreateTurn {
           ? ask("create_finish", state, ssml({ audio }, c.finishPrompt), c.finishPrompt, undefined, false)
           : ask("take_missing", state, c.finishMissing, c.finishPrompt, undefined, false);
       }
-      if (intent !== "SendStoryIntent" && intent !== "AMAZON.YesIntent") return prompt(state);
+      if (no) return prompt(state);
       const title = state.title ?? c.yourStory;
       const name = listener?.name ?? "";
       const sent: CreateState = { ...state, stage: "sent" };
       // A story still playing from before the flow stops, so only the finished story is heard.
       const directives: Directive[] = [STOP_DIRECTIVE, ...(screen(ctx, sent, c.status.sent(name)) ?? [])];
       const response = audio ? closing(ssml(c.sent(title, name), { audio }), directives) : closing(c.sentNoAudio(title, name), directives);
-      return { key: "create_sent", result: "completed", response, record: sent };
+      return follow({ key: "create_sent", result: "completed", response, record: recordOf(sent) }, intent === "SendStoryIntent" || yes);
     }
   }
 }

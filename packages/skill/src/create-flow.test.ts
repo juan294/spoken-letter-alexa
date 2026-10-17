@@ -137,7 +137,7 @@ describe("Jordan's script, lines 8 to 42", () => {
 
     // Line 25 has no carrier phrase, so it may arrive as a fallback; it still counts as the answer.
     const handOver = await turn("AMAZON.FallbackIntent");
-    expect(speech(handOver)).toBe("<speak>A lovely ending. Your script is on the screen. Say &quot;<w role=\"amazon:VB\">record</w>&quot; when you're ready, and &quot;the end&quot; when you finish.</speak>");
+    expect(speech(handOver)).toBe("<speak>A lovely ending. Your script is on the screen. Say &quot;<phoneme alphabet=\"ipa\" ph=\"ɹɪˈkɔɹd\">record</phoneme>&quot; when you're ready, and &quot;the end&quot; when you finish.</speak>");
     expect(handOver.response.reprompt?.outputSpeech.ssml).toBe(spoken(c.recordReprompt));
     const [preview] = renders(handOver);
     expect(preview).toMatchObject({ token: "teleprompter", document: teleprompter, datasources: { teleprompter: { preview: true, title: c.scriptTitle } } });
@@ -256,12 +256,10 @@ describe("the purchase scene (lines 9-15)", () => {
     }
   });
 
-  test("an unknown pack lists the packs again without saving", async () => {
-    const agent = creations();
-    const response = await device(agent)("ChoosePackIntent", { pack: "the biggest one" }, { attributes: atPacks });
-    expect(speech(response)).toBe(spoken(c.packList(DEMO.purchase?.packs ?? [], "euros")));
-    expect(response.sessionAttributes).toEqual(atPacks);
-    expect(agent.createSave).not.toHaveBeenCalled();
+  test("a pack the flow can't name is the script's pack (line 12)", async () => {
+    const response = await at(atPacks)("ChoosePackIntent", { pack: "the biggest one" });
+    expect(speech(response)).toBe(spoken("Founding family pack, 20 credits, for nineteen ninety-nine euros. Shall I complete the purchase?"));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
   });
 
   test("no to buying ends the flow as stopped", async () => {
@@ -282,14 +280,21 @@ describe("the purchase scene (lines 9-15)", () => {
     expect(speech(await at(atConfirm)("AMAZON.YesIntent"))).toBe(spoken(`Thank you. 10 story credits added. ${c.whoFor}`));
   });
 
-  test.each(["AMAZON.HelpIntent", "AMAZON.FallbackIntent"])("%s repeats each stage's question without saving", async (name) => {
+  test("help repeats each stage's question without saving", async () => {
     for (const [attributes, expected] of [[atCredits, c.buyReprompt], [atPacks, c.packList(DEMO.purchase?.packs ?? [], "euros")], [atConfirm, "Family story pack, 10 credits, for eleven ninety-nine euros. Shall I complete the purchase?"]] as const) {
       const agent = creations();
-      const response = await device(agent)(name, {}, { attributes });
+      const response = await device(agent)("AMAZON.HelpIntent", {}, { attributes });
       expect(speech(response)).toBe(spoken(expected));
       expect(response.sessionAttributes).toEqual(attributes);
       expect(agent.createSave).not.toHaveBeenCalled();
     }
+  });
+
+  // Device run 2026-10-17: Alexa+ sent a "yes" as WhatIsNewIntent.
+  test.each(["AMAZON.FallbackIntent", "WhatIsNewIntent"])("%s takes each stage's scripted answer", async (name) => {
+    expect(speech(await at(atCredits)(name))).toBe(spoken(c.packList(DEMO.purchase?.packs ?? [], "euros")));
+    expect((await at(atPacks)(name)).sessionAttributes).toEqual({ demoFlow: "create", createStage: "purchase", createPack: "founding" });
+    expect(speech(await at(atConfirm)(name))).toBe(spoken(`Thank you. 10 story credits added. ${c.whoFor}`));
   });
 
   test("a pack named with the yes goes straight to its confirmation", async () => {
@@ -327,10 +332,28 @@ describe("the purchase scene (lines 9-15)", () => {
 describe("stages", () => {
   const review = { demoFlow: "create", createStage: "review", createListener: "samuel" };
 
-  test.each(["AMAZON.HelpIntent", "AMAZON.FallbackIntent", "ChooseListenerIntent"])("%s in review repeats the review prompt", async (name) => {
-    const response = await at(review)(name);
+  test("help in review repeats the review prompt", async () => {
+    const response = await at(review)("AMAZON.HelpIntent");
     expect(speech(response)).toBe(spoken(c.reviewReprompt));
     expect(response.sessionAttributes).toEqual(review);
+  });
+
+  // Lines 32 and 34 follow the script whatever Alexa+ routes them to: the take plays, then the flow moves on.
+  test.each(["AMAZON.FallbackIntent", "ChooseListenerIntent"])("%s in review plays the take, then moves to the title", async (name) => {
+    const turn = at(review);
+    const first = await turn(name);
+    expect(speech(first)).toBe(`<speak>${audioOf(TAKE?.files.plain)} ${speechText(c.afterPlayback)}</speak>`);
+    expect(first.sessionAttributes).toEqual({ ...review, createHeard: "1" });
+    const second = await at(first.sessionAttributes ?? {})(name);
+    expect(speech(second)).toBe(spoken(c.titleQuestion));
+    expect(second.sessionAttributes).toEqual({ demoFlow: "create", createStage: "title", createListener: "samuel" });
+  });
+
+  test("the played-back marker is never saved", async () => {
+    const agent = creations();
+    await device(agent)("PlaybackIntent", {}, { attributes: review });
+    await device(agent)("AMAZON.NextIntent", {}, { attributes: { ...review, createHeard: "1" } });
+    expect(agent.stored()?.record).toEqual({ stage: "title", listenerId: "samuel" });
   });
 
   test("re-record goes back to the teleprompter", async () => {
@@ -346,7 +369,7 @@ describe("stages", () => {
   test("SS5 without a host for takes, playback says the take is not ready and stays at review", async () => {
     const response = await at(review, null)("PlaybackIntent");
     expect(speech(response)).toBe(spoken(c.takeMissing));
-    expect(response.sessionAttributes).toEqual(review);
+    expect(response.sessionAttributes).toEqual({ ...review, createHeard: "1" });
   });
 
   test("a done tap and the end both finish the reading", async () => {
@@ -355,16 +378,30 @@ describe("stages", () => {
     expect(speech(await at(reading)("TheEndIntent"))).toBe(spoken(c.saved));
   });
 
-  test("a fallback while reading repeats how to finish, with the microphone closed", async () => {
-    const response = await at({ demoFlow: "create", createStage: "recording", createReading: "1" })("AMAZON.FallbackIntent");
+  test("help while reading repeats how to finish, with the microphone closed", async () => {
+    const response = await at({ demoFlow: "create", createStage: "recording", createReading: "1" })("AMAZON.HelpIntent");
     expect(speech(response)).toBe(spoken(c.recordingHelp));
     expect("shouldEndSession" in response.response).toBe(false);
   });
 
-  test("before reading, a fallback asks for record again with the microphone open", async () => {
-    const response = await at({ demoFlow: "create", createStage: "recording" })("AMAZON.FallbackIntent");
+  // While reading, the only scripted line is "the end" (line 30), however Alexa+ routes it.
+  test.each(["AMAZON.FallbackIntent", "AMAZON.StopIntent", "AMAZON.PauseIntent"])("%s while reading finishes the reading", async (name) => {
+    const response = await at({ demoFlow: "create", createStage: "recording", createListener: "samuel", createReading: "1" })(name);
+    expect(speech(response)).toBe(spoken(c.saved));
+    expect(response.sessionAttributes).toEqual({ demoFlow: "create", createStage: "review", createListener: "samuel" });
+  });
+
+  test("help before reading asks for record again with the microphone open", async () => {
+    const response = await at({ demoFlow: "create", createStage: "recording" })("AMAZON.HelpIntent");
     expect(speech(response)).toBe(spoken(c.recordReprompt));
     expect(response.response.shouldEndSession).toBe(false);
+  });
+
+  // Device run 2026-10-17: Alexa+ sent "Record" (line 28) as FallbackIntent, and the flow stalled.
+  test("before reading, a fallback starts the reading", async () => {
+    const response = await at({ demoFlow: "create", createStage: "recording", createListener: "samuel" })("AMAZON.FallbackIntent");
+    expect(renders(response)[0]?.token).toBe("teleprompter");
+    expect(response.sessionAttributes).toMatchObject({ createStage: "recording", createReading: "1" });
   });
 
   test("without a screen, the hand-over and the reading are spoken (SS1)", async () => {
@@ -384,12 +421,18 @@ describe("stages", () => {
     expect(speech(response)).toBe(spoken("Would you like to add music or sound effects to The Moon Picnic?"));
   });
 
-  test("a fallback in title asks again", async () => {
-    expect(speech(await at({ demoFlow: "create", createStage: "title" })("AMAZON.FallbackIntent"))).toBe(spoken(c.titleReprompt));
+  test("help in title asks again", async () => {
+    expect(speech(await at({ demoFlow: "create", createStage: "title" })("AMAZON.HelpIntent"))).toBe(spoken(c.titleReprompt));
+  });
+
+  test("a fallback in title takes the script's title (line 36)", async () => {
+    expect(speech(await at({ demoFlow: "create", createStage: "title" })("AMAZON.FallbackIntent"))).toBe(spoken(c.soundQuestion("Sam on the Moon")));
   });
 
   test.each([
-    ["yes", "AMAZON.YesIntent", {}, c.soundWhich],
+    // Line 38 is "Yes, add both"; Alexa+ may keep only the yes.
+    ["yes", "AMAZON.YesIntent", {}, `${c.soundAdded.both} ${c.finishPrompt}`],
+    ["a fallback", "AMAZON.FallbackIntent", {}, `${c.soundAdded.both} ${c.finishPrompt}`],
     ["no", "AMAZON.NoIntent", {}, `${c.soundAdded.plain} ${c.finishPrompt}`],
     ["music, unresolved", "SoundChoiceIntent", { sound: "music please" }, `${c.soundAdded.music} ${c.finishPrompt}`],
     ["sound effects", "SoundChoiceIntent", { sound: { value: "sound effects", canonical: "effects" } }, `${c.soundAdded.effects} ${c.finishPrompt}`],
@@ -503,6 +546,15 @@ describe("telemetry and screens", () => {
     const fields = info.mock.calls.find(([event]) => event === "skill_turn")?.[1];
     expect(fields).toMatchObject({ responseKey: "create_sound", flowBefore: "create", flowAfter: "create", intent: "StoryTitleIntent" });
     expect(JSON.stringify(fields)).not.toMatch(/secret|One morning/i);
+    expect(fields).not.toHaveProperty("route");
+    info.mockRestore();
+  });
+
+  test("a turn that followed the script for an unexpected intent is logged as such", async () => {
+    const { log } = await import("@spoken-letter-alexa/shared");
+    const info = vi.spyOn(log, "info");
+    await device()("AMAZON.FallbackIntent", {}, { attributes: { demoFlow: "create", createStage: "recording" } });
+    expect(info.mock.calls.find(([event]) => event === "skill_turn")?.[1]).toMatchObject({ responseKey: "record_start", route: "script_default", intent: "AMAZON.FallbackIntent" });
     info.mockRestore();
   });
 });

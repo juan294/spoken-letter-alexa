@@ -28,6 +28,8 @@ const demoCreateSchema = z.strictObject({
   purchase: z.strictObject({
     currency: z.string().trim().min(1).max(20),
     packs: z.array(packSchema).min(1).max(5),
+    /** The pack Jordan's script chooses (line 12), by id: the answer when Alexa+ loses the pack name. */
+    scriptPack: z.string().regex(/^[a-z0-9-]+$/).max(40).optional(),
   }).optional(),
   listeners: z.array(z.strictObject({
     id: z.string().regex(/^[a-z0-9-]+$/),
@@ -42,6 +44,8 @@ const demoCreateSchema = z.strictObject({
     replies: z.array(z.string().trim().min(1).max(200)).length(2),
     /** The title the adult gives the story, for the `StoryTitle` slot type. */
     title: z.string().trim().min(1).max(60),
+    /** The sound the script chooses (line 38): the answer when Alexa+ loses the choice. */
+    sound: z.enum(TAKE_VARIANTS).default("both"),
     /** The script shown on screen, paragraphs separated by a blank line. A take must match it. */
     script: z.string().trim().min(1),
   }),
@@ -55,6 +59,7 @@ export type DemoPack = z.infer<typeof packSchema>;
 export function parseDemoCreate(input: unknown): DemoCreate {
   const result = demoCreateSchema
     .refine((demo) => demo.credits > 0 || demo.purchase !== undefined, { path: ["purchase"], message: "zero credits needs packs to buy" })
+    .refine((demo) => demo.purchase?.scriptPack === undefined || demo.purchase.packs.some((pack) => pack.id === demo.purchase?.scriptPack), { path: ["purchase", "scriptPack"], message: "the script's pack must be one of the packs" })
     .safeParse(input);
   if (!result.success) {
     const paths = result.error.issues.map((issue) => issue.path.join(".") || "(root)").join(", ");

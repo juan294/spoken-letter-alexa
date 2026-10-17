@@ -111,7 +111,7 @@ describe("Jordan's demo script (J1, J2)", () => {
       .toBe("Sam the astronaut meeting Monica the alien is a great start. What do Sam and Monica do together?"); // 22
     expect(said(await h.say("StoryDetailIntent", { detail: "play hide and seek" }))).toBe("Hide and seek in low gravity sounds fun. How does the adventure end?"); // 23–24
     const handOver = await h.say("AMAZON.FallbackIntent"); // 25: no carrier phrase
-    expect(said(handOver)).toBe("A lovely ending. Your script is on the screen. Say \"<w role=\"amazon:VB\">record</w>\" when you're ready, and \"the end\" when you finish."); // 26
+    expect(said(handOver)).toBe("A lovely ending. Your script is on the screen. Say \"<phoneme alphabet=\"ipa\" ph=\"ɹɪˈkɔɹd\">record</phoneme>\" when you're ready, and \"the end\" when you finish."); // 26
     expect(handOver.response.directives?.[0]).toMatchObject({ type: "Alexa.Presentation.APL.RenderDocument", token: "teleprompter" }); // 27
 
     // Recording.
@@ -159,7 +159,10 @@ describe("Jordan's demo script (J1, J2)", () => {
   // Alexa+ on Jordan's Echo (2026-10-13) filled only {title} for line 3, and nothing played.
   test.each(["a story by aunt whitney", "a story from aunt whitney", "aunt whitney", "an aunt whitney story", "aunt whitney's story", "the story by aunt whitney",
     // Issue 21: the reply was "I couldn't find that delivered story", so "play" or a misheard name stayed in the title.
-    "play a story by aunt whitney", "a story by ant whitney", "ant whitney"])(
+    "play a story by aunt whitney", "a story by ant whitney", "ant whitney",
+    // 2026-10-17: a title-only line 3 still played nothing. Misheard names and the invocation tail.
+    "a story by aunt witney", "a story by aunt britney", "a story by aunt whitley", "story by whitney", "a story from auntie whitney",
+    "a story by aunt whitney on spoken letter", "aunt whitney on spoken letter", "story by and whitney"])(
     "J3 line 3 heard as the title %j still plays an Aunt Whitney story", async (title) => {
       const h = await rehearsal();
       await h.open();
@@ -167,4 +170,136 @@ describe("Jordan's demo script (J1, J2)", () => {
       expect(said(response)).toMatch(/^Playing .+ by Aunt Whitney\.$/);
       expect(played(response)?.audioItem.metadata.subtitle).toContain("Aunt Whitney");
     });
+
+  // Line 5, said over a playing story. Alexa+ fills only {title}; Spanish names are often misheard.
+  test.each(["el trasgu by tio manuel", "el trasgu by tío manuel on spoken letter", "el trasgo by tio manual", "el trasgu by theo manuel",
+    "el trasgu by uncle manuel", "the trasgu by tio manuel", "el trasgu from tio manuel", "el trasgu", "el trasgu story"])(
+    "J6 line 5 heard as the title %j plays El Trasgu by Tío Manuel", async (title) => {
+      const h = await rehearsal();
+      const response = await h.say("PlayStoryIntent", { title }, true);
+      expect(said(response)).toBe("Playing El Trasgu by Tío Manuel.");
+      expect(played(response)?.audioItem.stream.url).toMatch(/\/fixtures\/audio\/st_el_trasgu\.mp3$/);
+    });
+
+  test("J6 line 5 with only the storyteller slot filled plays El Trasgu", async () => {
+    const h = await rehearsal();
+    const response = await h.say("PlayStoryIntent", { title: "el trasgu", storyteller: { heard: "tio manuel", canonical: "Tío Manuel" } }, true);
+    expect(said(response)).toBe("Playing El Trasgu by Tío Manuel.");
+  });
+
+  // Line 8, said over a playing story, through each intent Alexa+ might choose.
+  test.each([["StartStoryIntent", {}], ["CatchAllIntent", { text: "create a story" }], ["PlayStoryIntent", { title: "create a story" }], ["StartStoryIntent", { theme: "on spoken letter" }]] as const)(
+    "J7 line 8 through %s %j opens the purchase scene and stops the playing story", async (name, slots) => {
+      const h = await rehearsal();
+      const response = await h.say(name, slots, true);
+      expect(said(response)).toBe("Okay, create a story. There are no story credits on your account. Would you like to buy some?");
+      expect(response.response.directives?.[0]).toEqual({ type: "AudioPlayer.Stop" });
+    });
 });
+
+/** Lines 9-42 as Jordan's script has them, checked against Alexa's reply to each of her lines. */
+const SCRIPT_REPLIES = {
+  9: "Okay, create a story. There are no story credits on your account. Would you like to buy some?",
+  11: "Small story pack, 2 credits, for two ninety-nine euros. Family story pack, 10 credits, for eleven ninety-nine. Or Founding family pack, 20 credits, for nineteen ninety-nine. Which would you like?",
+  13: "Founding family pack, 20 credits, for nineteen ninety-nine euros. Shall I complete the purchase?",
+  16: "Thank you. 20 story credits added. Who is the story for?",
+  18: "There's a saved wish for Samuel: a space adventure. Would you like to create a story about space?",
+  20: "A space story it is. Who are the characters, and what happens?",
+  22: "Sam the astronaut meeting Monica the alien is a great start. What do Sam and Monica do together?",
+  24: "Hide and seek in low gravity sounds fun. How does the adventure end?",
+  26: "A lovely ending. Your script is on the screen. Say \"<phoneme alphabet=\"ipa\" ph=\"ɹɪˈkɔɹd\">record</phoneme>\" when you're ready, and \"the end\" when you finish.",
+  29: "Get ready.",
+  31: "Your recording is saved. Say \"playback\" to listen, \"<phoneme alphabet=\"ipa\" ph=\"ˌɹiɹɪˈkɔɹd\">re-record</phoneme>\" to try again, or \"next\" to continue.",
+  33: `${audio("sam_on_the_moon_plain.mp3")} Say "<phoneme alphabet="ipa" ph="ˌɹiɹɪˈkɔɹd">re-record</phoneme>" to try again, or "next" to continue.`,
+  35: "Time for the finishing touches. What would you like to call your story?",
+  37: "Would you like to add music or sound effects to Sam on the Moon?",
+  39: "Soft background music and gentle sound effects added. Say \"playback\" or \"send story\".",
+  41: `Sam on the Moon has been sent to Samuel's family. Here it is. ${audio("sam_on_the_moon_both.mp3")}`,
+} as const;
+
+type Heard = readonly [intent: string, slots?: Record<string, Slot>];
+/** Jordan's lines 10-40 in order, each paired with the reply line it must produce. */
+const USER_LINES = [10, 12, 14, 17, 19, 21, 23, 25, 28, 30, 32, 34, 36, 38, 40] as const;
+const REPLY_TO: Record<(typeof USER_LINES)[number], keyof typeof SCRIPT_REPLIES> = { 10: 11, 12: 13, 14: 16, 17: 18, 19: 20, 21: 22, 23: 24, 25: 26, 28: 29, 30: 31, 32: 33, 34: 35, 36: 37, 38: 39, 40: 41 };
+
+/** Runs lines 8-42 with each of Jordan's lines delivered as `heard(line)`, and checks every reply against the script. */
+async function runScript(heard: (line: (typeof USER_LINES)[number]) => Heard) {
+  const h = await rehearsal();
+  expect(said(await h.say("StartStoryIntent", {}, true))).toBe(SCRIPT_REPLIES[9]);
+  const replies: Record<number, AlexaResponseEnvelope> = {};
+  for (const line of USER_LINES) {
+    const [name, slots] = heard(line);
+    const response = await h.say(name, slots ?? {});
+    expect({ line, said: said(response) }).toEqual({ line, said: SCRIPT_REPLIES[REPLY_TO[line]] });
+    replies[line] = response;
+  }
+  expect(replies[28]?.response.directives?.map((directive) => directive.type)).toEqual(["Alexa.Presentation.APL.RenderDocument", "Alexa.Presentation.APL.ExecuteCommands"]);
+  expect(replies[40]?.response.shouldEndSession).toBe(true);
+  expect((await h.creations.get(deviceSessionId(DEVICE_ID)))?.record).toEqual({ stage: "sent", listenerId: "samuel", title: "Sam on the Moon", sound: "both" });
+}
+
+describe("Jordan's script under Alexa+ routing (J4, J5)", () => {
+  // Alexa+ on Jordan's Echo (2026-10-17) sent "Record" as FallbackIntent and a "Yes" as WhatIsNewIntent;
+  // the classic model resolves both correctly, so only the device showed it.
+  test("J4 every reply arriving as AMAZON.FallbackIntent still follows the script to the end", async () => {
+    await runScript(() => ["AMAZON.FallbackIntent"]);
+  });
+
+  test("J5 the routes seen on the device on 2026-10-17 follow the script", async () => {
+    const seen: Partial<Record<(typeof USER_LINES)[number], Heard>> = { 10: ["WhatIsNewIntent"], 19: ["AMAZON.FallbackIntent"], 28: ["AMAZON.FallbackIntent"] };
+    await runScript((line) => seen[line] ?? J1_INTENTS[line]);
+  });
+
+  test("J5 each line through the other intents Alexa+ can pick follows the script", async () => {
+    const other: Record<(typeof USER_LINES)[number], Heard> = {
+      10: ["CatchAllIntent", { text: "yes please" }],
+      12: ["CatchAllIntent", { text: "the founding family pack" }],
+      14: ["CatchAllIntent", { text: "yes" }],
+      17: ["CatchAllIntent", { text: "samuel" }],
+      19: ["ChooseListenerIntent", { listener: "yes" }],
+      21: ["CatchAllIntent", { text: "an astronaut named sam travels to the moon and meets an alien named monica" }],
+      23: ["PlayStoryIntent", { title: "hide and seek" }],
+      25: ["WhatIsNewIntent"],
+      28: ["CatchAllIntent", { text: "record" }],
+      30: ["AMAZON.StopIntent"],
+      32: ["PlayStoryIntent", { title: "back" }],
+      34: ["NextStoryIntent"],
+      36: ["PlayStoryIntent", { title: "sam on the moon" }],
+      38: ["AMAZON.YesIntent"],
+      40: ["CatchAllIntent", { text: "send story" }],
+    };
+    await runScript((line) => other[line]);
+  });
+
+  test("J5 misheard names and titles snap to the script's listener and title", async () => {
+    const misheard: Partial<Record<(typeof USER_LINES)[number], Heard>> = {
+      17: ["ChooseListenerIntent", { listener: "samual" }],
+      36: ["StoryTitleIntent", { storytitle: "sam on the mon" }],
+    };
+    await runScript((line) => misheard[line] ?? J1_INTENTS[line]);
+  });
+});
+
+/** J1's classic-model routes, line by line (`profileNlu` on the live model, 2026-10-17). */
+const J1_INTENTS: Record<(typeof USER_LINES)[number], Heard> = {
+  10: ["AMAZON.YesIntent"],
+  12: ["ChoosePackIntent", { pack: { heard: "founding family pack", canonical: "Founding family pack" } }],
+  14: ["AMAZON.YesIntent"],
+  17: ["ChooseListenerIntent", { listener: { heard: "samuel", canonical: "Samuel" } }],
+  19: ["AMAZON.YesIntent"],
+  21: ["StoryDetailIntent", { detail: "astronaut named sam travels to the moon and meets an alien named monica" }],
+  23: ["StoryDetailIntent", { detail: "play hide and seek" }],
+  25: ["StoryDetailIntent", { detail: "has to go home for dinner and says goodbye" }],
+  28: ["RecordStoryIntent"],
+  30: ["TheEndIntent"],
+  32: ["PlaybackIntent"],
+  34: ["AMAZON.NextIntent"],
+  36: ["StoryTitleIntent", { storytitle: { heard: "sam on the moon", canonical: "Sam on the Moon" } }],
+  38: ["SoundChoiceIntent", { sound: { heard: "add both", canonical: "both" } }],
+  40: ["SendStoryIntent"],
+};
+
+test("J4 the classic routes give the same script", async () => {
+  await runScript((line) => J1_INTENTS[line]);
+});
+

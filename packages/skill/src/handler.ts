@@ -7,6 +7,7 @@ import { type AudioDirective, decodeStreamToken, playDirective, STOP_DIRECTIVE }
 import { type DemoTopic, MATCHERS, type Matchers, MESSAGES, type Messages } from "./messages.ts";
 import { scheduleProgressiveResponse } from "./progressive.ts";
 import { type CreateKey, type CreateTurn, continueCreate, createAttributes, createStateFrom, isDoneEvent, resumeCreate, startCreate } from "./create-flow.ts";
+import { soundsLike } from "./names.ts";
 import { closing, type Directive, type OutputSpeech, question } from "./responses.ts";
 import { resolvedValue, slotValue } from "./slots.ts";
 import interactionModel from "../skill-package/interactionModels/custom/en-US.json" with { type: "json" };
@@ -109,7 +110,8 @@ const GIVEN_NAMES = (() => {
 
 /**
  * A known storyteller in at most `maxWords` heard words: an alias, the possessive ("aunt whitney's",
- * "aunt whitneys"), or one given name with a misheard kinship word ("ant whitney", issue 21).
+ * "aunt whitneys"), or one given name with a misheard kinship word ("ant whitney", issue 21) or a
+ * misspelling ("aunt witney", "tio manual"; Alexa+ on 2026-10-17).
  */
 function storytellerNamed(spoken: string, maxWords: number): string | undefined {
   const bare = spoken.replace(/['’]s\b/gi, "").trim();
@@ -118,8 +120,15 @@ function storytellerNamed(spoken: string, maxWords: number): string | undefined 
   // The given name must end what was heard, so "the jordan river" stays a title.
   const words = foldName(bare).split(/\s+/);
   const last = words.at(-1);
-  return words.length <= maxWords && last ? GIVEN_NAMES.get(last) : undefined;
+  if (words.length > maxWords || !last) return undefined;
+  const given = GIVEN_NAMES.get(last);
+  if (given) return given;
+  const close = [...GIVEN_NAMES].filter(([name]) => soundsLike(last, name));
+  return close.length === 1 ? close[0]?.[1] : undefined;
 }
+
+/** Alexa+ can keep the invocation in the slot: "el trasgu by tio manuel on spoken letter". */
+const withoutInvocation = (spoken: string): string => spoken.replace(/\s+(?:on|in|with|from|at)\s+spoken\s+letters?$/i, "").trim();
 
 /** Alexa+ also fills `{title}` with just a storyteller ("aunt whitney", "an aunt whitney story"). */
 function storytellerAsTitle(spoken: string): string | undefined {
@@ -278,6 +287,8 @@ function createEntry(event: AlexaRequestEnvelope, match: Matchers): { listener?:
     const listener = slotValue(event, "listeneralias");
     return listener ? { listener } : {};
   }
+  // Alexa+ can send line 8 as "play {title}" with the title "create a story".
+  if (intent === "PlayStoryIntent") return match.createStory.test(slotValue(event, "title") ?? "") ? {} : null;
   const text = intent === "CatchAllIntent" ? slotValue(event, "text") : undefined;
   if (!text || match.howToCreate.test(text) || !(match.createStory.test(text) || match.createFor.test(text) || match.send.test(text))) return null;
   const named = /\bfor\s+(\S+)\s*$/i.exec(text)?.[1] ?? /\bsend\s+(?!a\b|the\b|it\b|story\b)(\S+)/i.exec(text)?.[1];
@@ -317,6 +328,8 @@ type Telemetry = {
   played: boolean;
   playOriented: boolean;
   storyId?: string | null;
+  /** Which branch answered, from a closed set; never the words heard. */
+  route?: "title" | "title_by_storyteller" | "storyteller_shuffle" | "shuffle" | "script_default";
   tools: string[];
   say?: string;
   outcome: "ok" | "agent_error" | "timeout" | "rejected";
@@ -405,6 +418,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
             log.warn("create_save_failed", { errorClass: classifyError(error).errorClass });
           }
         }
+        if (turn.scriptDefault) telemetry.route = "script_default";
         return mark(turn.key, turn.result, turn.response);
       };
       const resumeFromRecord = async (fromDone: boolean): Promise<AlexaResponseEnvelope | null> => {
@@ -674,7 +688,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           // Alexa+ can leave the verb in the slot ("play a story by aunt whitney", issue 21).
           const playCarrier = match.titleCarriers[0];
           const heardTitle = slotValue(event, "title");
-          const strippedTitle = heardTitle && playCarrier ? heardTitle.replace(playCarrier, "") : heardTitle;
+          const strippedTitle = heardTitle && playCarrier ? withoutInvocation(heardTitle.replace(playCarrier, "")) : heardTitle;
           const spokenTitle = strippedTitle === "" ? undefined : strippedTitle;
           const resolvedStoryteller = resolvedValue(event, "storyteller");
           const split = spokenTitle && !resolvedStoryteller ? titleByStoryteller(spokenTitle) : null;
@@ -684,8 +698,10 @@ export function createHandler(options: HandlerOptions): SkillHandler {
           // Alexa+ hears "play a story by Aunt Whitney" as a title: no story is named, so play the storyteller's.
           if (title && !titleStoryteller && !match.anyStory.test(title)) {
             const shortTitle = match.shortTitle.exec(title)?.[1];
+            telemetry.route = storyteller ? "title_by_storyteller" : "title";
             return command({ command: "title", title: shortTitle ?? title, ...(storyteller && { storyteller }) });
           }
+          telemetry.route = storyteller ? "storyteller_shuffle" : "shuffle";
           return command({ command: "start", order: "shuffle", ...(storyteller && { storyteller }) });
         }
         if (intent === "NextStoryIntent" || intent === "AMAZON.NextIntent") {
@@ -786,6 +802,7 @@ export function createHandler(options: HandlerOptions): SkillHandler {
         ms,
         played: telemetry.played,
         ...(telemetry.storyId !== undefined && { storyId: telemetry.storyId }),
+        ...(telemetry.route !== undefined && { route: telemetry.route }),
         tools: telemetry.tools,
         outcome: telemetry.outcome,
         ...(telemetry.errorClass !== undefined && { errorClass: telemetry.errorClass }),

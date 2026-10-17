@@ -625,3 +625,21 @@ The final full Alexa simulator still returned Amazon's generic unexpected error 
   purchasing for digital goods sold by voice. Fix: none needed for the video; a real product
   would use in-skill purchasing or send the parent to the app.
 
+
+## 2026-10-17: Alexa+ routes a custom skill's short replies to other intents
+
+- **Intent routing differs from the interaction model.** Severity high. On an Echo Show 5
+  under Alexa+, the one-word reply "Record" reached the skill as `AMAZON.FallbackIntent`,
+  although "record" is a sample of the skill's own `RecordStoryIntent`; a "Yes" reached it as
+  `WhatIsNewIntent`. The NLU profiler (`profileNlu`) and the developer-console simulator map
+  every one of the same utterances to the expected intent, so no developer tool shows the
+  Alexa+ routing. Fix: give developers an Alexa+ mode in the simulator and the NLU profiler,
+  or document how Alexa+ chooses between a skill's intents.
+- **Intent request history returns HTTP 500.** Severity medium. `GET
+  /v1/skills/{skillId}/history/intentRequests` (and `ask api intent-requests-history`) fail
+  with "Internal Server Error" for this development skill, with and without filters, so the
+  utterances behind a misrouted turn cannot be read. Fix: repair the endpoint, or return a
+  clear error when the skill has too little traffic.
+- **SSML word roles are ignored.** Severity low. `<w role="amazon:VB">record</w>` was still
+  read as the noun on the Alexa+ device. Fix: document which SSML tags the Alexa+ voice
+  supports.
