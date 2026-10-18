@@ -7,7 +7,7 @@
 | Alexa+ MCP Toolkit access (`alexa-ai` CLI, Inspector, simulator) | high | A self-serve access tier for hackathon entrants, and the manifest schema outside the gated toolkit. |
 | Alexa+ audio playback contract | high | One page stating which content types Alexa+ renders and plays from a tool result (`resource_link`, screened vs screenless). |
 | Alexa+ protocol facts | medium | Publish the live client's `initialize` version (2025-03-26), the Inspector's (2025-06-18) and its `Mcp-Session-Id` expectation on one page. |
-| Alexa+ routing to development-stage custom skills | high | Say whether development skills run under Alexa+, keep support answers consistent, and give developers a per-skill way to test under Alexa+. |
+| Alexa+ routing to development-stage custom skills | high | Say whether development skills run under Alexa+, keep support answers consistent, make invocation by name deterministic (or say which capability refused it), and give developers a per-skill way to test under Alexa+. |
 | Alexa custom skill turn budget | high | State the endpoint timeout as a number, and report per-turn endpoint latency against it in the simulator. |
 | Alexa progressive responses (Directive Service) | medium | Connect `apiEndpoint`/`apiAccessToken` to slow endpoints in the latency guidance, and ship it in the audio-player sample. |
 | ASK CLI interaction model validation | medium | Fail or warn when a manifest declares `AUDIO_PLAYER` but the model omits the required playback intents, or when two `AMAZON.SearchQuery` intents share carrier prefixes. |
@@ -643,3 +643,9 @@ The final full Alexa simulator still returned Amazon's generic unexpected error 
 - **SSML word roles are ignored.** Severity low. `<w role="amazon:VB">record</w>` was still
   read as the noun on the Alexa+ device. Fix: document which SSML tags the Alexa+ voice
   supports.
+
+## 2026-10-18: Alexa+ rejects "open spoken letter" on the US account
+
+All times are CEST.
+
+- **Skill invocation by name fails under Alexa+.** Severity high. Jordan's US account ran the full create script on an Echo Show 5 from 12:49 to 12:55. From then on, "Alexa, open spoken letter" answered "Sorry, that is not supported on this device" on that Echo Show 5, on an Echo Show 11 newly added to the same account, and in the Alexa phone app. The skill Lambda received no request: CloudWatch `Invocations` for `sla-alexa-skill` is 0 after 13:08 until our own simulation at 14:23. The skill side was healthy: the skill manifest, the interaction model build, the beta test (`RUNNING`, tester `ACCEPTED`) and development enablement. An SMAPI simulation of "open spoken letter" at 14:23 reached the `LaunchRequest` normally. Disabling and re-enabling the skill in the Alexa app did not help; the notification-permission event of that change reached `sla-alexa-notifications` at 14:26:59. "Alexa, open the spoken letter skill" worked at 14:48, and the full script then ran to "sent" (14:48:51 to 14:51:42, 17 turns). The demo video was recorded with that wording. This repeats the 2026-10-07 pattern, where Alexa+ also answered "not supported on this device" to the same invocation. Fix: make skill invocation by name deterministic under Alexa+, or document when Alexa+ claims an invocation name for a built-in capability; and say in the response which capability refused the request.
