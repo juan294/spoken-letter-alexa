@@ -12,6 +12,12 @@ and a CDK deployment at `alexa.spokenletter.com`. The add-on is the parent's too
 exposes only stories the parent has already delivered, and no child account, voice or
 data exists on this path.
 
+Open-source contribution: [aws/aws-cdk#39390](https://github.com/aws/aws-cdk/pull/39390)
+(open pull request, issue [#39389](https://github.com/aws/aws-cdk/issues/39389)) adds
+MCP protocol versions 2025-11-25 and 2026-07-28 to `MCPProtocolVersion` in
+`aws-cdk-lib/aws-bedrockagentcore`, with unit tests, a README update and an integration
+test deployed in this project's account.
+
 ## What the video shows
 
 Amazon gives external developers no Alexa+ integration path yet, and a custom skill never
@@ -62,7 +68,7 @@ Every entry does real work in code and has a friction-log entry. The status colu
 
 | Tool | Function | Status |
 | --- | --- | --- |
-| AWS CDK | One-command deploy (`pnpm run deploy`) of seven stacks: Core (DynamoDB, KMS, Secrets Manager), Simulator, Api, Edge, Gateway, Observability, Skill | Live: all seven stacks deployed. Last updates: Core and Edge 2026-09-28, Gateway and Observability 2026-10-01, Simulator and Api 2026-10-09, Skill 2026-10-17 |
+| AWS CDK | One-command deploy (`pnpm run deploy`) of seven stacks: Core (DynamoDB, KMS, Secrets Manager), Simulator, Api, Edge, Gateway, Observability, Skill | Live: all seven stacks deployed. Last updates: Core and Edge 2026-09-28, Observability 2026-10-01, Simulator, Api, Gateway and Skill 2026-10-19 |
 | MCP TypeScript SDK v2 (`@modelcontextprotocol/server`) | Dual-era `/mcp` handler: 2026-07-28 plus the 2025-era `initialize` Alexa+ sends | Live at `https://alexa.spokenletter.com/mcp`. The deployed check on 2026-09-09 passed legacy `initialize` at 2025-03-26, modern `server/discover` at 2026-07-28 and 20 of 20 `tools/call`. The 401 challenge with `resource_metadata` answers on 2026-10-18 |
 | Lambda function URL (RESPONSE_STREAM), CloudFront, ACM, Route53 | `ApiStack` (one arm64 Lambda from `packages/app`, streaming URL behind an OAC) and `EdgeStack` (distribution, WAF rate rule, HSTS, DNS aliases) | Live: `/demo/` and the OAuth metadata answer 200 on 2026-10-18. `tools/call` p95 was 377 ms from Madrid and 107 ms from a `us-east-1` runner (2026-09-09) |
 | Lambda@Edge | Origin-response function that restores the `WWW-Authenticate` challenge the function URL renames (D24) | Live since 2026-09-09; the challenge reaches clients through CloudFront on 2026-10-18 |
@@ -71,7 +77,7 @@ Every entry does real work in code and has a friction-log entry. The status colu
 | Secrets Manager | `sla/bridge` and `sla/oauth-clients`, read once per cold start | Live: read at each API cold start (`secrets_loaded` in the API log) |
 | S3 | Simulator SPA, fixture audio and demo takes, Polly replies (1-day lifecycle) | Live: CloudFront serves the SPA, the fixture stories and the takes (HTTP 200, each size equal to the local file, 2026-10-09) |
 | Amazon Bedrock + Strands Agents | The agent behind the simulator and the skill's story requests: `BedrockModel` (Claude Haiku 4.5 by default, Nova as fallback), `McpClient` over the same `/mcp` | Live since 2026-09-09. The API log shows agent turns with Bedrock token counts from the Echo (device mode) and the simulator (demo mode) up to 2026-10-17. The staged create flow uses fixed lines and calls no model |
-| Bedrock AgentCore Gateway | `GatewayStack`: gateway with IAM inbound auth, MCP server target on `/mcp`, outbound client_credentials via an AgentCore Identity OAuth2 provider | Live: gateway `sla-alexa` `READY`. The simulator's demo turns call the tools through it (2026-10-10 and 2026-10-17): 1.0 to 2.4 s for the first call, then 0.33 to 0.42 s per call |
+| Bedrock AgentCore Gateway | `GatewayStack`: gateway with IAM inbound auth, MCP server target on `/mcp`, outbound client_credentials via an AgentCore Identity OAuth2 provider | Live: gateway `sla-alexa` and target `spoken-letter` `READY`, last synchronized 2026-10-19 06:19 CEST. A demo turn played a story through it the same day (`played: true`; 2.2 s for the first call, 0.41 s for the second). Before that, the target had not synchronized since 2026-09-09, and the logged demo turns of 2026-10-10 and 2026-10-17 did not play (friction log, 2026-10-19). `pnpm -F infra verify:gateway` now checks the target status and the cached tool schemas after every deploy |
 | Amazon Transcribe (streaming) | Voice input: WebM/Opus from the browser, converted to 16 kHz PCM, streamed | Deployed, live use not verified: the API log has no `transcribe_done` event in its 30-day retention window (2026-09-18 to 2026-10-18). Tests cover the request shape and a real `ffmpeg` conversion |
 | Amazon Polly | Spoken replies in the simulator, neural `Joanna` `en-US` (never story narration) | Live: `AWS/Polly` counts successful `SynthesizeSpeech` calls on 2026-10-10 (1) and 2026-10-17 (5), the same days and counts as the simulator's demo turns. Device turns skip Polly (the Echo speaks the reply) |
 | CloudWatch + X-Ray | `ObservabilityStack`: dashboard `sla-alexa`, EMF metrics (`ToolLatencyMs`, `SkillTurnMs`, `FallbackCount`), p95 alarms to SNS email, active tracing, 30-day logs | Live: alarms `sla-alexa-tool-latency-p95` and `sla-alexa-skill-turn-p95` in state `OK` on 2026-10-18; X-Ray traces on the notification Lambda the same day |
