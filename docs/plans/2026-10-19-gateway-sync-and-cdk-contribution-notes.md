@@ -48,3 +48,18 @@
 **Simplify (four angles: reuse, simplification, efficiency, altitude).** Applied: `./sigv4-fetch` subpath import; gateway URL from `GetGateway`; shared name constants; gateway and server tool lists fetched in parallel; `lastSynchronizedAt` on the target instead of a side variable; `timedOut` removed (derivable); one in-progress predicate; map and set lookups; a poll test helper with `test.each`; the trimmed IAM statement. Skipped: deriving the revision from a hash of the policy (D3 chose an explicit constant); an MCP SDK client for `tools/list` (new infra dependency for a check script); one shared SSE helper across `verify-deploy.mjs`, `e2e-link.mjs` and this script (outside the diff); moving the timeout check into the script (it guards the pure poller's bound); `SyncCheck.ok` removal and stack-test helper refactors (cosmetic).
 
 **Gate.** `python3 .rpi/scripts/rpi-verify.py` in the worktree after simplify: PASS, 5 checks (typecheck, lint, test with 948 tests, cdk-synth, e2e with 8 Playwright tests).
+
+**Integration.** `fix/gateway-sync` fast-forwarded into `develop` at `cf45bc4`. The worktree stays until the end of the run (Phase 5 removes it).
+
+## Phase 2: release and demo playback
+
+- **Authorization.** The Owner's "Push and release" in the entry instruction covers the deploy; the deploy ran in this phase so the later phases build on a working demo.
+- **Candidate.** `main` fast-forwarded to `develop` `cf45bc4` (`git rev-parse main` = `cf45bc466e3c7ffe141e26b6c6b8a6b6f16f4a3f`), clean tree. The gate in the primary checkout passed: `python3 .rpi/scripts/rpi-verify.py`, 5 checks.
+- **Preview.** `cdk diff --all --profile archy` showed the expected gateway changes: the new default policy on the custom resource role, the trimmed custom resource policy, the `:r2` physical id and the `DependsOn` entries. There was no `Gateway` or `GatewayTarget` change. Lambda code changed in Api, Skill (`Skill`, `NotificationWorker`, `NotificationSender`) and the Simulator fixtures from the SDK patch re-resolution. Core, Edge and Observability showed no differences.
+- **Deploy.** `pnpm build`, then `pnpm run deploy --require-approval never` (the IAM widening was reviewed in the preview, and the shell has no TTY for the approval prompt). It ran 2026-10-19 06:15:33 to 06:19:55 CEST, and all seven stacks succeeded (Core, Edge and Observability had no changes).
+- **Checks.**
+  - `/healthz`: `{"ok":true,"name":"spoken-letter","version":"0.1.0"}`. The body has no commit field.
+  - `pnpm -F infra verify:gateway`: exit 0, "target BL0QFT4T2E is READY and the cached tool schemas match the server". `lastSynchronizedAt` is 2026-10-19T04:19:40Z (06:19:40 CEST), later than the deploy start.
+  - `node scripts/verify-deploy.mjs` with `M2M_SECRET` and `ASSERT_P95=0`: all checks passed. Latency from Spain: p50 362 ms, p95 530 ms, p99 533 ms (n=20).
+- **Demo.** A demo session through the same public endpoints the `/demo` page calls was checked: `POST /agent/session {"mode":"demo"}`, then `POST /agent/turn` "Play the story about the snail". The turn returned "Now playing Ignacio the snail, told by Aunt Whitney." with `play.id` `st_ignacio_the_snail`, an audio URL and `artUrl`. The `/aws/lambda/sla-alexa-api` log line was: `{"time":"2026-10-19T04:20:59.669Z","level":"info","event":"agent_turn","mode":"demo","tools":["spoken-letter___list_family_stories:2236.8ms","spoken-letter___get_family_story:406.3ms"],"played":true,...}`. The browser page itself was not driven; its client calls these endpoints.
+- **Stuck states.** S1 and S3 did not occur. The grant alone was enough, which answers research unresolved question 1 for this deployment.
