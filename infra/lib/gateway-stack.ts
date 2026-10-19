@@ -6,6 +6,7 @@ import { type Construct } from "constructs";
 
 import { type ApiStack } from "./api-stack.ts";
 import { type CoreStack } from "./core-stack.ts";
+import { GATEWAY_NAME, TARGET_NAME } from "./gateway-check.ts";
 
 export type GatewayStackProps = StackProps & {
   core: CoreStack;
@@ -24,7 +25,8 @@ export type GatewayStackProps = StackProps & {
  * deploys only after `seed:secrets`); inbound auth is IAM for the agent Lambda, which
  * signs with SigV4 when `MCP_URL` is the gateway. The target is created after the edge
  * exists (bin/app.ts orders the stacks) and re-synchronized by a custom resource whenever
- * the API bundle changes. After `seed:secrets --rotate-m2m`, pass the printed version as
+ * the API bundle or the sync revision changes; `pnpm -F infra verify:gateway` shows the
+ * result. After `seed:secrets --rotate-m2m`, pass the printed version as
  * `-c sla:m2mSecretVersion=...` so the credential provider re-resolves the secret.
  */
 export class GatewayStack extends Stack {
@@ -53,7 +55,7 @@ export class GatewayStack extends Stack {
     });
 
     this.gateway = new agentcore.Gateway(this, "Gateway", {
-      gatewayName: "sla-alexa",
+      gatewayName: GATEWAY_NAME,
       description: "Spoken Letter for Alexa+ MCP server target",
       protocolConfiguration: agentcore.GatewayProtocol.mcp({
         instructions: "Read-only tools over the stories a parent has already delivered in Spoken Letter.",
@@ -64,7 +66,7 @@ export class GatewayStack extends Stack {
 
     this.target = agentcore.GatewayTarget.forMcpServer(this, "McpTarget", {
       gateway: this.gateway,
-      gatewayTargetName: "spoken-letter",
+      gatewayTargetName: TARGET_NAME,
       description: "alexa.spokenletter.com /mcp",
       endpoint: props.mcpEndpoint,
       credentialProviderConfigurations: [agentcore.GatewayCredentialProvider.fromOauthIdentity(provider, { scopes: ["mcp:service"] })],
@@ -84,12 +86,14 @@ export class GatewayStack extends Stack {
 
     // The cached tool list follows the server: the physical id carries the API bundle
     // hash, so the target re-synchronizes exactly when the deployed code changes and
-    // the template stays deterministic otherwise.
+    // the template stays deterministic otherwise. Bump SYNC_REVISION when the sync's
+    // permissions or parameters change: the bundle hash covers only code changes.
+    const SYNC_REVISION = 2;
     const synchronize: cr.AwsSdkCall = {
       service: "@aws-sdk/client-bedrock-agentcore-control",
       action: "SynchronizeGatewayTargetsCommand",
       parameters: { gatewayIdentifier: this.gateway.gatewayId, targetIdList: [this.target.targetId] },
-      physicalResourceId: cr.PhysicalResourceId.of(`${this.gateway.gatewayId}:sync:${props.api.bundleHash}`),
+      physicalResourceId: cr.PhysicalResourceId.of(`${this.gateway.gatewayId}:sync:${props.api.bundleHash}:r${SYNC_REVISION}`),
     };
     const sync = new cr.AwsCustomResource(this, "SynchronizeTarget", {
       resourceType: "Custom::SlaSynchronizeGatewayTarget",
@@ -97,20 +101,25 @@ export class GatewayStack extends Stack {
       onUpdate: synchronize,
       policy: cr.AwsCustomResourcePolicy.fromStatements([
         new iam.PolicyStatement({ actions: ["bedrock-agentcore:SynchronizeGatewayTargets"], resources: [this.gateway.gatewayArn, `${this.gateway.gatewayArn}/*`] }),
-        // The synchronization fetches the outbound OAuth token under the caller's identity:
-        // the gateway's workload identity and the m2m provider in the token vault (first
-        // deploy finding: "not authorized to perform GetWorkloadAccessToken").
+        // The synchronization fetches the outbound OAuth token under the caller's identity,
+        // starting with the gateway's workload identity (first deploy finding: "not
+        // authorized to perform GetWorkloadAccessToken"). The token vault and the secret
+        // come from provider.grantUse below.
         new iam.PolicyStatement({
-          actions: ["bedrock-agentcore:GetWorkloadAccessToken", "bedrock-agentcore:GetResourceOauth2Token"],
+          actions: ["bedrock-agentcore:GetWorkloadAccessToken"],
           resources: [
             `arn:aws:bedrock-agentcore:${this.region}:${this.account}:workload-identity-directory/default`,
             `arn:aws:bedrock-agentcore:${this.region}:${this.account}:workload-identity-directory/default/workload-identity/${this.gateway.gatewayId}`,
-            `arn:aws:bedrock-agentcore:${this.region}:${this.account}:token-vault/default`,
-            `arn:aws:bedrock-agentcore:${this.region}:${this.account}:token-vault/default/oauth2credentialprovider/sla-alexa-m2m`,
           ],
         }),
       ]),
     });
+    // The synchronization also reads the provider's Identity secret as the caller (2026-10-19
+    // status reason: GetSecretValue denied for this role). The L2's own grant matches the one
+    // on the gateway role, including the wildcard for the service-generated secret name.
+    // The grant lands on the stack's singleton AwsCustomResource role, shared by every
+    // AwsCustomResource in this stack (today only this one).
+    provider.grantUse(sync).applyBefore(sync);
     sync.node.addDependency(this.target);
 
     new CfnOutput(this, "GatewayUrl", {

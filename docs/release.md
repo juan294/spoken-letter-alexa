@@ -116,6 +116,7 @@ pnpm run deploy -c sla:certificateArn=... -c sla:deployGateway=1
 
 # Deploy 3: the agent targets the gateway (SigV4-signed, D19)
 pnpm run deploy -c sla:certificateArn=... -c sla:deployGateway=1 -c sla:gatewayUrl=<GatewayUrl>
+pnpm -F infra verify:gateway                      # target READY and cached tool schemas match the server
 
 # Skill (Phase 9): open trigger, create the development-stage skill, lock the trigger to its id
 pnpm run deploy -c sla:skillPermissionOpen=1          # first registration only: any Alexa skill may invoke the Lambda for a minute
@@ -134,8 +135,14 @@ the agent's `MCP_URL` is the gateway), `sla:skillId` (written by `pnpm -F @spoke
 Every deploy runs with `PROVIDER_MODE=fixtures` for every subject; Phase 8 switches to
 `auto` after the private bridge lands.
 
+CloudFormation reports the gateway sync custom resource complete before the gateway has
+synchronized, so only `pnpm -F infra verify:gateway` shows the result. It exits 1 and prints
+the status reasons and the `synchronize-gateway-targets` recovery command on a failed sync.
+
 After every deploy: `node scripts/verify-deploy.mjs` (discovery, legacy `initialize`,
-modern `server/discover`, tool latency, SSE pass-through); with `M2M_SECRET` from the
+modern `server/discover`, tool latency, SSE pass-through) and, whenever the gateway stack
+is part of the deploy (`sla:deployGateway` in the context), `pnpm -F infra verify:gateway`;
+with `M2M_SECRET` from the
 seeded `sla/oauth-clients` document the authenticated checks run too. From Spain set
 `ASSERT_P95=0` and record the numbers; the p95 assertion is for the `us-east-1` runner.
 
@@ -145,7 +152,7 @@ seeded `sla/oauth-clients` document the authenticated checks run too. From Spain
 2. Run the local gate: `python3 .rpi/scripts/rpi-verify.py`.
 3. Deploy that candidate: `pnpm run deploy` (Owner authorization).
 4. Verify deployed identity (`/healthz`).
-5. Run the A3 probes.
+5. Run the A3 probes, `node scripts/verify-deploy.mjs` and `pnpm -F infra verify:gateway`.
 6. Record results in the friction log entry for the release.
 7. Owner approval.
 8. Tag last (`vX.Y.Z`), never before steps 1 to 7.

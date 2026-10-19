@@ -3,5 +3,5 @@
   "compilerOptions": {
     "exactOptionalPropertyTypes": false
   },
-  "include": ["bin/**/*.ts", "lib/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+  "include": ["bin/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }

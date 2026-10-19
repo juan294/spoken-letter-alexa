@@ -298,6 +298,33 @@ describe("Phase 6 stacks", () => {
       // The API stack no longer references the gateway, so it deploys first.
       expect(JSON.stringify(t.api.toJSON())).not.toContain("SpokenLetterAlexaGateway");
     });
+
+    test("the sync custom resource's role reads the AgentCore Identity secret before the sync runs", () => {
+      // The synchronization reads the m2m client secret as the caller (2026-10-19 status reason:
+      // the custom resource role "is not authorized to perform: secretsmanager:GetSecretValue").
+      const policies = Object.entries(t.gateway.findResources("AWS::IAM::Policy") as Record<string, Resource>);
+      const secretRead = policies.filter(([, policy]) => {
+        const document = policy.Properties.PolicyDocument as { Statement: Statement[] };
+        return (
+          JSON.stringify(policy.Properties.Roles).includes("AWS679f53fac002430cb0da5b7") &&
+          document.Statement.some(
+            (statement) =>
+              ([] as string[]).concat(statement.Action).includes("secretsmanager:GetSecretValue") &&
+              JSON.stringify(statement.Resource).includes(":secretsmanager:us-east-1:106403001709:secret:bedrock-agentcore-identity!*"),
+          )
+        );
+      });
+      expect(secretRead).toHaveLength(1);
+      const [sync] = Object.values(t.gateway.findResources("Custom::SlaSynchronizeGatewayTarget") as Record<string, { DependsOn?: string[] }>);
+      expect(sync?.DependsOn).toContain(secretRead[0]?.[0]);
+    });
+
+    test("the sync's physical id carries the bundle hash and the sync revision, so a permission change re-runs it", () => {
+      const [sync] = resources(t.gateway, "Custom::SlaSynchronizeGatewayTarget");
+      for (const call of ["Create", "Update"]) {
+        expect(JSON.stringify(sync?.Properties[call])).toMatch(/:sync:\w+:r2(?!\d)/);
+      }
+    });
   });
 
   describe("ObservabilityStack", () => {
