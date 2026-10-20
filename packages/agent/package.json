@@ -20,7 +20,7 @@
     "@aws-sdk/client-s3": "3.1127.0",
     "@aws-sdk/client-transcribe-streaming": "3.1127.0",
     "@aws-sdk/lib-dynamodb": "3.1127.0",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.0",
     "@smithy/protocol-http": "5.6.2",
     "@smithy/signature-v4": "5.7.3",
     "@smithy/types": "4.18.0",
