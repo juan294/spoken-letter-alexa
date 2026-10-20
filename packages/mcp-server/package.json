@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.3.0",
     "@spoken-letter-alexa/oauth": "workspace:*",
     "@spoken-letter-alexa/shared": "workspace:*",
     "hono": "4.13.7",
