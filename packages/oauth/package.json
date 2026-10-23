@@ -17,7 +17,7 @@
     "@aws-sdk/lib-dynamodb": "3.1153.0",
     "@modelcontextprotocol/server": "2.3.1",
     "@spoken-letter-alexa/shared": "workspace:*",
-    "hono": "4.13.7",
+    "hono": "4.13.11",
     "jose": "6.2.13",
     "zod": "4.6.7"
   },
