@@ -12,12 +12,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "3.1153.0",
-    "@aws-sdk/client-kms": "3.1153.0",
-    "@aws-sdk/lib-dynamodb": "3.1153.0",
-    "@modelcontextprotocol/server": "2.3.1",
+    "@aws-sdk/client-dynamodb": "3.1156.0",
+    "@aws-sdk/client-kms": "3.1156.0",
+    "@aws-sdk/lib-dynamodb": "3.1156.0",
+    "@modelcontextprotocol/server": "2.4.0",
     "@spoken-letter-alexa/shared": "workspace:*",
-    "hono": "4.13.7",
+    "hono": "4.13.14",
     "jose": "6.2.13",
     "zod": "4.6.7"
   },
